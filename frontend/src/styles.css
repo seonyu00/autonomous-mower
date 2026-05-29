@@ -235,6 +235,12 @@ button {
   padding: 14px;
 }
 
+.app-status {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
 .section-heading,
 .panel-heading {
   align-items: center;
@@ -771,9 +777,67 @@ button {
   border-color: #4da3ff;
 }
 
+.snapshot-placeholder.compact {
+  min-height: 82px;
+  padding: 12px;
+}
+
 .snapshot-placeholder span,
 .snapshot-placeholder small {
   color: #8ea4af;
+}
+
+.video-panel {
+  background: #121d24;
+  border: 1px solid #25323c;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.video-frame {
+  aspect-ratio: 16 / 9;
+  background: #05090d;
+  border: 1px solid #273641;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.video-element,
+.mock-video-placeholder {
+  height: 100%;
+  width: 100%;
+}
+
+.video-element {
+  background: #05090d;
+  display: block;
+  object-fit: cover;
+}
+
+.mock-video-placeholder {
+  align-content: center;
+  background:
+    linear-gradient(135deg, rgba(77, 163, 255, 0.16), transparent 32%),
+    repeating-linear-gradient(0deg, #091017 0, #091017 12px, #0d1720 13px, #0d1720 24px);
+  color: #b9c8d0;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding: 14px;
+  text-align: center;
+}
+
+.mock-video-placeholder small {
+  color: #8ea4af;
+}
+
+.video-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
 }
 
 .phase-placeholder {

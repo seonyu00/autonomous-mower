@@ -4,6 +4,7 @@ import { EmergencyStopButton } from '../features/control/EmergencyStopButton';
 import { RobotList } from '../features/robots/components/RobotList';
 import { ProtocolIndicators } from '../features/telemetry/components/ProtocolIndicators';
 import { TelemetryPanel } from '../features/telemetry/components/TelemetryPanel';
+import { VideoPanel } from '../features/video/components/VideoPanel';
 
 const navigationItems = [
   { to: '/map', label: 'Map View' },
@@ -47,6 +48,7 @@ export function AppShell() {
 
       <aside className="app-status">
         <TelemetryPanel />
+        <VideoPanel />
       </aside>
     </div>
   );
