@@ -8,6 +8,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -46,6 +48,16 @@ public class GlobalExceptionHandler {
                 Map.of("violations", exception.getMessage())
         );
         return ResponseEntity.badRequest().body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler({AccessDeniedException.class, AuthorizationDeniedException.class})
+    public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(Exception exception, HttpServletRequest request) {
+        ApiError error = new ApiError(
+                "PERMISSION_DENIED",
+                "Permission denied.",
+                Map.of("path", request.getRequestURI())
+        );
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.failure(error));
     }
 
     @ExceptionHandler(Exception.class)

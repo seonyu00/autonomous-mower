@@ -34,3 +34,9 @@ management:
 logging:
   level:
     com.autonomousmower: INFO
+
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:local-development-secret-must-be-at-least-32-bytes}
+      expiration: ${JWT_EXPIRATION:PT8H}
