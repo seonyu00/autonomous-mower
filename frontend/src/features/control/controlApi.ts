@@ -2,13 +2,14 @@ import { httpClient } from '../../shared/api/httpClient';
 import { useAuthStore } from '../auth/authStore';
 import { hasPermission } from '../../shared/lib/permissions';
 import { useControlStore } from './controlStore';
-import { canControlRobot, canSendEmergencyStop } from './controlSelectors';
+import { canControlRobot, canSendEmergencyStop, canSendStopCommand } from './controlSelectors';
 import type {
   ControlCommandResult,
   ControlCommandType,
   ControlMode,
   ManualCommand,
   MowerAttachmentAction,
+  StopCommand,
 } from './types';
 
 type ControlRequestBody = Record<string, unknown>;
@@ -61,14 +62,31 @@ export async function changeMode(robotId: string, mode: ControlMode) {
 export async function sendManualCommand(robotId: string, command: ManualCommand) {
   requireCanControl(robotId);
   useControlStore.getState().recordManualInput(robotId);
+  useControlStore.getState().patchControlState(robotId, {
+    lastCommandPayload: command,
+  });
 
   return requestControlCommand(robotId, 'manual-command', `/api/control/${robotId}/manual`, command);
 }
 
 export async function sendStopCommand(robotId: string) {
-  requireCanControl(robotId);
+  const eligibility = canSendStopCommand(robotId);
 
-  return requestControlCommand(robotId, 'stop', `/api/control/${robotId}/stop`, {});
+  if (!eligibility.allowed) {
+    throw new ControlPrecheckError(eligibility.reasons);
+  }
+
+  const command: StopCommand = {
+    action: 'stop',
+    robotId,
+    direction: 'stop',
+    speed: 0,
+  };
+  useControlStore.getState().patchControlState(robotId, {
+    lastCommandPayload: command,
+  });
+
+  return requestControlCommand(robotId, 'stop', `/api/control/${robotId}/stop`, command);
 }
 
 export async function sendEmergencyStop(robotId: string) {

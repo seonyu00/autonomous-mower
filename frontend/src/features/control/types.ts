@@ -17,8 +17,17 @@ export type MowerAttachmentAction = 'blade-start' | 'blade-stop' | 'raise' | 'lo
 export type ManualDirection = 'forward' | 'reverse' | 'left' | 'right' | 'rotate-left' | 'rotate-right' | 'stop';
 
 export type ManualCommand = {
+  action: 'manual';
+  robotId: string;
   direction: ManualDirection;
   speed: number;
+};
+
+export type StopCommand = {
+  action: 'stop';
+  robotId: string;
+  direction: 'stop';
+  speed: 0;
 };
 
 export type PendingCommand = {
@@ -37,6 +46,7 @@ export type ControlState = {
   pendingCommand: PendingCommand | null;
   commandError: string | null;
   controlOwner: string | null;
+  lastCommandPayload: ManualCommand | StopCommand | null;
 };
 
 export type ControlCommandResult = {

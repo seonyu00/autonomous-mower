@@ -23,6 +23,7 @@ export function createDefaultControlState(robotId: string): ControlState {
     pendingCommand: null,
     commandError: null,
     controlOwner: null,
+    lastCommandPayload: null,
   };
 }
 

@@ -7,6 +7,7 @@ import { Button } from '../../shared/ui/Button';
 import { claimControl, ControlPrecheckError, releaseControl, resetAfterEmergency, takeoverControl } from './controlApi';
 import { canControlRobot } from './controlSelectors';
 import { createDefaultControlState, useControlStore } from './controlStore';
+import { ManualJoystick } from './ManualJoystick';
 import type { ControlLockState } from './types';
 
 const lockStates: ControlLockState[] = ['none', 'requesting', 'held', 'held-by-other', 'expired', 'revoked'];
@@ -165,9 +166,7 @@ export function ControlPanel() {
       {controlState?.commandError ? <p className="warning-line">{controlState.commandError}</p> : null}
       {actionError ? <p className="warning-line">{actionError}</p> : null}
 
-      <div className="phase-placeholder compact-placeholder">
-        <p>Joystick and E-Stop button are intentionally not implemented in this pass.</p>
-      </div>
+      <ManualJoystick />
     </div>
   );
 }

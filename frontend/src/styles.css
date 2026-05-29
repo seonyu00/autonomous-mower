@@ -540,6 +540,60 @@ button {
   min-height: 88px;
 }
 
+.manual-joystick {
+  border-top: 1px solid #23313b;
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.joystick-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-areas:
+    ". forward ."
+    "left stop right"
+    ". reverse .";
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.joystick-button {
+  background: #1a2a33;
+  border: 1px solid #344652;
+  border-radius: 6px;
+  color: #eef4f8;
+  cursor: pointer;
+  min-height: 44px;
+  padding: 10px;
+}
+
+.joystick-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.44;
+}
+
+.joystick-button.forward {
+  grid-area: forward;
+}
+
+.joystick-button.left {
+  grid-area: left;
+}
+
+.joystick-button.stop {
+  background: #2b1518;
+  border-color: #ff5664;
+  grid-area: stop;
+}
+
+.joystick-button.right {
+  grid-area: right;
+}
+
+.joystick-button.reverse {
+  grid-area: reverse;
+}
+
 .history-filters {
   align-items: end;
   display: grid;
