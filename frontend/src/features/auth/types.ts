@@ -1,4 +1,4 @@
-export type Role = 'viewer' | 'operator' | 'admin';
+export type Role = 'read-only' | 'operator' | 'supervisor' | 'admin';
 
 export type Permission =
   | 'robots:read'

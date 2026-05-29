@@ -245,7 +245,7 @@ button {
   min-height: calc(100vh - 112px);
 }
 
-.map-placeholder {
+.maplibre-shell {
   aspect-ratio: 16 / 10;
   background: #0d151b;
   border: 1px solid #273641;
@@ -255,45 +255,23 @@ button {
   position: relative;
 }
 
-.map-grid-lines {
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-  background-size: 42px 42px;
+.maplibre-container {
   inset: 0;
   position: absolute;
 }
 
-.mock-zone {
-  border: 2px solid #49d37b;
-  height: 45%;
-  left: 18%;
-  position: absolute;
-  top: 22%;
-  transform: skew(-8deg);
-  width: 56%;
-}
-
-.mock-path {
-  border-bottom: 3px solid #61b6ff;
-  border-left: 3px solid #61b6ff;
-  height: 30%;
-  left: 29%;
-  position: absolute;
-  top: 34%;
-  width: 36%;
-}
-
-.mock-robot-marker {
+.maplibre-robot-marker {
   background: #ffffff;
   border: 4px solid #4da3ff;
   border-radius: 999px;
   box-shadow: 0 0 0 8px rgba(77, 163, 255, 0.18);
   height: 24px;
-  left: 58%;
-  position: absolute;
-  top: 48%;
   width: 24px;
+}
+
+.maplibre-robot-marker.emergency {
+  border-color: #ff5664;
+  box-shadow: 0 0 0 8px rgba(255, 86, 100, 0.22);
 }
 
 .map-readout {
@@ -405,6 +383,50 @@ button {
 .secondary-button {
   background: #1a2a33;
   color: #e7f0f5;
+}
+
+.dialog-backdrop {
+  align-items: center;
+  background: rgba(4, 8, 12, 0.72);
+  display: grid;
+  inset: 0;
+  padding: 24px;
+  place-items: center;
+  position: fixed;
+  z-index: 20;
+}
+
+.dialog {
+  background: #121d24;
+  border: 1px solid #344652;
+  border-radius: 8px;
+  max-width: 520px;
+  padding: 18px;
+  width: min(100%, 520px);
+}
+
+.toast {
+  border-radius: 6px;
+  bottom: 18px;
+  padding: 10px 12px;
+  position: fixed;
+  right: 18px;
+  z-index: 30;
+}
+
+.toast.info {
+  background: #12314a;
+  color: #bfe2ff;
+}
+
+.toast.warning {
+  background: #3a3015;
+  color: #ffe19a;
+}
+
+.toast.critical {
+  background: #3a171c;
+  color: #ffb1b7;
 }
 
 @media (max-width: 1100px) {

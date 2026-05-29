@@ -1,4 +1,4 @@
-import { MapPlaceholder } from '../features/map/components/MapPlaceholder';
+import { MapViewMap } from '../features/map/components/MapViewMap';
 import { PhasePlaceholder } from '../shared/ui/PhasePlaceholder';
 
 export function MapViewPage() {
@@ -12,7 +12,7 @@ export function MapViewPage() {
           </div>
           <span className="status-pill connected">1Hz mock telemetry</span>
         </div>
-        <MapPlaceholder />
+        <MapViewMap />
       </section>
 
       <section className="workspace-panel">
