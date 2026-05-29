@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../app/providers/authContext';
+import { EmergencyStopButton } from '../features/control/EmergencyStopButton';
 import { RobotList } from '../features/robots/components/RobotList';
 import { ProtocolIndicators } from '../features/telemetry/components/ProtocolIndicators';
 import { TelemetryPanel } from '../features/telemetry/components/TelemetryPanel';
@@ -22,6 +23,7 @@ export function AppShell() {
           <h1>Control Dashboard</h1>
         </div>
         <ProtocolIndicators />
+        <EmergencyStopButton />
         <div className="profile-block">
           <span>{new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date())}</span>
           <strong>{user?.name ?? 'Guest'}</strong>

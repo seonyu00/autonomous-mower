@@ -112,6 +112,59 @@ button {
   color: #8ea4af;
 }
 
+.global-estop {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.estop-button,
+.danger-button {
+  background: #d71928;
+  border: 1px solid #ff8d94;
+  border-radius: 6px;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 800;
+  min-height: 40px;
+  padding: 10px 14px;
+}
+
+.estop-button {
+  min-width: 110px;
+}
+
+.estop-button:disabled,
+.danger-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.estop-state {
+  border: 1px solid #344652;
+  border-radius: 999px;
+  color: #8ea4af;
+  font-size: 12px;
+  padding: 5px 9px;
+}
+
+.estop-state.active {
+  background: #3a171c;
+  border-color: #ff5664;
+  color: #ffb1b7;
+}
+
+.estop-dialog-content {
+  display: grid;
+  gap: 12px;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .protocol-indicators {
   display: flex;
   flex-wrap: wrap;
@@ -451,6 +504,21 @@ button {
 .control-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
+}
+
+.estop-recovery-panel {
+  background: #2b1518;
+  border: 1px solid #ff5664;
+  border-radius: 6px;
+  color: #ffd5d8;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.estop-recovery-panel p {
+  color: #ffb1b7;
+  margin: 0;
 }
 
 .control-reasons {

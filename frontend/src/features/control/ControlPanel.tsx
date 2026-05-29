@@ -4,7 +4,7 @@ import { useAuthStore } from '../auth/authStore';
 import { useRobotStore } from '../robots/robotStore';
 import { useTelemetryStore } from '../telemetry/telemetryStore';
 import { Button } from '../../shared/ui/Button';
-import { claimControl, ControlPrecheckError, releaseControl, takeoverControl } from './controlApi';
+import { claimControl, ControlPrecheckError, releaseControl, resetAfterEmergency, takeoverControl } from './controlApi';
 import { canControlRobot } from './controlSelectors';
 import { createDefaultControlState, useControlStore } from './controlStore';
 import type { ControlLockState } from './types';
@@ -39,7 +39,7 @@ export function ControlPanel() {
 
   const eligibility = selectedRobotId ? canControlRobot(selectedRobotId) : { allowed: false, reasons: ['robot-not-selected'] };
 
-  const handleAction = async (action: 'claim' | 'release' | 'takeover') => {
+  const handleAction = async (action: 'claim' | 'release' | 'takeover' | 'reset-after-emergency') => {
     if (!selectedRobotId) {
       setActionError('No robot selected.');
       return;
@@ -59,6 +59,10 @@ export function ControlPanel() {
       if (action === 'takeover') {
         await takeoverControl(selectedRobotId);
       }
+
+      if (action === 'reset-after-emergency') {
+        await resetAfterEmergency(selectedRobotId);
+      }
     } catch (error) {
       if (error instanceof ControlPrecheckError) {
         setActionError(error.reasons.map(formatReason).join(' '));
@@ -73,6 +77,7 @@ export function ControlPanel() {
   const heldByOther =
     controlState?.lockState === 'held-by-other' ||
     (controlState?.lockState === 'held' && Boolean(controlState.controlOwner) && !ownedByCurrentUser);
+  const emergencyActive = Boolean(controlState?.emergency || controlState?.mode === 'emergency');
 
   return (
     <div className="control-panel">
@@ -91,9 +96,20 @@ export function ControlPanel() {
         <Metric label="Lock" value={controlState?.lockState ?? 'none'} />
         <Metric label="Owner" value={controlState?.controlOwner ?? 'Unassigned'} />
         <Metric label="Mode" value={controlState?.mode ?? 'idle'} />
+        <Metric label="Emergency" value={emergencyActive ? 'active' : 'clear'} />
         <Metric label="Realtime" value={connectionState} />
         <Metric label="WSS" value={protocolState.wss} />
       </div>
+
+      {emergencyActive ? (
+        <section className="estop-recovery-panel" aria-label="Emergency recovery status">
+          <strong>E-Stop is active.</strong>
+          <p>Previous commands are blocked and will not resume automatically. Reset only returns the robot to idle.</p>
+          <Button type="button" onClick={() => void handleAction('reset-after-emergency')}>
+            Reset After Emergency
+          </Button>
+        </section>
+      ) : null}
 
       <div className="lock-state-list" aria-label="Control lock state list">
         {lockStates.map((lockState) => (
@@ -107,20 +123,26 @@ export function ControlPanel() {
         <Button
           type="button"
           variant="primary"
-          disabled={!selectedRobotId || controlState?.lockState === 'requesting' || controlState?.lockState === 'held'}
+          disabled={
+            emergencyActive || !selectedRobotId || controlState?.lockState === 'requesting' || controlState?.lockState === 'held'
+          }
           onClick={() => void handleAction('claim')}
         >
           Request Control
         </Button>
         <Button
           type="button"
-          disabled={!selectedRobotId || !ownedByCurrentUser}
+          disabled={emergencyActive || !selectedRobotId || !ownedByCurrentUser}
           onClick={() => void handleAction('release')}
         >
           Release Control
         </Button>
         <PermissionGate permission="control:takeover">
-          <Button type="button" disabled={!selectedRobotId || !heldByOther} onClick={() => void handleAction('takeover')}>
+          <Button
+            type="button"
+            disabled={emergencyActive || !selectedRobotId || !heldByOther}
+            onClick={() => void handleAction('takeover')}
+          >
             Take Over
           </Button>
         </PermissionGate>
