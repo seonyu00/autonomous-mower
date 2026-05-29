@@ -34,6 +34,7 @@ export function ManualJoystick() {
       return;
     }
 
+    deadmanRef.current?.clear();
     stopInFlightRef.current = true;
 
     try {
@@ -102,8 +103,8 @@ export function ManualJoystick() {
       if (direction === 'stop') {
         await stopRobot();
       } else {
-        await sendManualCommand(selectedRobotId, command);
         deadmanRef.current?.reset();
+        await sendManualCommand(selectedRobotId, command);
       }
 
       setLocalError(null);

@@ -99,6 +99,10 @@ export function canSendStopCommand(robotId: string): ControlEligibility {
     reasons.push('control-lock-not-held');
   }
 
+  if (controlState.controlOwner && user && controlState.controlOwner !== user.id) {
+    reasons.push('control-owned-by-other-user');
+  }
+
   if (protocolState.https !== 'connected') {
     reasons.push('transport-not-ready');
   }
