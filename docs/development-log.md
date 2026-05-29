@@ -283,3 +283,174 @@
 - Vite build에서 React Router/TanStack Query의 `"use client"` directive 무시 경고가 출력된다. 현재 빌드 실패 요인은 아니다.
 - MapLibre 추가 후 bundle chunk size 경고가 발생한다. Phase 2 후반 또는 Phase 4 전에 route-level lazy loading/code splitting을 검토한다.
 - Polygon 편집, 실제 저장, 실제 snapshot 이미지 렌더링, E-Stop, joystick, WebRTC는 아직 후속 단계 범위다.
+
+### Frontend Implementation Status - Phase 1 to Phase 4
+
+#### Completed Scope
+
+- Phase 1 foundation
+  - Vite + React + TypeScript frontend project.
+  - React Router pages: Login, Map View, History, Log Viewer, Settings.
+  - AppShell layout: Header, Sidebar, main content, right status area.
+  - Auth source of truth through `authStore` and `AuthProvider`.
+  - RBAC model and `PermissionGate`.
+  - REST `httpClient` with central access token injection.
+  - Zustand stores for robot selection, telemetry, control, and video state.
+  - STOMP client skeleton with robot-scoped subscription lifecycle.
+  - Dashboard basics: RobotList, ProtocolIndicators, TelemetryPanel.
+- Phase 2 map, work zone, history, logs
+  - MapLibre GL selected and connected in Map View.
+  - Mock robot marker, route polyline, and work-zone Polygon display.
+  - `WorkZoneEditor` skeleton with Polygon coordinate display.
+  - GeoJSON Polygon validation and PostGIS SRID 4326-compatible payload conversion.
+  - Work-zone save API skeleton.
+  - History page with date range, robot filter, mock route data, route map, and event timeline placeholder.
+  - Log Viewer with filters, severity filtering, mock logs, log timeline, and snapshot placeholder.
+- Phase 3 control and safety
+  - Robot-scoped control ownership state.
+  - Control lock states: `none`, `requesting`, `held`, `held-by-other`, `expired`, `revoked`.
+  - ControlPanel with request/release/takeover.
+  - Global E-Stop with confirmation dialog and recovery placeholder.
+  - `canControlRobot`, `canSendEmergencyStop`, `canSendStopCommand`, `canResetAfterEmergency` selectors.
+  - ManualJoystick with command payload preview.
+  - 500ms deadman switch.
+  - Stop command on pointerup, pointercancel, blur, visibilitychange, pagehide, beforeunload.
+  - AUTO/MANUAL/HOME mode command UI.
+  - Work start/stop, mower blade start/stop, attachment raise/lower command UI.
+  - E-Stop state blocks normal commands and does not auto-resume previous commands after reset.
+- Phase 4 quality and video foundation
+  - Vitest + React Testing Library + jest-dom + jsdom setup.
+  - Unit tests for RBAC, control selectors, E-Stop normal-command blocking, read-only command rejection, deadman switch, and video store transitions.
+  - VideoPanel in right status area.
+  - WebRTCClient wrapper with RTCPeerConnection lifecycle.
+  - Mock signalling skeleton: `startStream`, `stopStream`, `reconnectStream`.
+  - Video state UI: loading, error, disconnected, connected, reconnecting.
+  - Stream lifecycle stop on page hide/unload, selected robot change, and permission loss.
+  - WebRTC connection timeout and ICE failure/disconnect state handling.
+  - SRS video policy display: 15fps minimum, 480p, 500kbps max.
+  - Snapshot placeholder type aligned with log `SnapshotRef`.
+
+#### Mock or Skeleton Areas
+
+- Authentication uses mock session defaults. Real login API skeleton exists but is not wired to a deployed backend.
+- Robot list, telemetry, history, logs, work zones, and map overlays still use mock/fallback data in DEV.
+- Work-zone Polygon edit-on-map and real persistence are not implemented.
+- STOMP connection and topic lifecycle exist, but payload parsing and store updates are still minimal.
+- Control APIs are skeletons with DEV mock state updates.
+- Command ack/error, idempotency, sequence numbers, QoS behavior, and server-side lock expiry are not implemented in frontend contracts yet.
+- WebRTC signalling uses mock responses when no signalling URL/backend exists.
+- Video playback uses a placeholder unless a real remote MediaStream arrives.
+- Snapshot capture/upload is placeholder only. Logs can display snapshot metadata, but real JPEG rendering depends on backend-provided URLs.
+- Route-level auth guard remains a known hardening item.
+
+#### REST API Contract Needed Before Backend Integration
+
+- Auth
+  - `POST /api/auth/login`
+  - Request: username/password or backend-approved credential format.
+  - Response: access token, refresh/expiry policy, role, permissions, user profile.
+- Robots
+  - `GET /api/robots`
+  - `GET /api/robots/{robotId}`
+  - Required fields: id, modelName, active, connectionState, current control summary if available.
+- Telemetry/history/logs
+  - `GET /api/history?robotId=&from=&to=`
+  - Must return PostGIS-compatible route structures, preferably GeoJSON `LineString` with `srid: 4326`.
+  - `GET /api/logs?robotId=&from=&to=&severity=&text=`
+  - Must return `LogEntry` including optional `SnapshotRef`.
+- Work zone
+  - `GET /api/robots/{robotId}/work-zone`
+  - `PUT /api/robots/{robotId}/work-zone`
+  - Payload must clarify GeoJSON Polygon format, SRID 4326, ring closure, validation error shape, and version/update conflict handling.
+- Control
+  - `POST /api/control/{robotId}/claim`
+  - `POST /api/control/{robotId}/release`
+  - `POST /api/control/{robotId}/takeover`
+  - `POST /api/control/{robotId}/mode`
+  - `POST /api/control/{robotId}/manual`
+  - `POST /api/control/{robotId}/stop`
+  - `POST /api/control/{robotId}/estop`
+  - `POST /api/control/{robotId}/reset-after-emergency`
+  - `POST /api/control/{robotId}/attachment`
+  - Required contract items: command id, requester id, lock owner, lock version, accepted/rejected status, rejection reason, server timestamp, command sequence, idempotency key, and explicit E-Stop priority semantics.
+- Video
+  - `POST /api/video/{robotId}/offer`
+  - `POST /api/video/{robotId}/stop`
+  - `POST /api/video/{robotId}/reconnect`
+  - Required contract items are listed below in WebRTC signalling.
+
+#### STOMP Topic Contract Needed
+
+- Current topic names are assumptions unless backend confirms them.
+- Existing frontend topic skeleton:
+  - `/topic/robots/{robotId}/telemetry`
+  - `/topic/robots/{robotId}/status`
+  - `/topic/robots/{robotId}/events`
+  - `/topic/robots/{robotId}/control-lock`
+- Planned/needed topic:
+  - `/topic/robots/{robotId}/video-status`
+- Required payload contracts:
+  - Telemetry: robotId, timestamp, latitude, longitude, speed, battery, signal, mode, workState, errorState.
+  - Status: robotId, connection state, subsystem status, stale/heartbeat timestamp.
+  - Events: event id, severity, type, occurredAt, source, message, optional location/snapshot.
+  - Control lock: robotId, lockState, owner id/name, expiresAt, version, reason, updatedAt.
+  - Control command ack/error: command id, command type, accepted, status, reason, server timestamp.
+  - Video status: robotId, sessionId, state, bitrate, fps, resolution, error reason.
+- Operational requirements:
+  - WSS only outside local mock/dev.
+  - Auth token location must be defined: STOMP connect headers or cookie/session.
+  - Reconnect/backoff policy and duplicate subscription cleanup must be agreed.
+
+#### WebRTC Signalling Contract Needed
+
+- Frontend currently supports REST-style signalling skeleton.
+- Start stream:
+  - `POST /api/video/{robotId}/offer`
+  - Request: robotId, SDP offer, offer type, optional desired quality policy.
+  - Response: sessionId, SDP answer, answer type, ICE servers, mock flag not needed in production.
+- Stop stream:
+  - `POST /api/video/{robotId}/stop`
+  - Request: robotId, sessionId.
+  - Response: 204 or explicit stopped state.
+- Reconnect:
+  - `POST /api/video/{robotId}/reconnect`
+  - Request: robotId, previous sessionId.
+  - Response should define whether client must create a fresh offer or reuse a session.
+- Missing decisions:
+  - Trickle ICE support or single offer/answer exchange only.
+  - ICE candidate endpoint/topic shape if trickle ICE is used.
+  - Codec policy: H.264/H.265, NVENC constraints, browser compatibility fallback.
+  - Quality policy enforcement: 15fps minimum, 480p, max 500kbps.
+  - Snapshot capture ownership: frontend canvas capture, backend frame capture, or robot-side snapshot.
+  - Whether video loss affects manual control eligibility. Current frontend does not automatically allow/deny control based on video status.
+
+#### Remaining Vite Warnings and Plan
+
+- Warning: React Router and TanStack Query module-level `"use client"` directives are ignored by Vite/Rollup.
+  - Current impact: warning only, build succeeds.
+  - Plan: leave unless it becomes noisy in CI; optionally suppress known directive warnings in Rollup `onwarn` after confirming no real warnings are hidden.
+- Warning: large bundle chunk caused mainly by MapLibre and map-heavy pages.
+  - Current impact: warning only, build succeeds.
+  - Plan: apply route-level lazy loading and isolate MapLibre imports inside lazily loaded route modules.
+
+#### Route-Level Lazy Loading Plan for MapLibre Chunk Size
+
+1. Convert route elements in `src/app/routes.tsx` to lazy imports:
+   - `MapViewPage`
+   - `HistoryPage`
+   - `LogViewerPage`
+   - `SettingsPage`
+2. Wrap route outlet/page elements with `React.Suspense` and a compact loading fallback.
+3. Keep `AppShell`, Header, Sidebar, RobotList, TelemetryPanel, VideoPanel in the main shell chunk.
+4. Ensure MapLibre imports remain only inside map-related lazy chunks:
+   - `MapViewMap`
+   - `HistoryMap`
+5. Optionally split History map from History filters/timeline if the history page should load quickly before map code.
+6. Re-run `npm run build` and compare chunk output.
+7. If warning remains, add `build.rollupOptions.output.manualChunks`:
+   - `maplibre` chunk for `maplibre-gl`
+   - `vendor` chunk for React/Router/TanStack if needed
+8. Add a short smoke check:
+   - `/map` loads and renders MapLibre placeholder/map.
+   - `/history` lazy map still renders selected route.
+   - `/logs`, `/settings` are unaffected.
