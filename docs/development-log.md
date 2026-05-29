@@ -144,9 +144,49 @@
 - `npm run build` 성공 확인.
 - `npm run lint` 성공 확인.
 
+### Phase 2. Log Viewer - Pass 4
+
+- `LogViewerPage`를 placeholder에서 실제 mock 기반 로그 조회 화면으로 교체했다.
+- 로그 검색 필터 UI를 추가했다.
+  - robot filter
+  - severity filter
+  - date range filter
+  - text search
+- logs API client skeleton을 확장했다.
+  - DEV 환경에서는 mock 데이터를 robot, severity, date range, text 기준으로 필터링한다.
+  - 실제 환경에서는 `/api/logs?robotId=&severity=&text=&from=&to=` 형태의 REST 호출 구조를 유지한다.
+- 향후 logs API와 호환되도록 로그 타입을 확장했다.
+  - `LogSeverity`
+  - `LogEventType`
+  - `SnapshotRef`
+  - `LogEntry`
+  - `LogQuery`
+- `mockLogs.ts`를 추가했다.
+  - obstacle detected
+  - communication lost
+  - E-Stop
+  - sensor fault
+  - job event
+  - snapshot metadata
+- `LogTimeline`을 추가했다.
+  - severity별 timeline item 표시
+  - 선택 로그 상태 지원
+- `SnapshotViewer` placeholder를 추가했다.
+  - snapshot metadata 표시
+  - 실제 JPEG 렌더링은 logs API가 snapshot URL을 제공할 때 연결하도록 남겨두었다.
+- 선택 로그의 metadata preview를 추가했다.
+- Log Viewer 화면 스타일을 추가했다.
+  - filter form
+  - timeline panel
+  - snapshot placeholder
+  - log metadata panel
+- 실제 API 연동은 구현하지 않고 mock 데이터만 사용했다.
+- `npm run build` 성공 확인.
+- `npm run lint` 성공 확인.
+
 ### Current Notes
 
 - MapLibre 지도 스타일은 `https://demotiles.maplibre.org/style.json`을 사용한다. 실제 화면 렌더링에는 네트워크 접근이 필요하다.
 - Vite build에서 React Router/TanStack Query의 `"use client"` directive 무시 경고가 출력된다. 현재 빌드 실패 요인은 아니다.
 - MapLibre 추가 후 bundle chunk size 경고가 발생한다. Phase 2 후반 또는 Phase 4 전에 route-level lazy loading/code splitting을 검토한다.
-- Polygon 편집, 실제 저장, 로그/스냅샷 조회, E-Stop, joystick, WebRTC는 아직 후속 단계 범위다.
+- Polygon 편집, 실제 저장, 실제 snapshot 이미지 렌더링, E-Stop, joystick, WebRTC는 아직 후속 단계 범위다.

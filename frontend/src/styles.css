@@ -239,6 +239,12 @@ button {
   grid-template-columns: minmax(0, 1fr) 340px;
 }
 
+.logs-page {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+
 .map-panel {
   grid-row: span 2;
 }
@@ -412,7 +418,19 @@ button {
   grid-template-columns: 1fr 1fr 1fr auto;
 }
 
-.history-filters label {
+.log-filters {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+
+.log-search-field {
+  grid-column: span 3;
+}
+
+.history-filters label,
+.log-filters label {
   color: #8ea4af;
   display: grid;
   font-size: 12px;
@@ -420,7 +438,9 @@ button {
 }
 
 .history-filters input,
-.history-filters select {
+.history-filters select,
+.log-filters input,
+.log-filters select {
   background: #0d151b;
   border: 1px solid #344652;
   border-radius: 6px;
@@ -433,8 +453,13 @@ button {
   grid-row: span 2;
 }
 
+.logs-timeline-panel {
+  grid-row: span 3;
+}
+
 .history-result-list,
-.history-timeline {
+.history-timeline,
+.log-timeline {
   display: grid;
   gap: 10px;
 }
@@ -486,6 +511,64 @@ button {
 .timeline-event p {
   color: #b9c8d0;
   margin: 0;
+}
+
+.log-event {
+  background: #0d151b;
+  border: 1px solid #23313b;
+  border-left: 3px solid #61b6ff;
+  border-radius: 6px;
+  color: #dce8ee;
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.log-event.warning {
+  border-left-color: #ffc84d;
+}
+
+.log-event.critical {
+  border-left-color: #ff5664;
+}
+
+.log-event.selected {
+  border-color: #4da3ff;
+}
+
+.log-event span,
+.log-event small {
+  color: #8ea4af;
+}
+
+.log-event p {
+  color: #b9c8d0;
+  margin: 0;
+}
+
+.snapshot-placeholder {
+  align-content: center;
+  background: #0d151b;
+  border: 1px dashed #344652;
+  border-radius: 8px;
+  color: #aebfc8;
+  display: grid;
+  gap: 6px;
+  min-height: 220px;
+  padding: 18px;
+  text-align: center;
+}
+
+.snapshot-placeholder.has-snapshot {
+  border-color: #4da3ff;
+}
+
+.snapshot-placeholder span,
+.snapshot-placeholder small {
+  color: #8ea4af;
 }
 
 .phase-placeholder {
@@ -613,8 +696,20 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .logs-page {
+    grid-template-columns: 1fr;
+  }
+
   .history-filters {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .log-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .log-search-field {
+    grid-column: span 2;
   }
 }
 
@@ -642,5 +737,11 @@ button {
 
   .history-filters {
     grid-template-columns: 1fr;
+  }
+
+  .log-filters,
+  .log-search-field {
+    grid-template-columns: 1fr;
+    grid-column: auto;
   }
 }
