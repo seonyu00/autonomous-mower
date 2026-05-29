@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: autonomous-mower-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mower}
+      POSTGRES_USER: ${POSTGRES_USER:-mower}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mower}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
