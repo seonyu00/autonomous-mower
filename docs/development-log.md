@@ -206,6 +206,45 @@
   4. STOMP wrapper에 robot-scoped subscription 및 control-lock/status event 처리 구조를 추가한다.
   5. `canControlRobot(robotId)` selector를 추가해 RBAC, selected robot, lock ownership, realtime, emergency, transport security를 결합한다.
 
+### Phase 3. Mode and Attachment Commands - Pass 4
+
+- `ControlPanel`에 일반 제어 명령 UI를 추가했다.
+- `GeneralControlCommands` 컴포넌트를 신규 작성했다.
+  - AUTO/MANUAL/HOME 모드 전환 버튼
+  - 작업 시작/정지 버튼
+  - 예초 장치 구동/정지 버튼
+  - 작업장치 상승/하강 버튼
+- `changeMode` API skeleton을 UI와 연결했다.
+  - AUTO는 `autonomous`
+  - MANUAL은 `manual`
+  - HOME은 `home`
+  - 작업 시작은 mock 단계에서 `autonomous`
+  - 작업 정지는 mock 단계에서 `idle`
+- `sendMowerAttachmentCommand` API skeleton을 UI와 연결했다.
+  - `blade-start`
+  - `blade-stop`
+  - `raise`
+  - `lower`
+- `ControlCommandPayload` 타입을 확장했다.
+  - `ModeCommand`
+  - `MowerAttachmentCommand`
+  - 기존 `ManualCommand`, `StopCommand`
+- mock fallback에서 `change-mode` 명령을 받으면 control store의 `mode`를 갱신하도록 했다.
+- 모든 일반 명령은 기존 `canControlRobot(robotId)` selector를 통과해야만 실행되도록 유지했다.
+  - E-Stop 상태
+  - 제어권 없음
+  - read-only 권한
+  - realtime degraded/disconnected
+  - transport-not-ready
+  상태에서는 명령 버튼이 비활성화된다.
+- E-Stop과 `sendStopCommand` 우선순위 로직은 변경하지 않았다.
+- 명령 실패 시 local error와 `commandError`를 UI에 표시하도록 했다.
+- `npm run build` 성공 확인.
+- `npm run lint` 성공 확인.
+- 남은 경고:
+  - Vite build에서 React Router/TanStack Query `"use client"` directive 무시 경고가 계속 발생한다.
+  - MapLibre 포함 bundle chunk size 경고가 계속 발생한다.
+
 ### Current Notes
 
 - MapLibre 지도 스타일은 `https://demotiles.maplibre.org/style.json`을 사용한다. 실제 화면 렌더링에는 네트워크 접근이 필요하다.

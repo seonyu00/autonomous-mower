@@ -8,7 +8,9 @@ import type {
   ControlCommandType,
   ControlMode,
   ManualCommand,
+  ModeCommand,
   MowerAttachmentAction,
+  MowerAttachmentCommand,
   StopCommand,
 } from './types';
 
@@ -55,8 +57,16 @@ export async function takeoverControl(robotId: string) {
 
 export async function changeMode(robotId: string, mode: ControlMode) {
   requireCanControl(robotId);
+  const command: ModeCommand = {
+    action: 'change-mode',
+    robotId,
+    mode,
+  };
+  useControlStore.getState().patchControlState(robotId, {
+    lastCommandPayload: command,
+  });
 
-  return requestControlCommand(robotId, 'change-mode', `/api/control/${robotId}/mode`, { mode });
+  return requestControlCommand(robotId, 'change-mode', `/api/control/${robotId}/mode`, command);
 }
 
 export async function sendManualCommand(robotId: string, command: ManualCommand) {
@@ -107,8 +117,16 @@ export async function resetAfterEmergency(robotId: string) {
 
 export async function sendMowerAttachmentCommand(robotId: string, action: MowerAttachmentAction) {
   requireCanControl(robotId);
+  const command: MowerAttachmentCommand = {
+    action: 'mower-attachment',
+    robotId,
+    attachmentAction: action,
+  };
+  useControlStore.getState().patchControlState(robotId, {
+    lastCommandPayload: command,
+  });
 
-  return requestControlCommand(robotId, 'mower-attachment', `/api/control/${robotId}/attachment`, { action });
+  return requestControlCommand(robotId, 'mower-attachment', `/api/control/${robotId}/attachment`, command);
 }
 
 function requireCanControl(robotId: string) {
@@ -161,7 +179,7 @@ async function requestControlCommand(
 
   try {
     if (import.meta.env.DEV) {
-      applyMockControlResult(robotId, commandType);
+      applyMockControlResult(robotId, commandType, body);
 
       return {
         accepted: true,
@@ -181,7 +199,7 @@ async function requestControlCommand(
   }
 }
 
-function applyMockControlResult(robotId: string, commandType: ControlCommandType) {
+function applyMockControlResult(robotId: string, commandType: ControlCommandType, body: ControlRequestBody) {
   const user = useAuthStore.getState().user;
 
   if (commandType === 'claim-control' || commandType === 'takeover-control') {
@@ -220,5 +238,16 @@ function applyMockControlResult(robotId: string, commandType: ControlCommandType
       manualActive: false,
       mode: 'idle',
     });
+  }
+
+  if (commandType === 'change-mode') {
+    const mode = body.mode;
+
+    if (mode === 'idle' || mode === 'manual' || mode === 'autonomous' || mode === 'home') {
+      useControlStore.getState().patchControlState(robotId, {
+        mode,
+        manualActive: false,
+      });
+    }
   }
 }

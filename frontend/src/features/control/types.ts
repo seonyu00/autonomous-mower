@@ -23,12 +23,26 @@ export type ManualCommand = {
   speed: number;
 };
 
+export type ModeCommand = {
+  action: 'change-mode';
+  robotId: string;
+  mode: ControlMode;
+};
+
+export type MowerAttachmentCommand = {
+  action: 'mower-attachment';
+  robotId: string;
+  attachmentAction: MowerAttachmentAction;
+};
+
 export type StopCommand = {
   action: 'stop';
   robotId: string;
   direction: 'stop';
   speed: 0;
 };
+
+export type ControlCommandPayload = ManualCommand | ModeCommand | MowerAttachmentCommand | StopCommand;
 
 export type PendingCommand = {
   id: string;
@@ -46,7 +60,7 @@ export type ControlState = {
   pendingCommand: PendingCommand | null;
   commandError: string | null;
   controlOwner: string | null;
-  lastCommandPayload: ManualCommand | StopCommand | null;
+  lastCommandPayload: ControlCommandPayload | null;
 };
 
 export type ControlCommandResult = {
