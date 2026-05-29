@@ -4,19 +4,24 @@ import type { VideoSignalOfferRequest } from './types';
 
 type WebRtcClientOptions = {
   onRemoteStream?: (stream: MediaStream | null) => void;
+  connectionTimeoutMs?: number;
 };
 
 export class WebRTCClient {
   private peerConnection: RTCPeerConnection | null = null;
   private robotId: string | null = null;
   private sessionId: string | null = null;
+  private connectionTimeoutId: number | undefined;
   private readonly onRemoteStream?: (stream: MediaStream | null) => void;
+  private readonly connectionTimeoutMs: number;
 
   constructor(options: WebRtcClientOptions = {}) {
     this.onRemoteStream = options.onRemoteStream;
+    this.connectionTimeoutMs = options.connectionTimeoutMs ?? 8000;
   }
 
   async startStream(robotId: string) {
+    this.clearConnectionTimeout();
     this.robotId = robotId;
     useVideoStore.getState().patchSession(robotId, {
       connectionState: 'connecting',
@@ -27,6 +32,7 @@ export class WebRTCClient {
 
     try {
       this.peerConnection = this.createPeerConnection(robotId);
+      this.startConnectionTimeout(robotId);
       const offer = await this.createOffer(robotId);
       const answer = await startSignaling(robotId, offer);
       this.sessionId = answer.sessionId;
@@ -45,6 +51,7 @@ export class WebRTCClient {
         error: null,
         mock: answer.mock,
       });
+      this.clearConnectionTimeout();
     } catch (error) {
       this.closePeerConnection();
       useVideoStore.getState().patchSession(robotId, {
@@ -132,10 +139,26 @@ export class WebRTCClient {
     };
     peerConnection.onconnectionstatechange = () => {
       const state = mapPeerConnectionState(peerConnection.connectionState);
+      if (state === 'connected' || state === 'failed' || state === 'disconnected') {
+        this.clearConnectionTimeout();
+      }
       useVideoStore.getState().patchSession(robotId, {
         connectionState: state,
         loading: state === 'connecting',
       });
+    };
+    peerConnection.oniceconnectionstatechange = () => {
+      if (peerConnection.iceConnectionState === 'failed') {
+        this.failConnection(robotId, 'WebRTC ICE connection failed.');
+      }
+
+      if (peerConnection.iceConnectionState === 'disconnected') {
+        useVideoStore.getState().patchSession(robotId, {
+          connectionState: 'disconnected',
+          loading: false,
+          error: 'WebRTC ICE connection disconnected.',
+        });
+      }
     };
 
     return peerConnection;
@@ -164,11 +187,38 @@ export class WebRTCClient {
   }
 
   private closePeerConnection() {
+    this.clearConnectionTimeout();
     this.peerConnection?.getSenders().forEach((sender) => {
       sender.track?.stop();
     });
     this.peerConnection?.close();
     this.peerConnection = null;
+  }
+
+  private startConnectionTimeout(robotId: string) {
+    this.connectionTimeoutId = window.setTimeout(() => {
+      const session = useVideoStore.getState().getSession(robotId);
+
+      if (session.connectionState === 'connecting' || session.connectionState === 'reconnecting') {
+        this.failConnection(robotId, 'WebRTC connection timed out.');
+      }
+    }, this.connectionTimeoutMs);
+  }
+
+  private clearConnectionTimeout() {
+    if (this.connectionTimeoutId !== undefined) {
+      window.clearTimeout(this.connectionTimeoutId);
+      this.connectionTimeoutId = undefined;
+    }
+  }
+
+  private failConnection(robotId: string, error: string) {
+    this.closePeerConnection();
+    useVideoStore.getState().patchSession(robotId, {
+      connectionState: 'failed',
+      loading: false,
+      error,
+    });
   }
 }
 

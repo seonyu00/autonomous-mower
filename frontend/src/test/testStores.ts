@@ -4,6 +4,7 @@ import { useRobotStore } from '../features/robots/robotStore';
 import { mockRobots } from '../features/robots/mockRobots';
 import { mockTelemetry } from '../features/telemetry/mockTelemetry';
 import { useTelemetryStore } from '../features/telemetry/telemetryStore';
+import { useVideoStore } from '../features/video/videoStore';
 import type { Role } from '../features/auth/types';
 import type { ControlState } from '../features/control/types';
 
@@ -38,6 +39,10 @@ export function resetStores(role: Role = 'admin') {
 
   useControlStore.setState({
     controlByRobotId: {},
+  });
+
+  useVideoStore.setState({
+    sessionsByRobotId: {},
   });
 }
 

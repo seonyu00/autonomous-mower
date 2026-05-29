@@ -1,19 +1,27 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Button } from '../../../shared/ui/Button';
+import { hasPermission } from '../../../shared/lib/permissions';
+import { useAuthStore } from '../../auth/authStore';
 import { useRobotStore } from '../../robots/robotStore';
 import { createDefaultVideoSession, useVideoStore } from '../videoStore';
 import { WebRTCClient } from '../WebRtcClient';
 
 export function VideoPanel() {
   const selectedRobotId = useRobotStore((state) => state.selectedRobotId);
+  const user = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const sessionsByRobotId = useVideoStore((state) => state.sessionsByRobotId);
+  const requestSnapshot = useVideoStore((state) => state.requestSnapshot);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const clientRef = useRef<WebRTCClient | null>(null);
-  const [snapshotRequestedAt, setSnapshotRequestedAt] = useState<string | null>(null);
+  const previousRobotIdRef = useRef<string | null>(null);
 
   const session = selectedRobotId
     ? sessionsByRobotId[selectedRobotId] ?? createDefaultVideoSession(selectedRobotId)
     : null;
+  const canUseVideo = Boolean(isAuthenticated && user && hasPermission(user.role, 'telemetry:read'));
+  const activeVideoStates = ['connecting', 'connected', 'reconnecting'];
+  const hasActiveStream = Boolean(session && activeVideoStates.includes(session.connectionState));
 
   useEffect(() => {
     clientRef.current = new WebRTCClient({
@@ -26,6 +34,43 @@ export function VideoPanel() {
 
     return () => {
       void clientRef.current?.stopStream();
+    };
+  }, []);
+
+  useEffect(() => {
+    const previousRobotId = previousRobotIdRef.current;
+
+    if (previousRobotId && previousRobotId !== selectedRobotId) {
+      void clientRef.current?.stopStream(previousRobotId);
+    }
+
+    previousRobotIdRef.current = selectedRobotId;
+  }, [selectedRobotId]);
+
+  useEffect(() => {
+    if (!canUseVideo && selectedRobotId && hasActiveStream) {
+      void clientRef.current?.stopStream(selectedRobotId);
+    }
+  }, [canUseVideo, hasActiveStream, selectedRobotId]);
+
+  useEffect(() => {
+    const stopCurrentStream = () => {
+      void clientRef.current?.stopStream();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        stopCurrentStream();
+      }
+    };
+
+    window.addEventListener('pagehide', stopCurrentStream);
+    window.addEventListener('beforeunload', stopCurrentStream);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('pagehide', stopCurrentStream);
+      window.removeEventListener('beforeunload', stopCurrentStream);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
@@ -43,9 +88,11 @@ export function VideoPanel() {
     return session?.connectionState ?? 'idle';
   }, [selectedRobotId, session?.connectionState]);
 
-  const startDisabled = !selectedRobotId || session?.loading || session?.connectionState === 'connected';
+  const startDisabled = !selectedRobotId || !canUseVideo || session?.loading || session?.connectionState === 'connected';
   const stopDisabled = !selectedRobotId || session?.loading || !['connected', 'failed', 'reconnecting'].includes(session?.connectionState ?? '');
-  const reconnectDisabled = !selectedRobotId || session?.loading || !['connected', 'failed', 'disconnected'].includes(session?.connectionState ?? '');
+  const reconnectDisabled =
+    !selectedRobotId || !canUseVideo || session?.loading || !['connected', 'failed', 'disconnected'].includes(session?.connectionState ?? '');
+  const snapshotDisabled = !selectedRobotId || !canUseVideo;
 
   const handleStart = async () => {
     if (!selectedRobotId) {
@@ -69,6 +116,14 @@ export function VideoPanel() {
     }
 
     await clientRef.current?.reconnect(selectedRobotId);
+  };
+
+  const handleSnapshot = () => {
+    if (!selectedRobotId || !canUseVideo) {
+      return;
+    }
+
+    requestSnapshot(selectedRobotId);
   };
 
   return (
@@ -102,7 +157,7 @@ export function VideoPanel() {
         <Button type="button" disabled={reconnectDisabled} onClick={() => void handleReconnect()}>
           Reconnect
         </Button>
-        <Button type="button" disabled={!selectedRobotId} onClick={() => setSnapshotRequestedAt(new Date().toISOString())}>
+        <Button type="button" disabled={snapshotDisabled} onClick={handleSnapshot}>
           Snapshot
         </Button>
       </div>
@@ -110,10 +165,21 @@ export function VideoPanel() {
       {session?.loading ? <p className="muted">Loading WebRTC session through mock signalling.</p> : null}
       {session?.error ? <p className="warning-line">{session.error}</p> : null}
       {session?.connectionState === 'disconnected' ? <p className="muted">Video stream is disconnected.</p> : null}
+      {!canUseVideo ? <p className="warning-line">Telemetry permission is required for on-demand video.</p> : null}
+
+      <div className="video-policy" aria-label="WebRTC stream policy">
+        <span>{session?.qualityPolicy.minFps ?? 15}fps minimum</span>
+        <span>
+          {session?.qualityPolicy.width ?? 640}x{session?.qualityPolicy.height ?? 480}
+        </span>
+        <span>{session?.qualityPolicy.maxBitrateKbps ?? 500}kbps max</span>
+      </div>
 
       <div className="snapshot-placeholder compact" aria-label="Snapshot placeholder">
         <span>Snapshot placeholder</span>
-        <small>{snapshotRequestedAt ? `Requested ${new Date(snapshotRequestedAt).toLocaleTimeString()}` : 'No snapshot captured'}</small>
+        <small>
+          {session?.snapshot ? `Requested ${new Date(session.snapshot.capturedAt).toLocaleTimeString()}` : 'No snapshot captured'}
+        </small>
       </div>
     </section>
   );

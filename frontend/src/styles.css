@@ -840,6 +840,21 @@ button {
   grid-template-columns: 1fr 1fr;
 }
 
+.video-policy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.video-policy span {
+  background: #0d151b;
+  border: 1px solid #23313b;
+  border-radius: 999px;
+  color: #b9c8d0;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
 .phase-placeholder {
   align-items: center;
   background: #0d151b;
