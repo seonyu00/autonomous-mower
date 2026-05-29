@@ -1,4 +1,5 @@
-import type { Feature, LineString, Polygon } from 'geojson';
+import type { Feature, LineString } from 'geojson';
+import type { PolygonGeometry } from './geojson';
 
 export const mockRouteByRobotId: Record<string, Feature<LineString>> = {
   'MOWER-01': {
@@ -46,7 +47,7 @@ export const mockRouteByRobotId: Record<string, Feature<LineString>> = {
   },
 };
 
-export const mockWorkZoneByRobotId: Record<string, Feature<Polygon>> = {
+export const mockWorkZoneByRobotId: Record<string, Feature<PolygonGeometry>> = {
   'MOWER-01': {
     type: 'Feature',
     properties: {

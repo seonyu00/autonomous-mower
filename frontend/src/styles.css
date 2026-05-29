@@ -327,6 +327,68 @@ button {
   margin: 12px 0 0;
 }
 
+.work-zone-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.coordinate-list {
+  background: #0d151b;
+  border: 1px solid #23313b;
+  border-radius: 6px;
+  display: grid;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.coordinate-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 32px 1fr 1fr;
+  padding: 8px 10px;
+}
+
+.coordinate-row + .coordinate-row {
+  border-top: 1px solid #23313b;
+}
+
+.coordinate-row span {
+  color: #8ea4af;
+}
+
+.coordinate-row code,
+.payload-preview {
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+}
+
+.validation-list {
+  color: #ffb1b7;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.work-zone-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.payload-preview {
+  background: #0d151b;
+  border: 1px solid #23313b;
+  border-radius: 6px;
+  color: #b9c8d0;
+  font-size: 12px;
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.save-note {
+  color: #8ef0be;
+  margin: 0;
+}
+
 .phase-placeholder {
   align-items: center;
   background: #0d151b;
