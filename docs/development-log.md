@@ -184,6 +184,28 @@
 - `npm run build` 성공 확인.
 - `npm run lint` 성공 확인.
 
+### Phase 3 Readiness Review
+
+- Phase 1~2 구현을 reviewer 역할로 검토했다.
+- `npm run build` 성공 확인.
+- `npm run lint` 성공 확인.
+- Phase 3(Control/E-Stop) 진입 전 수정이 필요한 구조적 문제를 식별했다.
+- 주요 findings:
+  - Auth 상태가 `AuthProvider`와 `authStore`로 분리되어 있어 command authorization drift 위험이 있다.
+  - `httpClient`가 active token을 중앙에서 자동 주입하지 않아 control API 호출 시 인증 누락 위험이 있다.
+  - `controlStore`가 `hasControl`/`controlOwner`만 갖고 있어 robot-scoped lock, emergency state, mode, last input, pending/error 상태를 표현할 수 없다.
+  - `controlApi`가 아직 command DTO와 claim/release/takeover/mode/E-Stop/stop API contract를 갖고 있지 않다.
+  - STOMP wrapper가 `activate/deactivate`만 제공해 control-lock/status topic 구독과 command ack/error 반영에 부족하다.
+  - mock realtime이 기본적으로 `connected`로 표시되어 Phase 3 UI가 실제 연결 가능 상태와 mock 상태를 혼동할 수 있다.
+  - HTTPS protocol indicator가 항상 connected로 표시되어 SRS의 HTTPS/WSS 요구사항을 안전 판단에 활용하기 어렵다.
+  - route-level auth guard가 없어 read-only 또는 unauthenticated 상태에서 control surface가 렌더링될 위험이 있다.
+- Phase 3 전 권장 수정 순서:
+  1. auth source of truth를 단일화하고 `httpClient` token 주입을 중앙화한다.
+  2. control type/store를 robot-scoped lock, emergency, mode, last input, command pending/error 중심으로 확장한다.
+  3. typed `controlApi` skeleton과 RBAC/state precheck를 구현한다.
+  4. STOMP wrapper에 robot-scoped subscription 및 control-lock/status event 처리 구조를 추가한다.
+  5. `canControlRobot(robotId)` selector를 추가해 RBAC, selected robot, lock ownership, realtime, emergency, transport security를 결합한다.
+
 ### Current Notes
 
 - MapLibre 지도 스타일은 `https://demotiles.maplibre.org/style.json`을 사용한다. 실제 화면 렌더링에는 네트워크 접근이 필요하다.
