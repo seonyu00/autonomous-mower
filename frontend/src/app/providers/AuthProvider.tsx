@@ -1,29 +1,21 @@
-import { useMemo, useState } from 'react';
 import type { PropsWithChildren } from 'react';
-import type { AuthUser } from '../../features/auth/types';
 import { AuthContext } from './authContext';
-import type { AuthContextValue } from './authContext';
-
-const mockUser: AuthUser = {
-  id: 'admin',
-  name: 'ADMIN USER',
-  role: 'admin',
-};
+import { useAuthStore } from '../../features/auth/authStore';
 
 export function AuthProvider({ children }: PropsWithChildren) {
-  const [user, setUser] = useState<AuthUser | null>(mockUser);
+  const user = useAuthStore((state) => state.user);
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const loginAsMock = useAuthStore((state) => state.loginAsMock);
+  const clearSession = useAuthStore((state) => state.clearSession);
 
-  const value = useMemo<AuthContextValue>(
-    () => ({
-      user,
-      isAuthenticated: Boolean(user),
-      loginAsMock: (role = 'admin') => {
-        setUser({ ...mockUser, role });
-      },
-      logout: () => setUser(null),
-    }),
-    [user],
-  );
+  const value = {
+    user,
+    accessToken,
+    isAuthenticated,
+    loginAsMock,
+    logout: clearSession,
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

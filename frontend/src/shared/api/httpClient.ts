@@ -1,8 +1,10 @@
 import { env } from '../config/env';
 import { ApiError, classifyStatus } from './errors';
+import { getAccessToken } from '../../features/auth/authStore';
 
 type RequestOptions = RequestInit & {
   token?: string;
+  skipAuth?: boolean;
 };
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -13,8 +15,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     headers.set('Content-Type', 'application/json');
   }
 
-  if (options.token) {
-    headers.set('Authorization', `Bearer ${options.token}`);
+  const accessToken = options.token ?? (options.skipAuth ? null : getAccessToken());
+
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
   let response: Response;

@@ -19,10 +19,10 @@ type TelemetryStore = {
 
 export const useTelemetryStore = create<TelemetryStore>((set) => ({
   telemetryByRobotId: mockTelemetry,
-  connectionState: 'connected',
+  connectionState: 'mock',
   protocolState: {
-    https: window.location.protocol === 'https:' ? 'connected' : 'connected',
-    wss: 'connected',
+    https: window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'connected' : 'disconnected',
+    wss: 'mock',
     mqtt: 'connected',
   },
   upsertTelemetry: (telemetry) =>

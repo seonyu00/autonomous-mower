@@ -23,5 +23,5 @@ export async function login(request: LoginRequest): Promise<LoginResponse> {
     };
   }
 
-  return httpClient.post<LoginResponse>('/api/auth/login', request);
+  return httpClient.post<LoginResponse>('/api/auth/login', request, { skipAuth: true });
 }

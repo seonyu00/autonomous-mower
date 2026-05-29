@@ -1,3 +1,4 @@
+import { ControlPanel } from '../features/control/ControlPanel';
 import { MapViewMap } from '../features/map/components/MapViewMap';
 import { WorkZoneEditor } from '../features/map/components/WorkZoneEditor';
 import { PhasePlaceholder } from '../shared/ui/PhasePlaceholder';
@@ -21,13 +22,7 @@ export function MapViewPage() {
       </section>
 
       <section className="workspace-panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">Phase 3 Placeholder</p>
-            <h2>Manual Control</h2>
-          </div>
-        </div>
-        <PhasePlaceholder title="E-Stop and joystick are intentionally not implemented in Phase 1." />
+        <ControlPanel />
       </section>
 
       <section className="workspace-panel">
