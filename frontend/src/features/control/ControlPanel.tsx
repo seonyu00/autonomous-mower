@@ -5,7 +5,7 @@ import { useRobotStore } from '../robots/robotStore';
 import { useTelemetryStore } from '../telemetry/telemetryStore';
 import { Button } from '../../shared/ui/Button';
 import { claimControl, ControlPrecheckError, releaseControl, resetAfterEmergency, takeoverControl } from './controlApi';
-import { canControlRobot } from './controlSelectors';
+import { canControlRobot, canResetAfterEmergency } from './controlSelectors';
 import { createDefaultControlState, useControlStore } from './controlStore';
 import { GeneralControlCommands } from './GeneralControlCommands';
 import { ManualJoystick } from './ManualJoystick';
@@ -24,6 +24,7 @@ const reasonLabels: Record<string, string> = {
   'realtime-degraded': 'Realtime connection is degraded.',
   'realtime-disconnected': 'Realtime connection is disconnected.',
   'robot-in-emergency': 'Robot is in emergency state.',
+  'robot-not-in-emergency': 'Robot is not in emergency state.',
   'transport-not-ready': 'Secure transport is not ready.',
 };
 
@@ -40,6 +41,9 @@ export function ControlPanel() {
     : null;
 
   const eligibility = selectedRobotId ? canControlRobot(selectedRobotId) : { allowed: false, reasons: ['robot-not-selected'] };
+  const resetEligibility = selectedRobotId
+    ? canResetAfterEmergency(selectedRobotId)
+    : { allowed: false, reasons: ['robot-not-selected'] };
 
   const handleAction = async (action: 'claim' | 'release' | 'takeover' | 'reset-after-emergency') => {
     if (!selectedRobotId) {
@@ -107,9 +111,16 @@ export function ControlPanel() {
         <section className="estop-recovery-panel" aria-label="Emergency recovery status">
           <strong>E-Stop is active.</strong>
           <p>Previous commands are blocked and will not resume automatically. Reset only returns the robot to idle.</p>
-          <Button type="button" onClick={() => void handleAction('reset-after-emergency')}>
+          <Button type="button" disabled={!resetEligibility.allowed} onClick={() => void handleAction('reset-after-emergency')}>
             Reset After Emergency
           </Button>
+          {resetEligibility.reasons.length > 0 ? (
+            <ul>
+              {resetEligibility.reasons.map((reason) => (
+                <li key={reason}>{formatReason(reason)}</li>
+              ))}
+            </ul>
+          ) : null}
         </section>
       ) : null}
 

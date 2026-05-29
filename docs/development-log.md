@@ -245,6 +245,38 @@
   - Vite build에서 React Router/TanStack Query `"use client"` directive 무시 경고가 계속 발생한다.
   - MapLibre 포함 bundle chunk size 경고가 계속 발생한다.
 
+### Phase 3. Final Control Safety Review
+
+- Phase 3 전체 제어 기능을 reviewer 관점으로 검토했다.
+- 검토 범위:
+  - Control ownership
+  - E-Stop
+  - ManualJoystick
+  - 500ms deadman switch
+  - AUTO/MANUAL/HOME mode commands
+  - 작업 시작/정지
+  - 예초 장치 구동/정지
+  - 작업장치 상승/하강
+  - RBAC/state precheck
+  - mock mode와 실제 API 전환 위험
+- High finding:
+  - `resetAfterEmergency` API skeleton이 UI에서는 E-Stop 패널에서만 노출되지만 함수 자체에서는 selected robot, emergency state, HTTPS transport를 재검증하지 않았다.
+  - 실제 API 전환 시 E-Stop 복구 명령이 너무 넓게 열릴 수 있어 최소 범위로 수정했다.
+- High finding 수정:
+  - `canResetAfterEmergency(robotId)` selector를 추가했다.
+  - E-Stop 복구 명령은 인증, `control:write`, selected robot 일치, emergency 상태, HTTPS transport를 통과해야 한다.
+  - `resetAfterEmergency` API skeleton이 새 selector를 사용하도록 변경했다.
+  - `ControlPanel`의 Reset After Emergency 버튼도 새 precheck 결과에 따라 비활성화하고 사유를 표시하도록 변경했다.
+- Medium findings:
+  - `beforeunload`에서 비동기 `sendStopCommand` 완료는 브라우저가 보장하지 않는다. 실제 API 전환 전 `keepalive` 또는 beacon-compatible stop endpoint와 서버/Jetson/STM32 fail-safe가 필요하다.
+  - mock fallback은 DEV 환경에서만 동작한다. 실제 API 전환 시 backend command contract, ack/error, idempotency, QoS 정책을 별도 테스트해야 한다.
+  - 제어권 자동 해제는 현재 STOMP topic lifecycle과 UI skeleton만 있고 서버 이벤트 반영 테스트는 아직 없다.
+- Low findings:
+  - Mode/attachment command payload는 skeleton 수준이며 backend DTO 확정 후 필드명을 재검토해야 한다.
+  - E-Stop, deadman, RBAC precheck에 대한 자동화 테스트는 Phase 4 품질 단계에서 추가해야 한다.
+- `npm run build` 성공 확인.
+- `npm run lint` 성공 확인.
+
 ### Current Notes
 
 - MapLibre 지도 스타일은 `https://demotiles.maplibre.org/style.json`을 사용한다. 실제 화면 렌더링에는 네트워크 접근이 필요하다.

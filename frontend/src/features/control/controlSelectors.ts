@@ -78,6 +78,37 @@ export function canSendEmergencyStop(robotId: string): ControlEligibility {
   };
 }
 
+export function canResetAfterEmergency(robotId: string): ControlEligibility {
+  const reasons: string[] = [];
+  const { user, isAuthenticated } = useAuthStore.getState();
+  const { selectedRobotId } = useRobotStore.getState();
+  const { protocolState } = useTelemetryStore.getState();
+  const controlState = useControlStore.getState().getControlState(robotId);
+
+  if (!isAuthenticated || !user) {
+    reasons.push('not-authenticated');
+  } else if (!hasPermission(user.role, 'control:write')) {
+    reasons.push('missing-control-permission');
+  }
+
+  if (selectedRobotId !== robotId) {
+    reasons.push('robot-not-selected');
+  }
+
+  if (!controlState.emergency && controlState.mode !== 'emergency') {
+    reasons.push('robot-not-in-emergency');
+  }
+
+  if (protocolState.https !== 'connected') {
+    reasons.push('transport-not-ready');
+  }
+
+  return {
+    allowed: reasons.length === 0,
+    reasons,
+  };
+}
+
 export function canSendStopCommand(robotId: string): ControlEligibility {
   const reasons: string[] = [];
   const { user, isAuthenticated } = useAuthStore.getState();

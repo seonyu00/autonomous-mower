@@ -2,7 +2,7 @@ import { httpClient } from '../../shared/api/httpClient';
 import { useAuthStore } from '../auth/authStore';
 import { hasPermission } from '../../shared/lib/permissions';
 import { useControlStore } from './controlStore';
-import { canControlRobot, canSendEmergencyStop, canSendStopCommand } from './controlSelectors';
+import { canControlRobot, canResetAfterEmergency, canSendEmergencyStop, canSendStopCommand } from './controlSelectors';
 import type {
   ControlCommandResult,
   ControlCommandType,
@@ -110,7 +110,11 @@ export async function sendEmergencyStop(robotId: string) {
 }
 
 export async function resetAfterEmergency(robotId: string) {
-  requireControlPermission();
+  const eligibility = canResetAfterEmergency(robotId);
+
+  if (!eligibility.allowed) {
+    throw new ControlPrecheckError(eligibility.reasons);
+  }
 
   return requestControlCommand(robotId, 'reset-after-emergency', `/api/control/${robotId}/reset-after-emergency`, {});
 }
