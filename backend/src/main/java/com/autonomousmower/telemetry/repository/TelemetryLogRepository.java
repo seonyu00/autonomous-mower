@@ -12,4 +12,6 @@ public interface TelemetryLogRepository extends JpaRepository<TelemetryLog, Long
             LocalDateTime from,
             LocalDateTime to
     );
+
+    List<TelemetryLog> findByRobotRobotIdOrderByRecordedAtAsc(String robotId);
 }

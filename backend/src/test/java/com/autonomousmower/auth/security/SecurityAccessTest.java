@@ -18,7 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@WebMvcTest
+@WebMvcTest(controllers = SecurityAccessTest.ProtectedController.class)
 @Import({
         SecurityConfig.class,
         JwtAuthenticationFilter.class,

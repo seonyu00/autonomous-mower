@@ -34,6 +34,12 @@ public class WorkZone {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
+    @Column(name = "version", nullable = false)
+    private int version = 1;
+
     protected WorkZone() {
     }
 
@@ -41,6 +47,7 @@ public class WorkZone {
         this.robot = Objects.requireNonNull(robot, "robot must not be null");
         this.zonePolygon = Objects.requireNonNull(zonePolygon, "zonePolygon must not be null");
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt must not be null");
+        this.updatedAt = createdAt;
     }
 
     public boolean isPointInside(Point currentPoint) {
@@ -61,5 +68,19 @@ public class WorkZone {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public int getVersion() {
+        return version;
+    }
+
+    public void replacePolygon(Polygon zonePolygon, LocalDateTime updatedAt) {
+        this.zonePolygon = Objects.requireNonNull(zonePolygon, "zonePolygon must not be null");
+        this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt must not be null");
+        this.version += 1;
     }
 }
