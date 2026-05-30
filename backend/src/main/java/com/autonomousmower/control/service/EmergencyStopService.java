@@ -7,8 +7,11 @@ import com.autonomousmower.control.dto.EmergencyStopRequest;
 import com.autonomousmower.control.dto.ResetAfterEmergencyRequest;
 import com.autonomousmower.control.model.ControlLockSnapshot;
 import com.autonomousmower.control.model.ControlStateStore;
+import com.autonomousmower.mqtt.dto.MqttCommandPayload;
+import com.autonomousmower.mqtt.service.MqttCommandPublisher;
 import com.autonomousmower.realtime.service.RealtimePublisher;
 import java.time.Instant;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -18,25 +21,37 @@ public class EmergencyStopService {
     private final RealtimePublisher realtimePublisher;
     private final ControlResponseFactory responseFactory;
     private final ControlEventPublisher controlEventPublisher;
+    private final MqttCommandPublisher mqttCommandPublisher;
 
     public EmergencyStopService(
             ControlStateStore controlStateStore,
             RealtimePublisher realtimePublisher,
             ControlResponseFactory responseFactory,
-            ControlEventPublisher controlEventPublisher
+            ControlEventPublisher controlEventPublisher,
+            MqttCommandPublisher mqttCommandPublisher
     ) {
         this.controlStateStore = controlStateStore;
         this.realtimePublisher = realtimePublisher;
         this.responseFactory = responseFactory;
         this.controlEventPublisher = controlEventPublisher;
+        this.mqttCommandPublisher = mqttCommandPublisher;
     }
 
     public ControlCommandResponse activate(String robotId, EmergencyStopRequest request, SecurityUser user) {
         Instant requestedAt = Instant.now();
         ControlLockSnapshot snapshot = controlStateStore.stateFor(robotId)
                 .activateEmergency(request.reason(), requestedAt);
-        realtimePublisher.publishControlLock(ControlRealtimeMapper.toMessage(snapshot));
         ControlCommandResponse response = responseFactory.accepted("emergency-stop", snapshot, requestedAt);
+        mqttCommandPublisher.publishEmergencyStop(new MqttCommandPayload(
+                response.commandId(),
+                robotId,
+                response.commandType(),
+                user.getAdminId(),
+                requestedAt,
+                "emergency",
+                Map.of("reason", request.reason() == null ? "operator emergency stop" : request.reason())
+        ));
+        realtimePublisher.publishControlLock(ControlRealtimeMapper.toMessage(snapshot));
         controlEventPublisher.publishAccepted(response, user.getAdminId());
         return response;
     }

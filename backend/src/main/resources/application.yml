@@ -40,3 +40,9 @@ app:
     jwt:
       secret: ${JWT_SECRET:local-development-secret-must-be-at-least-32-bytes}
       expiration: ${JWT_EXPIRATION:PT8H}
+  mqtt:
+    enabled: ${MQTT_ENABLED:false}
+    broker-url: ${MQTT_BROKER_URL:tcp://localhost:1883}
+    username: ${MQTT_USERNAME:}
+    password: ${MQTT_PASSWORD:}
+    client-id: ${MQTT_CLIENT_ID:autonomous-mower-backend}

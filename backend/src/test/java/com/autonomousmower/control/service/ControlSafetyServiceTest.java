@@ -17,6 +17,7 @@ import com.autonomousmower.control.dto.ReleaseControlRequest;
 import com.autonomousmower.control.dto.ResetAfterEmergencyRequest;
 import com.autonomousmower.control.dto.TakeoverControlRequest;
 import com.autonomousmower.control.model.ControlStateStore;
+import com.autonomousmower.mqtt.service.MqttCommandPublisher;
 import com.autonomousmower.realtime.dto.ControlEventMessage;
 import com.autonomousmower.realtime.dto.ControlLockMessage;
 import com.autonomousmower.realtime.service.RealtimePublisher;
@@ -33,6 +34,9 @@ class ControlSafetyServiceTest {
 
     @Mock
     private RealtimePublisher realtimePublisher;
+
+    @Mock
+    private MqttCommandPublisher mqttCommandPublisher;
 
     private ControlStateStore stateStore;
     private ControlLockService controlLockService;
@@ -51,8 +55,20 @@ class ControlSafetyServiceTest {
         ControlEventPublisher controlEventPublisher = new ControlEventPublisher(realtimePublisher);
         deadmanService = new DeadmanService(stateStore, controlEventPublisher);
         controlLockService = new ControlLockService(stateStore, realtimePublisher, responseFactory, controlEventPublisher);
-        emergencyStopService = new EmergencyStopService(stateStore, realtimePublisher, responseFactory, controlEventPublisher);
-        controlCommandService = new ControlCommandService(stateStore, deadmanService, responseFactory, controlEventPublisher);
+        emergencyStopService = new EmergencyStopService(
+                stateStore,
+                realtimePublisher,
+                responseFactory,
+                controlEventPublisher,
+                mqttCommandPublisher
+        );
+        controlCommandService = new ControlCommandService(
+                stateStore,
+                deadmanService,
+                responseFactory,
+                controlEventPublisher,
+                mqttCommandPublisher
+        );
     }
 
     @Test
