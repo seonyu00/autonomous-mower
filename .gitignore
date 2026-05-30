@@ -1,1 +1,21 @@
+# Local environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Runtime logs
+*.log
 **/integration-*.log
+
+# Node artifacts
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+
+# Java/Gradle artifacts
+.gradle/
+**/.gradle/
+build/
+**/build/
