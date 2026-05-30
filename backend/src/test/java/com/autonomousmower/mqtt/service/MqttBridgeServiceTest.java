@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 
+import com.autonomousmower.control.service.CommandExecutionService;
+import com.autonomousmower.mqtt.dto.MqttCommandAckPayload;
 import com.autonomousmower.mqtt.dto.MqttCommandPayload;
 import com.autonomousmower.mqtt.dto.MqttTelemetryPayload;
 import com.autonomousmower.mqtt.transport.MqttTransport;
@@ -24,7 +26,12 @@ class MqttBridgeServiceTest {
     void inboundTelemetryPublishesStompTelemetryMessage() {
         RealtimePublisher realtimePublisher = Mockito.mock(RealtimePublisher.class);
         MqttInboundPersistenceService persistenceService = Mockito.mock(MqttInboundPersistenceService.class);
-        MqttInboundHandler handler = new MqttInboundHandler(realtimePublisher, persistenceService);
+        CommandExecutionService commandExecutionService = Mockito.mock(CommandExecutionService.class);
+        MqttInboundHandler handler = new MqttInboundHandler(
+                realtimePublisher,
+                persistenceService,
+                commandExecutionService
+        );
         MqttTelemetryPayload payload = new MqttTelemetryPayload(
                 "MOWER-01",
                 37.5001,
@@ -54,7 +61,8 @@ class MqttBridgeServiceTest {
         MqttCommandPublisher publisher = new MqttCommandPublisher(
                 transport,
                 new MqttTopicResolver(),
-                objectMapper()
+                objectMapper(),
+                Mockito.mock(CommandExecutionService.class)
         );
         MqttCommandPayload payload = command("manual-command");
 
@@ -71,7 +79,8 @@ class MqttBridgeServiceTest {
         MqttCommandPublisher publisher = new MqttCommandPublisher(
                 transport,
                 new MqttTopicResolver(),
-                objectMapper()
+                objectMapper(),
+                Mockito.mock(CommandExecutionService.class)
         );
         MqttCommandPayload payload = command("emergency-stop");
 
@@ -80,6 +89,32 @@ class MqttBridgeServiceTest {
         assertThat(transport.topic).isEqualTo("mowers/MOWER-01/commands/estop");
         assertThat(transport.qos).isEqualTo(MqttQoS.AT_LEAST_ONCE);
         assertThat(new String(transport.payload, StandardCharsets.UTF_8)).contains("\"priority\":\"emergency\"");
+    }
+
+    @Test
+    void inboundCommandAckUpdatesCommandExecutionLifecycle() {
+        RealtimePublisher realtimePublisher = Mockito.mock(RealtimePublisher.class);
+        MqttInboundPersistenceService persistenceService = Mockito.mock(MqttInboundPersistenceService.class);
+        CommandExecutionService commandExecutionService = Mockito.mock(CommandExecutionService.class);
+        MqttInboundHandler handler = new MqttInboundHandler(
+                realtimePublisher,
+                persistenceService,
+                commandExecutionService
+        );
+        MqttCommandAckPayload payload = new MqttCommandAckPayload(
+                "cmd-001",
+                "MOWER-01",
+                "stop",
+                "accepted",
+                null,
+                "edge-mock",
+                Instant.parse("2026-05-30T01:00:01Z"),
+                Instant.parse("2026-05-30T01:00:02Z")
+        );
+
+        handler.handleCommandAck(payload);
+
+        verify(commandExecutionService).applyAck(payload);
     }
 
     private MqttCommandPayload command(String commandType) {

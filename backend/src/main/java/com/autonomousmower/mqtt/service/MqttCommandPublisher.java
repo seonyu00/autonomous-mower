@@ -1,5 +1,6 @@
 package com.autonomousmower.mqtt.service;
 
+import com.autonomousmower.control.service.CommandExecutionService;
 import com.autonomousmower.mqtt.dto.MqttCommandPayload;
 import com.autonomousmower.mqtt.transport.MqttTransport;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -17,11 +18,18 @@ public class MqttCommandPublisher {
     private final MqttTransport mqttTransport;
     private final MqttTopicResolver topicResolver;
     private final ObjectMapper objectMapper;
+    private final CommandExecutionService commandExecutionService;
 
-    public MqttCommandPublisher(MqttTransport mqttTransport, MqttTopicResolver topicResolver, ObjectMapper objectMapper) {
+    public MqttCommandPublisher(
+            MqttTransport mqttTransport,
+            MqttTopicResolver topicResolver,
+            ObjectMapper objectMapper,
+            CommandExecutionService commandExecutionService
+    ) {
         this.mqttTransport = mqttTransport;
         this.topicResolver = topicResolver;
         this.objectMapper = objectMapper;
+        this.commandExecutionService = commandExecutionService;
     }
 
     public void publishManualCommand(MqttCommandPayload payload) {
@@ -56,6 +64,7 @@ public class MqttCommandPublisher {
                     payload.commandType()
             );
             mqttTransport.publish(topic, bytes, qos, false);
+            commandExecutionService.markSent(payload);
         } catch (JsonProcessingException exception) {
             throw new IllegalArgumentException("Invalid MQTT command payload.", exception);
         }

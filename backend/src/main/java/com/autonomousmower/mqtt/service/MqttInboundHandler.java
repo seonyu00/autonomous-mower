@@ -1,10 +1,10 @@
 package com.autonomousmower.mqtt.service;
 
+import com.autonomousmower.control.service.CommandExecutionService;
 import com.autonomousmower.mqtt.dto.MqttCommandAckPayload;
 import com.autonomousmower.mqtt.dto.MqttEventPayload;
 import com.autonomousmower.mqtt.dto.MqttStatusPayload;
 import com.autonomousmower.mqtt.dto.MqttTelemetryPayload;
-import com.autonomousmower.realtime.dto.ControlEventMessage;
 import com.autonomousmower.realtime.dto.RobotEventMessage;
 import com.autonomousmower.realtime.dto.RobotStatusMessage;
 import com.autonomousmower.realtime.dto.TelemetryMessage;
@@ -16,10 +16,16 @@ public class MqttInboundHandler {
 
     private final RealtimePublisher realtimePublisher;
     private final MqttInboundPersistenceService persistenceService;
+    private final CommandExecutionService commandExecutionService;
 
-    public MqttInboundHandler(RealtimePublisher realtimePublisher, MqttInboundPersistenceService persistenceService) {
+    public MqttInboundHandler(
+            RealtimePublisher realtimePublisher,
+            MqttInboundPersistenceService persistenceService,
+            CommandExecutionService commandExecutionService
+    ) {
         this.realtimePublisher = realtimePublisher;
         this.persistenceService = persistenceService;
+        this.commandExecutionService = commandExecutionService;
     }
 
     public void handleTelemetry(MqttTelemetryPayload payload) {
@@ -73,16 +79,6 @@ public class MqttInboundHandler {
     }
 
     public void handleCommandAck(MqttCommandAckPayload payload) {
-        // TODO: Persist command ack state after the command persistence model is introduced.
-        realtimePublisher.publishControlEvent(new ControlEventMessage(
-                payload.robotId(),
-                payload.commandId(),
-                payload.commandType(),
-                payload.status(),
-                payload.reason(),
-                payload.edgeNodeId(),
-                payload.receivedAt(),
-                payload.ackedAt()
-        ));
+        commandExecutionService.applyAck(payload);
     }
 }
