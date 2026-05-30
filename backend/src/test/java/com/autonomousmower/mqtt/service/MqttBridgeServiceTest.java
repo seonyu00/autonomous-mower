@@ -1,6 +1,7 @@
 package com.autonomousmower.mqtt.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 
 import com.autonomousmower.mqtt.dto.MqttCommandPayload;
@@ -22,7 +23,8 @@ class MqttBridgeServiceTest {
     @Test
     void inboundTelemetryPublishesStompTelemetryMessage() {
         RealtimePublisher realtimePublisher = Mockito.mock(RealtimePublisher.class);
-        MqttInboundHandler handler = new MqttInboundHandler(realtimePublisher);
+        MqttInboundPersistenceService persistenceService = Mockito.mock(MqttInboundPersistenceService.class);
+        MqttInboundHandler handler = new MqttInboundHandler(realtimePublisher, persistenceService);
         MqttTelemetryPayload payload = new MqttTelemetryPayload(
                 "MOWER-01",
                 37.5001,
@@ -35,6 +37,7 @@ class MqttBridgeServiceTest {
                 Instant.parse("2026-05-30T01:00:00Z"),
                 null
         );
+        when(persistenceService.persistTelemetry(payload)).thenReturn(true);
 
         handler.handleTelemetry(payload);
 

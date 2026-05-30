@@ -15,12 +15,17 @@ import org.springframework.stereotype.Service;
 public class MqttInboundHandler {
 
     private final RealtimePublisher realtimePublisher;
+    private final MqttInboundPersistenceService persistenceService;
 
-    public MqttInboundHandler(RealtimePublisher realtimePublisher) {
+    public MqttInboundHandler(RealtimePublisher realtimePublisher, MqttInboundPersistenceService persistenceService) {
         this.realtimePublisher = realtimePublisher;
+        this.persistenceService = persistenceService;
     }
 
     public void handleTelemetry(MqttTelemetryPayload payload) {
+        if (!persistenceService.persistTelemetry(payload)) {
+            return;
+        }
         realtimePublisher.publishTelemetry(new TelemetryMessage(
                 payload.robotId(),
                 payload.latitude(),
@@ -36,6 +41,9 @@ public class MqttInboundHandler {
     }
 
     public void handleStatus(MqttStatusPayload payload) {
+        if (!persistenceService.persistStatus(payload)) {
+            return;
+        }
         realtimePublisher.publishStatus(new RobotStatusMessage(
                 payload.robotId(),
                 payload.connectionState(),
@@ -48,6 +56,9 @@ public class MqttInboundHandler {
     }
 
     public void handleEvent(MqttEventPayload payload) {
+        if (!persistenceService.persistEvent(payload)) {
+            return;
+        }
         realtimePublisher.publishEvent(new RobotEventMessage(
                 payload.id(),
                 payload.robotId(),
@@ -62,6 +73,7 @@ public class MqttInboundHandler {
     }
 
     public void handleCommandAck(MqttCommandAckPayload payload) {
+        // TODO: Persist command ack state after the command persistence model is introduced.
         realtimePublisher.publishControlEvent(new ControlEventMessage(
                 payload.robotId(),
                 payload.commandId(),
