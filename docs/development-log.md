@@ -2,6 +2,16 @@
 
 ## 2026-05-30
 
+### Local MQTT Broker
+
+- Docker Compose local development now includes Mosquitto.
+- Run only the broker: `docker compose up -d mosquitto`
+- Run local dependencies: `docker compose up -d postgres mosquitto`
+- Host-local backend default `MQTT_BROKER_URL` is `tcp://localhost:1883`, matching the Compose `1883:1883` port mapping.
+- Other Compose containers should use `tcp://mosquitto:1883` on the Compose network.
+- Mosquitto local development config is `docker/mosquitto/mosquitto.conf`.
+- Anonymous MQTT access is enabled only for local development.
+
 ### Planning
 
 - `AGENTS.md` 지침에 따라 작업 전 `SRS.md`, `docs/*`, 기존 코드 구조를 확인했다.
