@@ -1,22 +1,64 @@
+import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../app/providers/authContext';
+import { login } from '../features/auth/api';
+import { useAuthStore } from '../features/auth/authStore';
+import { env } from '../shared/config/env';
 
 export function LoginPage() {
   const { isAuthenticated, loginAsMock } = useAuth();
+  const setSession = useAuthStore((state) => state.setSession);
+  const [adminId, setAdminId] = useState('admin');
+  const [password, setPassword] = useState('admin');
+  const [error, setError] = useState<string | null>(null);
 
   if (isAuthenticated) {
     return <Navigate to="/map" replace />;
   }
 
+  const handleLogin = async () => {
+    setError(null);
+
+    try {
+      const response = await login({ adminId, password });
+      setSession(response.user, response.accessToken);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Login failed.');
+    }
+  };
+
   return (
     <main className="login-page">
       <section className="login-panel">
         <p className="eyebrow">Secure Access</p>
-        <h1>관제 대시보드 로그인</h1>
-        <p className="muted">Phase 1에서는 실제 백엔드 인증 대신 mock 관리자 세션을 사용합니다.</p>
-        <button className="primary-button" type="button" onClick={() => loginAsMock('admin')}>
-          Mock Admin Login
-        </button>
+        <h1>Control Dashboard Login</h1>
+        <p className="muted">Use the local integration account when mock auth is disabled.</p>
+        {env.enableMockAuth ? (
+          <button className="primary-button" type="button" onClick={() => loginAsMock('admin')}>
+            Mock Admin Login
+          </button>
+        ) : (
+          <form
+            className="login-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleLogin();
+            }}
+          >
+            <label>
+              Admin ID
+              <input value={adminId} onChange={(event) => setAdminId(event.target.value)} />
+            </label>
+            <label>
+              Password
+              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+            </label>
+            <button className="primary-button" type="submit">
+              Login
+            </button>
+            {error ? <p className="warning-line">{error}</p> : null}
+          </form>
+        )}
       </section>
     </main>
   );

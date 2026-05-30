@@ -1,4 +1,5 @@
 import { httpClient } from '../../shared/api/httpClient';
+import { env } from '../../shared/config/env';
 import { useAuthStore } from '../auth/authStore';
 import { hasPermission } from '../../shared/lib/permissions';
 import { useControlStore } from './controlStore';
@@ -61,6 +62,8 @@ export async function changeMode(robotId: string, mode: ControlMode) {
     action: 'change-mode',
     robotId,
     mode,
+    idempotencyKey: createIdempotencyKey('mode'),
+    lockVersion: 0,
   };
   useControlStore.getState().patchControlState(robotId, {
     lastCommandPayload: command,
@@ -71,12 +74,18 @@ export async function changeMode(robotId: string, mode: ControlMode) {
 
 export async function sendManualCommand(robotId: string, command: ManualCommand) {
   requireCanControl(robotId);
+  const commandWithDefaults: ManualCommand = {
+    ...command,
+    idempotencyKey: command.idempotencyKey ?? createIdempotencyKey('manual'),
+    lockVersion: command.lockVersion ?? 0,
+    clientSentAt: command.clientSentAt ?? new Date().toISOString(),
+  };
   useControlStore.getState().recordManualInput(robotId);
   useControlStore.getState().patchControlState(robotId, {
-    lastCommandPayload: command,
+    lastCommandPayload: commandWithDefaults,
   });
 
-  return requestControlCommand(robotId, 'manual-command', `/api/control/${robotId}/manual`, command);
+  return requestControlCommand(robotId, 'manual-command', `/api/control/${robotId}/manual`, commandWithDefaults);
 }
 
 export async function sendStopCommand(robotId: string) {
@@ -91,6 +100,8 @@ export async function sendStopCommand(robotId: string) {
     robotId,
     direction: 'stop',
     speed: 0,
+    idempotencyKey: createIdempotencyKey('stop'),
+    lockVersion: 0,
   };
   useControlStore.getState().patchControlState(robotId, {
     lastCommandPayload: command,
@@ -125,6 +136,8 @@ export async function sendMowerAttachmentCommand(robotId: string, action: MowerA
     action: 'mower-attachment',
     robotId,
     attachmentAction: action,
+    idempotencyKey: createIdempotencyKey('attachment'),
+    lockVersion: 0,
   };
   useControlStore.getState().patchControlState(robotId, {
     lastCommandPayload: command,
@@ -182,7 +195,9 @@ async function requestControlCommand(
   useControlStore.getState().setCommandError(robotId, null);
 
   try {
-    if (import.meta.env.DEV) {
+    const requestBody = withCommandDefaults(commandType, body);
+
+    if (import.meta.env.DEV && env.enableMockControl) {
       applyMockControlResult(robotId, commandType, body);
 
       return {
@@ -194,13 +209,51 @@ async function requestControlCommand(
       };
     }
 
-    return await httpClient.post<ControlCommandResult>(path, body);
+    const result = await httpClient.post<ControlCommandResult>(path, requestBody);
+    applyBackendControlResult(robotId, result);
+    return result;
   } catch (error) {
     useControlStore.getState().setCommandError(robotId, error instanceof Error ? error.message : 'Control command failed');
     throw error;
   } finally {
     useControlStore.getState().setPendingCommand(robotId, null);
   }
+}
+
+function withCommandDefaults(commandType: ControlCommandType, body: ControlRequestBody): ControlRequestBody {
+  const idempotencyKey = typeof body.idempotencyKey === 'string' ? body.idempotencyKey : createIdempotencyKey(commandType);
+
+  if (commandType === 'claim-control') {
+    return {
+      idempotencyKey,
+      requestedMode: 'manual',
+      ...body,
+    };
+  }
+
+  return {
+    idempotencyKey,
+    ...body,
+  };
+}
+
+function applyBackendControlResult(robotId: string, result: ControlCommandResult) {
+  const patch = {
+    ...(result.lockState ? { lockState: result.lockState } : {}),
+    ...(result.controlOwner !== undefined ? { controlOwner: result.controlOwner } : {}),
+    ...(result.mode ? { mode: result.mode } : {}),
+    ...(result.emergency !== undefined ? { emergency: result.emergency } : {}),
+  };
+
+  useControlStore.getState().patchControlState(robotId, patch);
+}
+
+function createIdempotencyKey(prefix: string) {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function applyMockControlResult(robotId: string, commandType: ControlCommandType, body: ControlRequestBody) {

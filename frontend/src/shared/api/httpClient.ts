@@ -7,6 +7,12 @@ type RequestOptions = RequestInit & {
   skipAuth?: boolean;
 };
 
+type ApiEnvelope<T> = {
+  success?: boolean;
+  data?: T;
+  error?: unknown;
+};
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
@@ -40,7 +46,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     return undefined as T;
   }
 
-  return response.json() as Promise<T>;
+  const json = (await response.json()) as T | ApiEnvelope<T>;
+
+  if (json && typeof json === 'object' && 'success' in json && 'data' in json) {
+    return (json as ApiEnvelope<T>).data as T;
+  }
+
+  return json as T;
 }
 
 export const httpClient = {

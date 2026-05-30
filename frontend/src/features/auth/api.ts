@@ -1,4 +1,5 @@
 import { httpClient } from '../../shared/api/httpClient';
+import { env } from '../../shared/config/env';
 import type { AuthUser, Role } from './types';
 
 export type LoginRequest = {
@@ -12,7 +13,7 @@ export type LoginResponse = {
 };
 
 export async function login(request: LoginRequest): Promise<LoginResponse> {
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && env.enableMockAuth) {
     return {
       accessToken: 'mock-access-token',
       user: {

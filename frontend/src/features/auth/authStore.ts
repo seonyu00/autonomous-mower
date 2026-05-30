@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { env } from '../../shared/config/env';
 import type { AuthUser, Role } from './types';
 
 type AuthStore = {
@@ -17,9 +18,9 @@ const mockUser: AuthUser = {
 };
 
 export const useAuthStore = create<AuthStore>((set) => ({
-  user: mockUser,
-  accessToken: 'mock-access-token',
-  isAuthenticated: true,
+  user: env.enableMockAuth ? mockUser : null,
+  accessToken: env.enableMockAuth ? 'mock-access-token' : null,
+  isAuthenticated: env.enableMockAuth,
   setSession: (user, accessToken) => set({ user, accessToken, isAuthenticated: true }),
   loginAsMock: (role = 'admin') =>
     set({

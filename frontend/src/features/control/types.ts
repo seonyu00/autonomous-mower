@@ -21,18 +21,25 @@ export type ManualCommand = {
   robotId: string;
   direction: ManualDirection;
   speed: number;
+  idempotencyKey?: string;
+  lockVersion?: number;
+  clientSentAt?: string;
 };
 
 export type ModeCommand = {
   action: 'change-mode';
   robotId: string;
   mode: ControlMode;
+  idempotencyKey?: string;
+  lockVersion?: number;
 };
 
 export type MowerAttachmentCommand = {
   action: 'mower-attachment';
   robotId: string;
   attachmentAction: MowerAttachmentAction;
+  idempotencyKey?: string;
+  lockVersion?: number;
 };
 
 export type StopCommand = {
@@ -40,6 +47,9 @@ export type StopCommand = {
   robotId: string;
   direction: 'stop';
   speed: 0;
+  idempotencyKey?: string;
+  lockVersion?: number;
+  reason?: string;
 };
 
 export type ControlCommandPayload = ManualCommand | ModeCommand | MowerAttachmentCommand | StopCommand;
@@ -66,7 +76,13 @@ export type ControlState = {
 export type ControlCommandResult = {
   accepted: boolean;
   robotId: string;
+  commandId?: string;
   commandType: ControlCommandType;
   requestedAt: string;
-  mock: boolean;
+  acceptedAt?: string;
+  lockState?: ControlLockState;
+  controlOwner?: string | null;
+  mode?: ControlMode;
+  emergency?: boolean;
+  mock?: boolean;
 };
