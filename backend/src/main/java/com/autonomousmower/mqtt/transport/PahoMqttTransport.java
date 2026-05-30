@@ -16,7 +16,7 @@ public class PahoMqttTransport implements MqttTransport {
     }
 
     @Override
-    public void publish(String topic, byte[] payload, int qos, boolean retained) {
+    public synchronized void publish(String topic, byte[] payload, int qos, boolean retained) {
         try {
             if (!mqttAsyncClient.isConnected()) {
                 mqttAsyncClient.connect(mqttConnectOptions).waitForCompletion();
@@ -27,6 +27,17 @@ public class PahoMqttTransport implements MqttTransport {
             mqttAsyncClient.publish(topic, message);
         } catch (MqttException exception) {
             throw new IllegalStateException("Failed to publish MQTT message to " + topic, exception);
+        }
+    }
+
+    public void close() {
+        try {
+            if (mqttAsyncClient.isConnected()) {
+                mqttAsyncClient.disconnect().waitForCompletion();
+            }
+            mqttAsyncClient.close();
+        } catch (MqttException exception) {
+            throw new IllegalStateException("Failed to close MQTT client.", exception);
         }
     }
 }

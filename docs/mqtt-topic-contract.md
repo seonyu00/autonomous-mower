@@ -36,3 +36,13 @@ Inbound telemetry/status/event messages are mapped to STOMP through `RealtimePub
 - `MQTT_CLIENT_ID`
 
 When `MQTT_ENABLED=false`, the backend uses a no-op transport so tests and local API work do not require a broker.
+
+## Open Decisions Before Jetson Integration
+
+- Exact Jetson JSON field names and versioning for all payloads.
+- Whether telemetry/status/event inbound subscriptions are installed by Spring Integration, Paho callbacks, or a dedicated adapter.
+- Command ack topic and payload shape, including `commandId`, sequence number, status, and error reason.
+- Idempotency and sequence handling for duplicate QoS 1 delivery.
+- TLS/MQTTS certificate, username/password, and client identity policy.
+- Retained-message policy for status topics.
+- Backpressure/latest-wins handling for high-rate manual commands.
