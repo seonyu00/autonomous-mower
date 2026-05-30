@@ -21,6 +21,10 @@ public final class RealtimeTopics {
         return robotTopic(robotId, "control-lock");
     }
 
+    public static String controlEvents(String robotId) {
+        return robotTopic(robotId, "control-events");
+    }
+
     public static String videoStatus(String robotId) {
         return robotTopic(robotId, "video-status");
     }

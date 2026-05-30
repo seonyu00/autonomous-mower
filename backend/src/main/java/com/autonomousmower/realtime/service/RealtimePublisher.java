@@ -1,6 +1,7 @@
 package com.autonomousmower.realtime.service;
 
 import com.autonomousmower.realtime.dto.ControlLockMessage;
+import com.autonomousmower.realtime.dto.ControlEventMessage;
 import com.autonomousmower.realtime.dto.RobotEventMessage;
 import com.autonomousmower.realtime.dto.RobotStatusMessage;
 import com.autonomousmower.realtime.dto.TelemetryMessage;
@@ -31,6 +32,10 @@ public class RealtimePublisher {
 
     public void publishControlLock(ControlLockMessage message) {
         messagingTemplate.convertAndSend(RealtimeTopics.controlLock(message.robotId()), message);
+    }
+
+    public void publishControlEvent(ControlEventMessage message) {
+        messagingTemplate.convertAndSend(RealtimeTopics.controlEvents(message.robotId()), message);
     }
 
     public void publishVideoStatus(VideoStatusMessage message) {
