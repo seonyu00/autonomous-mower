@@ -1,0 +1,16 @@
+{
+  "name": "edge-mock-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mock MQTT edge client for autonomous mower backend development.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "mqtt": "^5.10.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
