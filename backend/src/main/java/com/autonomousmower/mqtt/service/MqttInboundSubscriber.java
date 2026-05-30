@@ -1,5 +1,6 @@
 package com.autonomousmower.mqtt.service;
 
+import com.autonomousmower.mqtt.dto.MqttCommandAckPayload;
 import com.autonomousmower.mqtt.dto.MqttEventPayload;
 import com.autonomousmower.mqtt.dto.MqttStatusPayload;
 import com.autonomousmower.mqtt.dto.MqttTelemetryPayload;
@@ -25,6 +26,7 @@ public class MqttInboundSubscriber {
     private static final String TELEMETRY_TOPIC = "mowers/+/telemetry";
     private static final String STATUS_TOPIC = "mowers/+/status";
     private static final String EVENTS_TOPIC = "mowers/+/events";
+    private static final String COMMAND_ACK_TOPIC = "mowers/+/commands/ack";
 
     private final MqttAsyncClient mqttAsyncClient;
     private final MqttConnectOptions mqttConnectOptions;
@@ -79,10 +81,21 @@ public class MqttInboundSubscriber {
     private void subscribeToInboundTopics() {
         try {
             mqttAsyncClient.subscribe(
-                    new String[] {TELEMETRY_TOPIC, STATUS_TOPIC, EVENTS_TOPIC},
-                    new int[] {MqttQoS.AT_LEAST_ONCE, MqttQoS.AT_LEAST_ONCE, MqttQoS.AT_LEAST_ONCE}
+                    new String[] {TELEMETRY_TOPIC, STATUS_TOPIC, EVENTS_TOPIC, COMMAND_ACK_TOPIC},
+                    new int[] {
+                            MqttQoS.AT_LEAST_ONCE,
+                            MqttQoS.AT_LEAST_ONCE,
+                            MqttQoS.AT_LEAST_ONCE,
+                            MqttQoS.AT_LEAST_ONCE
+                    }
             ).waitForCompletion();
-            log.info("Subscribed MQTT inbound topics: {}, {}, {}", TELEMETRY_TOPIC, STATUS_TOPIC, EVENTS_TOPIC);
+            log.info(
+                    "Subscribed MQTT inbound topics: {}, {}, {}, {}",
+                    TELEMETRY_TOPIC,
+                    STATUS_TOPIC,
+                    EVENTS_TOPIC,
+                    COMMAND_ACK_TOPIC
+            );
         } catch (MqttException exception) {
             throw new IllegalStateException("Failed to subscribe MQTT inbound topics.", exception);
         }
@@ -90,13 +103,13 @@ public class MqttInboundSubscriber {
 
     private void handleMessage(String topic, MqttMessage message) {
         String[] parts = topic.split("/");
-        if (parts.length != 3 || !"mowers".equals(parts[0])) {
+        if (!isSupportedTopic(parts)) {
             log.warn("Ignoring MQTT message on unexpected topic={}", topic);
             return;
         }
 
         String topicRobotId = parts[1];
-        String channel = parts[2];
+        String channel = parts.length == 4 ? "commands/ack" : parts[2];
         String payload = new String(message.getPayload(), StandardCharsets.UTF_8);
 
         try {
@@ -119,11 +132,27 @@ public class MqttInboundSubscriber {
                         inboundHandler.handleEvent(event);
                     }
                 }
+                case "commands/ack" -> {
+                    MqttCommandAckPayload ack = objectMapper.readValue(payload, MqttCommandAckPayload.class);
+                    if (sameRobot(topicRobotId, ack.robotId(), topic)) {
+                        inboundHandler.handleCommandAck(ack);
+                    }
+                }
                 default -> log.warn("Ignoring MQTT message on unsupported inbound channel topic={}", topic);
             }
         } catch (Exception exception) {
             log.warn("Failed to process MQTT inbound topic={} payload={}", topic, payload, exception);
         }
+    }
+
+    private boolean isSupportedTopic(String[] parts) {
+        if (parts.length == 3) {
+            return "mowers".equals(parts[0]);
+        }
+        return parts.length == 4
+                && "mowers".equals(parts[0])
+                && "commands".equals(parts[2])
+                && "ack".equals(parts[3]);
     }
 
     private boolean sameRobot(String topicRobotId, String payloadRobotId, String topic) {

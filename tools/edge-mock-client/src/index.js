@@ -15,6 +15,7 @@ const topic = {
   telemetry: `mowers/${config.robotId}/telemetry`,
   status: `mowers/${config.robotId}/status`,
   events: `mowers/${config.robotId}/events`,
+  commandAck: `mowers/${config.robotId}/commands/ack`,
   manualCommand: `mowers/${config.robotId}/commands/manual`,
   modeCommand: `mowers/${config.robotId}/commands/mode`,
   attachmentCommand: `mowers/${config.robotId}/commands/attachment`,
@@ -67,6 +68,7 @@ client.on("message", (receivedTopic, payload) => {
     payload: parsed ?? text
   });
 
+  publishCommandAck(receivedTopic, parsed);
   publishStatus();
 });
 
@@ -130,6 +132,24 @@ function publishEvent() {
   publishJson(topic.events, payload, 1);
 }
 
+function publishCommandAck(receivedTopic, command) {
+  if (!command || typeof command !== "object") {
+    return;
+  }
+  const now = new Date().toISOString();
+  const payload = {
+    commandId: command.commandId ?? null,
+    robotId: config.robotId,
+    commandType: command.commandType ?? commandTypeFromTopic(receivedTopic),
+    status: "accepted",
+    reason: null,
+    edgeNodeId: config.clientId,
+    receivedAt: now,
+    ackedAt: now
+  };
+  publishJson(topic.commandAck, payload, 1);
+}
+
 function publishJson(targetTopic, payload, qos) {
   if (!client.connected) {
     return;
@@ -157,6 +177,25 @@ function expectedCommandQos(receivedTopic) {
     return 1;
   }
   return null;
+}
+
+function commandTypeFromTopic(receivedTopic) {
+  if (receivedTopic === topic.manualCommand) {
+    return "manual-command";
+  }
+  if (receivedTopic === topic.stopCommand) {
+    return "stop";
+  }
+  if (receivedTopic === topic.estopCommand) {
+    return "emergency-stop";
+  }
+  if (receivedTopic === topic.modeCommand) {
+    return "change-mode";
+  }
+  if (receivedTopic === topic.attachmentCommand) {
+    return "mower-attachment";
+  }
+  return "unknown";
 }
 
 function logSubscribe(subscribeTopic) {

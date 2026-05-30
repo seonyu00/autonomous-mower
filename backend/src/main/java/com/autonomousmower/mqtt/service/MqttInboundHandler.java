@@ -1,8 +1,10 @@
 package com.autonomousmower.mqtt.service;
 
+import com.autonomousmower.mqtt.dto.MqttCommandAckPayload;
 import com.autonomousmower.mqtt.dto.MqttEventPayload;
 import com.autonomousmower.mqtt.dto.MqttStatusPayload;
 import com.autonomousmower.mqtt.dto.MqttTelemetryPayload;
+import com.autonomousmower.realtime.dto.ControlEventMessage;
 import com.autonomousmower.realtime.dto.RobotEventMessage;
 import com.autonomousmower.realtime.dto.RobotStatusMessage;
 import com.autonomousmower.realtime.dto.TelemetryMessage;
@@ -56,6 +58,19 @@ public class MqttInboundHandler {
                 payload.source(),
                 null,
                 null
+        ));
+    }
+
+    public void handleCommandAck(MqttCommandAckPayload payload) {
+        realtimePublisher.publishControlEvent(new ControlEventMessage(
+                payload.robotId(),
+                payload.commandId(),
+                payload.commandType(),
+                payload.status(),
+                payload.reason(),
+                payload.edgeNodeId(),
+                payload.receivedAt(),
+                payload.ackedAt()
         ));
     }
 }

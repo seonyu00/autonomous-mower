@@ -11,8 +11,12 @@ Mock MQTT edge client for backend MQTT bridge testing. This is not Jetson or STM
   - `mowers/{robotId}/events` with QoS 1
 - Subscribes to backend command topics:
   - `mowers/{robotId}/commands/manual` with QoS 0
+  - `mowers/{robotId}/commands/mode` with QoS 1
+  - `mowers/{robotId}/commands/attachment` with QoS 1
   - `mowers/{robotId}/commands/stop` with QoS 1
   - `mowers/{robotId}/commands/estop` with QoS 1
+- Publishes command ack:
+  - `mowers/{robotId}/commands/ack` with QoS 1
 - Prints received commands to stdout as JSON logs.
 
 ## Start A Local Broker
@@ -74,4 +78,4 @@ Publish an E-Stop command:
 mosquitto_pub -h localhost -t mowers/MOWER-01/commands/estop -q 1 -m "{\"commandId\":\"cmd-estop-001\",\"robotId\":\"MOWER-01\",\"commandType\":\"emergency-stop\",\"priority\":\"emergency\"}"
 ```
 
-The mock client logs each received command and changes its mock status after `stop` or `estop`.
+The mock client logs each received command, publishes an ack, and changes its mock status after `stop`, `estop`, or `mode`.

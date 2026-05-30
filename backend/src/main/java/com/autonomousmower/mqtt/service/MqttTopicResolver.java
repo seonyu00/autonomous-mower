@@ -17,6 +17,10 @@ public class MqttTopicResolver {
         return robotTopic(robotId, "events");
     }
 
+    public String commandAckInbound(String robotId) {
+        return robotCommandTopic(robotId, "ack");
+    }
+
     public String manualCommandOutbound(String robotId) {
         return robotCommandTopic(robotId, "manual");
     }
