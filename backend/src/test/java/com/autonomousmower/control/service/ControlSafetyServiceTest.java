@@ -41,6 +41,7 @@ class ControlSafetyServiceTest {
     private DeadmanService deadmanService;
 
     private final SecurityUser operator = SecurityUser.from("operator", "Operator", RoleName.OPERATOR);
+    private final SecurityUser otherOperator = SecurityUser.from("other", "Other Operator", RoleName.OPERATOR);
     private final SecurityUser supervisor = SecurityUser.from("supervisor", "Supervisor", RoleName.SUPERVISOR);
 
     @BeforeEach
@@ -126,6 +127,32 @@ class ControlSafetyServiceTest {
         );
         assertThat(reset.emergency()).isFalse();
         assertThat(reset.mode()).isEqualTo("idle");
+    }
+
+    @Test
+    void emergencyResetRequiresOwnerOrTakeoverWhenOwnerExists() {
+        controlLockService.claim("MOWER-01", new ClaimControlRequest("claim-key", "manual"), operator);
+        emergencyStopService.activate(
+                "MOWER-01",
+                new EmergencyStopRequest("estop-key", "operator emergency stop"),
+                operator
+        );
+
+        assertThatThrownBy(() -> emergencyStopService.reset(
+                "MOWER-01",
+                new ResetAfterEmergencyRequest("reset-key", "safe state verified"),
+                otherOperator
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.CONTROL_OWNED_BY_OTHER_USER);
+
+        ControlCommandResponse reset = emergencyStopService.reset(
+                "MOWER-01",
+                new ResetAfterEmergencyRequest("supervisor-reset-key", "supervisor verified safe state"),
+                supervisor
+        );
+        assertThat(reset.emergency()).isFalse();
     }
 
     @Test

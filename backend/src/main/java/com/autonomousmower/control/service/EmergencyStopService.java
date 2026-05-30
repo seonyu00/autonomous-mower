@@ -1,6 +1,7 @@
 package com.autonomousmower.control.service;
 
 import com.autonomousmower.auth.security.SecurityUser;
+import com.autonomousmower.auth.security.Permission;
 import com.autonomousmower.control.dto.ControlCommandResponse;
 import com.autonomousmower.control.dto.EmergencyStopRequest;
 import com.autonomousmower.control.dto.ResetAfterEmergencyRequest;
@@ -43,10 +44,14 @@ public class EmergencyStopService {
     public ControlCommandResponse reset(String robotId, ResetAfterEmergencyRequest request, SecurityUser user) {
         Instant requestedAt = Instant.now();
         ControlLockSnapshot snapshot = controlStateStore.stateFor(robotId)
-                .resetEmergency(request.reason(), requestedAt);
+                .resetEmergency(user.getAdminId(), hasTakeoverAuthority(user), request.reason(), requestedAt);
         realtimePublisher.publishControlLock(ControlRealtimeMapper.toMessage(snapshot));
         ControlCommandResponse response = responseFactory.accepted("reset-after-emergency", snapshot, requestedAt);
         controlEventPublisher.publishAccepted(response, user.getAdminId());
         return response;
+    }
+
+    private boolean hasTakeoverAuthority(SecurityUser user) {
+        return user.getPermissionValues().contains(Permission.CONTROL_TAKEOVER.getValue());
     }
 }

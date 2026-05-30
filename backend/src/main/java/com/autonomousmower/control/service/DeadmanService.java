@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -31,6 +32,11 @@ public class DeadmanService {
         for (String robotId : trackedRobots) {
             evaluateTimeout(robotId, now, DEFAULT_TIMEOUT);
         }
+    }
+
+    @Scheduled(fixedRate = 100)
+    public void evaluateTimeoutsOnSchedule() {
+        evaluateTimeouts();
     }
 
     public boolean evaluateTimeout(String robotId, Instant now, Duration timeout) {

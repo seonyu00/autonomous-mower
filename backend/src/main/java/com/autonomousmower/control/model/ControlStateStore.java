@@ -93,10 +93,20 @@ public class ControlStateStore {
             return snapshotWithoutRefresh();
         }
 
-        public synchronized ControlLockSnapshot resetEmergency(String reason, Instant now) {
+        public synchronized ControlLockSnapshot resetEmergency(
+                String requester,
+                boolean canTakeover,
+                String reason,
+                Instant now
+        ) {
             if (!emergency) {
                 throw new com.autonomousmower.common.exception.BusinessException(
                         com.autonomousmower.common.exception.ErrorCode.ROBOT_NOT_IN_EMERGENCY
+                );
+            }
+            if (controlOwner != null && !controlOwner.equals(requester) && !canTakeover) {
+                throw new com.autonomousmower.common.exception.BusinessException(
+                        com.autonomousmower.common.exception.ErrorCode.CONTROL_OWNED_BY_OTHER_USER
                 );
             }
             emergency = false;
