@@ -22,22 +22,26 @@ public class EmergencyStopService {
     private final ControlResponseFactory responseFactory;
     private final ControlEventPublisher controlEventPublisher;
     private final MqttCommandPublisher mqttCommandPublisher;
+    private final ControlRobotGuard controlRobotGuard;
 
     public EmergencyStopService(
             ControlStateStore controlStateStore,
             RealtimePublisher realtimePublisher,
             ControlResponseFactory responseFactory,
             ControlEventPublisher controlEventPublisher,
-            MqttCommandPublisher mqttCommandPublisher
+            MqttCommandPublisher mqttCommandPublisher,
+            ControlRobotGuard controlRobotGuard
     ) {
         this.controlStateStore = controlStateStore;
         this.realtimePublisher = realtimePublisher;
         this.responseFactory = responseFactory;
         this.controlEventPublisher = controlEventPublisher;
         this.mqttCommandPublisher = mqttCommandPublisher;
+        this.controlRobotGuard = controlRobotGuard;
     }
 
     public ControlCommandResponse activate(String robotId, EmergencyStopRequest request, SecurityUser user) {
+        controlRobotGuard.requireKnownRobot(robotId);
         Instant requestedAt = Instant.now();
         ControlLockSnapshot snapshot = controlStateStore.stateFor(robotId)
                 .activateEmergency(request.reason(), requestedAt);
@@ -57,6 +61,7 @@ public class EmergencyStopService {
     }
 
     public ControlCommandResponse reset(String robotId, ResetAfterEmergencyRequest request, SecurityUser user) {
+        controlRobotGuard.requireKnownRobot(robotId);
         Instant requestedAt = Instant.now();
         ControlLockSnapshot snapshot = controlStateStore.stateFor(robotId)
                 .resetEmergency(user.getAdminId(), hasTakeoverAuthority(user), request.reason(), requestedAt);

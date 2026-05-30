@@ -84,6 +84,17 @@ public class ControlStateStore {
             return snapshotWithoutRefresh();
         }
 
+        public synchronized ControlLockSnapshot changeMode(String owner, String requestedMode, Instant now) {
+            refreshExpiration(now);
+            requireOwner(owner);
+            requireNotEmergency();
+            mode = requestedMode;
+            reason = "change-mode";
+            updatedAt = now;
+            lockVersion++;
+            return snapshotWithoutRefresh();
+        }
+
         public synchronized ControlLockSnapshot activateEmergency(String reason, Instant now) {
             emergency = true;
             mode = "emergency";

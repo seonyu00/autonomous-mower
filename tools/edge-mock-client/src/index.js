@@ -16,6 +16,8 @@ const topic = {
   status: `mowers/${config.robotId}/status`,
   events: `mowers/${config.robotId}/events`,
   manualCommand: `mowers/${config.robotId}/commands/manual`,
+  modeCommand: `mowers/${config.robotId}/commands/mode`,
+  attachmentCommand: `mowers/${config.robotId}/commands/attachment`,
   stopCommand: `mowers/${config.robotId}/commands/stop`,
   estopCommand: `mowers/${config.robotId}/commands/estop`
 };
@@ -55,6 +57,8 @@ client.on("message", (receivedTopic, payload) => {
     lastMode = emergency ? "emergency" : "idle";
   } else if (receivedTopic === topic.manualCommand && !emergency) {
     lastMode = "manual";
+  } else if (receivedTopic === topic.modeCommand && !emergency) {
+    lastMode = parsed?.parameters?.mode ?? parsed?.mode ?? lastMode;
   }
 
   log("command-received", {
@@ -75,6 +79,8 @@ process.on("SIGTERM", shutdown);
 
 function subscribeCommandTopics() {
   client.subscribe(topic.manualCommand, { qos: 0 }, logSubscribe(topic.manualCommand));
+  client.subscribe(topic.modeCommand, { qos: 1 }, logSubscribe(topic.modeCommand));
+  client.subscribe(topic.attachmentCommand, { qos: 1 }, logSubscribe(topic.attachmentCommand));
   client.subscribe(topic.stopCommand, { qos: 1 }, logSubscribe(topic.stopCommand));
   client.subscribe(topic.estopCommand, { qos: 1 }, logSubscribe(topic.estopCommand));
 }
@@ -145,6 +151,9 @@ function expectedCommandQos(receivedTopic) {
     return 0;
   }
   if (receivedTopic === topic.stopCommand || receivedTopic === topic.estopCommand) {
+    return 1;
+  }
+  if (receivedTopic === topic.modeCommand || receivedTopic === topic.attachmentCommand) {
     return 1;
   }
   return null;

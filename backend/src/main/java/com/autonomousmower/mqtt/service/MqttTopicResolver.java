@@ -29,6 +29,14 @@ public class MqttTopicResolver {
         return robotCommandTopic(robotId, "estop");
     }
 
+    public String modeCommandOutbound(String robotId) {
+        return robotCommandTopic(robotId, "mode");
+    }
+
+    public String attachmentCommandOutbound(String robotId) {
+        return robotCommandTopic(robotId, "attachment");
+    }
+
     private String robotTopic(String robotId, String topicName) {
         return "mowers/" + robotId + "/" + topicName;
     }

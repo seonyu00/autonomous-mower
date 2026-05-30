@@ -18,20 +18,24 @@ public class ControlLockService {
     private final RealtimePublisher realtimePublisher;
     private final ControlResponseFactory responseFactory;
     private final ControlEventPublisher controlEventPublisher;
+    private final ControlRobotGuard controlRobotGuard;
 
     public ControlLockService(
             ControlStateStore controlStateStore,
             RealtimePublisher realtimePublisher,
             ControlResponseFactory responseFactory,
-            ControlEventPublisher controlEventPublisher
+            ControlEventPublisher controlEventPublisher,
+            ControlRobotGuard controlRobotGuard
     ) {
         this.controlStateStore = controlStateStore;
         this.realtimePublisher = realtimePublisher;
         this.responseFactory = responseFactory;
         this.controlEventPublisher = controlEventPublisher;
+        this.controlRobotGuard = controlRobotGuard;
     }
 
     public ControlCommandResponse claim(String robotId, ClaimControlRequest request, SecurityUser user) {
+        controlRobotGuard.requireKnownRobot(robotId);
         Instant requestedAt = Instant.now();
         ControlLockSnapshot snapshot = controlStateStore.stateFor(robotId)
                 .claim(user.getAdminId(), user.getDisplayName(), request.requestedMode(), requestedAt);
@@ -42,6 +46,7 @@ public class ControlLockService {
     }
 
     public ControlCommandResponse release(String robotId, ReleaseControlRequest request, SecurityUser user) {
+        controlRobotGuard.requireKnownRobot(robotId);
         Instant requestedAt = Instant.now();
         ControlLockSnapshot snapshot = controlStateStore.stateFor(robotId)
                 .release(user.getAdminId(), requestedAt);
@@ -52,6 +57,7 @@ public class ControlLockService {
     }
 
     public ControlCommandResponse takeover(String robotId, TakeoverControlRequest request, SecurityUser user) {
+        controlRobotGuard.requireKnownRobot(robotId);
         Instant requestedAt = Instant.now();
         ControlLockSnapshot snapshot = controlStateStore.stateFor(robotId)
                 .takeover(user.getAdminId(), user.getDisplayName(), request.reason(), requestedAt);
@@ -62,6 +68,7 @@ public class ControlLockService {
     }
 
     public ControlLockSnapshot snapshot(String robotId) {
+        controlRobotGuard.requireKnownRobot(robotId);
         return controlStateStore.stateFor(robotId).snapshot();
     }
 

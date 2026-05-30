@@ -2,10 +2,12 @@ package com.autonomousmower.control.controller;
 
 import com.autonomousmower.auth.security.SecurityUser;
 import com.autonomousmower.common.api.ApiResponse;
+import com.autonomousmower.control.dto.ChangeModeRequest;
 import com.autonomousmower.control.dto.ClaimControlRequest;
 import com.autonomousmower.control.dto.ControlCommandResponse;
 import com.autonomousmower.control.dto.EmergencyStopRequest;
 import com.autonomousmower.control.dto.ManualCommandRequest;
+import com.autonomousmower.control.dto.MowerAttachmentCommandRequest;
 import com.autonomousmower.control.dto.ReleaseControlRequest;
 import com.autonomousmower.control.dto.ResetAfterEmergencyRequest;
 import com.autonomousmower.control.dto.StopCommandRequest;
@@ -80,6 +82,16 @@ public class ControlController {
         return ApiResponse.success(controlCommandService.manual(robotId, request, user));
     }
 
+    @PostMapping("/mode")
+    @PreAuthorize("hasAuthority('control:write')")
+    public ApiResponse<ControlCommandResponse> mode(
+            @PathVariable String robotId,
+            @Valid @RequestBody ChangeModeRequest request,
+            @AuthenticationPrincipal SecurityUser user
+    ) {
+        return ApiResponse.success(controlCommandService.changeMode(robotId, request, user));
+    }
+
     @PostMapping("/stop")
     @PreAuthorize("hasAuthority('control:write')")
     public ApiResponse<ControlCommandResponse> stop(
@@ -88,6 +100,16 @@ public class ControlController {
             @AuthenticationPrincipal SecurityUser user
     ) {
         return ApiResponse.success(controlCommandService.stop(robotId, request, user));
+    }
+
+    @PostMapping("/attachment")
+    @PreAuthorize("hasAuthority('control:write')")
+    public ApiResponse<ControlCommandResponse> attachment(
+            @PathVariable String robotId,
+            @Valid @RequestBody MowerAttachmentCommandRequest request,
+            @AuthenticationPrincipal SecurityUser user
+    ) {
+        return ApiResponse.success(controlCommandService.attachment(robotId, request, user));
     }
 
     @PostMapping("/estop")

@@ -3,6 +3,7 @@ package com.autonomousmower.control.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.verify;
 
 import com.autonomousmower.auth.security.RoleName;
@@ -38,6 +39,9 @@ class ControlSafetyServiceTest {
     @Mock
     private MqttCommandPublisher mqttCommandPublisher;
 
+    @Mock
+    private ControlRobotGuard controlRobotGuard;
+
     private ControlStateStore stateStore;
     private ControlLockService controlLockService;
     private EmergencyStopService emergencyStopService;
@@ -53,21 +57,29 @@ class ControlSafetyServiceTest {
         stateStore = new ControlStateStore();
         ControlResponseFactory responseFactory = new ControlResponseFactory();
         ControlEventPublisher controlEventPublisher = new ControlEventPublisher(realtimePublisher);
-        deadmanService = new DeadmanService(stateStore, controlEventPublisher);
-        controlLockService = new ControlLockService(stateStore, realtimePublisher, responseFactory, controlEventPublisher);
+        deadmanService = new DeadmanService(stateStore, controlEventPublisher, mqttCommandPublisher);
+        controlLockService = new ControlLockService(
+                stateStore,
+                realtimePublisher,
+                responseFactory,
+                controlEventPublisher,
+                controlRobotGuard
+        );
         emergencyStopService = new EmergencyStopService(
                 stateStore,
                 realtimePublisher,
                 responseFactory,
                 controlEventPublisher,
-                mqttCommandPublisher
+                mqttCommandPublisher,
+                controlRobotGuard
         );
         controlCommandService = new ControlCommandService(
                 stateStore,
                 deadmanService,
                 responseFactory,
                 controlEventPublisher,
-                mqttCommandPublisher
+                mqttCommandPublisher,
+                controlRobotGuard
         );
     }
 
@@ -106,8 +118,8 @@ class ControlSafetyServiceTest {
         );
         assertThat(release.lockState()).isEqualTo("none");
 
-        verify(realtimePublisher, org.mockito.Mockito.atLeast(3)).publishControlLock(any(ControlLockMessage.class));
-        verify(realtimePublisher, org.mockito.Mockito.atLeast(3)).publishControlEvent(any(ControlEventMessage.class));
+        verify(realtimePublisher, atLeast(3)).publishControlLock(any(ControlLockMessage.class));
+        verify(realtimePublisher, atLeast(3)).publishControlEvent(any(ControlEventMessage.class));
     }
 
     @Test
@@ -183,6 +195,7 @@ class ControlSafetyServiceTest {
         );
 
         assertThat(issued).isTrue();
+        verify(mqttCommandPublisher).publishStopCommand(any());
         verify(realtimePublisher).publishControlEvent(any(ControlEventMessage.class));
     }
 }

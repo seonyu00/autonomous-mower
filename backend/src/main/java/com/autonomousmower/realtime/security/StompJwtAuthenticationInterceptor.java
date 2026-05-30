@@ -11,6 +11,7 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -30,6 +31,9 @@ public class StompJwtAuthenticationInterceptor implements ChannelInterceptor {
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         if (accessor == null || accessor.getCommand() != StompCommand.CONNECT) {
+            if (accessor != null && accessor.getCommand() == StompCommand.SUBSCRIBE) {
+                authorizeSubscription(accessor);
+            }
             return message;
         }
 
@@ -46,6 +50,23 @@ public class StompJwtAuthenticationInterceptor implements ChannelInterceptor {
         );
         accessor.setUser(authentication);
         return message;
+    }
+
+    private void authorizeSubscription(StompHeaderAccessor accessor) {
+        String destination = accessor.getDestination();
+        if (destination == null || !destination.startsWith("/topic/robots/")) {
+            return;
+        }
+
+        if (!(accessor.getUser() instanceof Authentication authentication)) {
+            throw new AccessDeniedException("Missing STOMP authentication.");
+        }
+
+        boolean canReadRobotTopic = authentication.getAuthorities().stream()
+                .anyMatch(authority -> "telemetry:read".equals(authority.getAuthority()));
+        if (!canReadRobotTopic) {
+            throw new AccessDeniedException("Missing telemetry:read authority for robot topic subscription.");
+        }
     }
 
     private String resolveBearerToken(StompHeaderAccessor accessor) {

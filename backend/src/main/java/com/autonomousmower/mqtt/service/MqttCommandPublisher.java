@@ -36,6 +36,14 @@ public class MqttCommandPublisher {
         publish(topicResolver.emergencyStopCommandOutbound(payload.robotId()), payload, MqttQoS.AT_LEAST_ONCE);
     }
 
+    public void publishModeCommand(MqttCommandPayload payload) {
+        publish(topicResolver.modeCommandOutbound(payload.robotId()), payload, MqttQoS.AT_LEAST_ONCE);
+    }
+
+    public void publishAttachmentCommand(MqttCommandPayload payload) {
+        publish(topicResolver.attachmentCommandOutbound(payload.robotId()), payload, MqttQoS.AT_LEAST_ONCE);
+    }
+
     private void publish(String topic, MqttCommandPayload payload, int qos) {
         try {
             byte[] bytes = objectMapper.writeValueAsString(payload).getBytes(StandardCharsets.UTF_8);
