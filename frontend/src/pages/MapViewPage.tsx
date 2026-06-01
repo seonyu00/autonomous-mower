@@ -12,7 +12,7 @@ export function MapViewPage() {
             <p className="eyebrow">실시간 운용</p>
             <h2>지도 보기</h2>
           </div>
-          <span className="status-pill connected">1Hz Mock 텔레메트리(Telemetry)</span>
+          <span className="status-pill connected">1Hz 샘플 텔레메트리(Telemetry)</span>
         </div>
         <MapViewMap />
       </section>
@@ -28,11 +28,11 @@ export function MapViewPage() {
       <section className="workspace-panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">4단계 자리표시자</p>
+            <p className="eyebrow">4단계 예정 기능</p>
             <h2>실시간 카메라</h2>
           </div>
         </div>
-        <PhasePlaceholder title="WebRTC 온디맨드 영상 모듈 자리표시자입니다." />
+        <PhasePlaceholder title="WebRTC 온디맨드 영상 모듈은 이후 단계에서 연결합니다." />
       </section>
     </div>
   );

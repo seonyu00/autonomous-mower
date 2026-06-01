@@ -41,7 +41,7 @@ export function GeneralControlCommands() {
     try {
       await changeMode(selectedRobotId, mode);
     } catch (error) {
-      setLocalError(formatError(error, '모드 변경에 실패했습니다.'));
+      setLocalError(formatError(error, '모드 변경 요청을 처리하지 못했습니다.'));
     }
   };
 
@@ -55,7 +55,7 @@ export function GeneralControlCommands() {
     try {
       await sendMowerAttachmentCommand(selectedRobotId, action);
     } catch (error) {
-      setLocalError(formatError(error, '예초 장치 명령에 실패했습니다.'));
+      setLocalError(formatError(error, '예초 장치 명령을 처리하지 못했습니다.'));
     }
   };
 

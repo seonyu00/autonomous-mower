@@ -34,7 +34,7 @@ export function LogViewerPage() {
             <p className="eyebrow">2단계</p>
             <h2>로그 뷰어</h2>
           </div>
-          <span className="status-pill connected">Mock 로그</span>
+          <span className="status-pill connected">샘플 로그</span>
         </div>
 
         <div className="log-filters">
@@ -95,7 +95,7 @@ export function LogViewerPage() {
       <section className="workspace-panel">
         <div className="panel-heading compact">
           <div>
-            <p className="eyebrow">자리표시자</p>
+            <p className="eyebrow">스냅샷</p>
             <h2>스냅샷 뷰어</h2>
           </div>
         </div>

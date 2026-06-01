@@ -140,8 +140,8 @@ export function VideoPanel() {
         {session?.stream ? (
           <video ref={videoRef} className="video-element" autoPlay muted playsInline aria-label="로봇 실시간 카메라 스트림" />
         ) : (
-          <div className="mock-video-placeholder" aria-label="Mock 영상 자리표시자">
-            <span>{session?.loading ? '스트림 연결 중' : '카메라 스트림 자리표시자'}</span>
+          <div className="mock-video-placeholder" aria-label="샘플 영상 영역">
+            <span>{session?.loading ? '스트림 연결 중' : '카메라 스트림 대기 중'}</span>
             <small>{selectedRobotId ?? '로봇 선택'}</small>
           </div>
         )}
@@ -162,7 +162,7 @@ export function VideoPanel() {
         </Button>
       </div>
 
-      {session?.loading ? <p className="muted">Mock 시그널링으로 WebRTC 세션을 불러오는 중입니다.</p> : null}
+      {session?.loading ? <p className="muted">WebRTC 세션을 준비하는 중입니다.</p> : null}
       {session?.error ? <p className="warning-line">{session.error}</p> : null}
       {session?.connectionState === 'disconnected' ? <p className="muted">영상 스트림 연결이 끊겼습니다.</p> : null}
       {!canUseVideo ? <p className="warning-line">온디맨드 영상을 보려면 텔레메트리(Telemetry) 권한이 필요합니다.</p> : null}
@@ -175,8 +175,8 @@ export function VideoPanel() {
         <span>{session?.qualityPolicy.maxBitrateKbps ?? 500}kbps 최대</span>
       </div>
 
-      <div className="snapshot-placeholder compact" aria-label="스냅샷 자리표시자">
-        <span>스냅샷 자리표시자</span>
+      <div className="snapshot-placeholder compact" aria-label="스냅샷 상태">
+        <span>스냅샷</span>
         <small>
           {session?.snapshot ? `${new Date(session.snapshot.capturedAt).toLocaleTimeString()} 요청됨` : '캡처된 스냅샷 없음'}
         </small>

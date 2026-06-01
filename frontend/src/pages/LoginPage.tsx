@@ -23,7 +23,7 @@ export function LoginPage() {
       const response = await login({ adminId, password });
       setSession(response.user, response.accessToken);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : '로그인에 실패했습니다.');
+      setError(caught instanceof Error ? caught.message : '로그인하지 못했습니다.');
     }
   };
 
@@ -32,10 +32,10 @@ export function LoginPage() {
       <section className="login-panel">
         <p className="eyebrow">보안 접속</p>
         <h1>관제 대시보드 로그인</h1>
-        <p className="muted">Mock 인증이 꺼져 있으면 발급된 관리자 계정으로 로그인하세요.</p>
+        <p className="muted">Mock 인증이 꺼져 있으면 발급받은 관리자 계정으로 로그인합니다.</p>
         {env.enableMockAuth ? (
           <button className="primary-button" type="button" onClick={() => loginAsMock('admin')}>
-            Mock 관리자 로그인
+            Mock 관리자로 로그인
           </button>
         ) : (
           <form

@@ -6,10 +6,10 @@ import { canSendEmergencyStop } from './controlSelectors';
 import { ControlPrecheckError, sendEmergencyStop } from './controlApi';
 
 const reasonLabels: Record<string, string> = {
-  'not-authenticated': '인증된 작업자 세션이 필요합니다.',
-  'missing-control-permission': '현재 역할에는 긴급 정지(E-Stop) 권한이 없습니다.',
-  'robot-not-selected': '긴급 정지(E-Stop) 전송 전에 로봇을 선택하세요.',
-  'transport-not-ready': '보안 전송 경로가 준비되지 않았습니다.',
+  'not-authenticated': '작업자 세션이 없습니다.',
+  'missing-control-permission': '현재 역할로는 긴급 정지(E-Stop)를 보낼 수 없습니다.',
+  'robot-not-selected': '먼저 로봇을 선택합니다.',
+  'transport-not-ready': '보안 연결이 아직 준비되지 않았습니다.',
 };
 
 export function EmergencyStopButton() {
@@ -27,7 +27,7 @@ export function EmergencyStopButton() {
 
   const handleConfirm = async () => {
     if (!selectedRobotId) {
-      setError('선택된 로봇이 없습니다.');
+      setError('먼저 로봇을 선택합니다.');
       return;
     }
 
@@ -42,7 +42,7 @@ export function EmergencyStopButton() {
         return;
       }
 
-      setError(caught instanceof Error ? caught.message : '긴급 정지(E-Stop)에 실패했습니다.');
+      setError(caught instanceof Error ? caught.message : '긴급 정지(E-Stop) 요청을 처리하지 못했습니다.');
     }
   };
 
@@ -66,7 +66,7 @@ export function EmergencyStopButton() {
           <p>
             <strong>{selectedRobotId ?? '선택한 로봇'}</strong>의 모든 주행 및 예초 출력을 즉시 정지하도록 요청합니다.
           </p>
-          <p className="warning-line">긴급 정지(E-Stop) 후에는 이전 명령이 자동으로 재개되면 안 됩니다.</p>
+          <p className="warning-line">긴급 정지(E-Stop) 후에는 이전 명령을 자동으로 재개하지 않습니다.</p>
           {eligibility.reasons.length > 0 ? (
             <ul className="validation-list">
               {eligibility.reasons.map((reason) => (

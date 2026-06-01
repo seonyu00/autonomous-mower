@@ -213,7 +213,7 @@ async function requestControlCommand(
     applyBackendControlResult(robotId, result);
     return result;
   } catch (error) {
-    useControlStore.getState().setCommandError(robotId, error instanceof Error ? error.message : '제어 명령에 실패했습니다.');
+    useControlStore.getState().setCommandError(robotId, error instanceof Error ? error.message : '제어 명령을 처리하지 못했습니다.');
     throw error;
   } finally {
     useControlStore.getState().setPendingCommand(robotId, null);

@@ -149,7 +149,7 @@ export function MapViewMap() {
         <span>
           {telemetry ? `${telemetry.latitude.toFixed(5)}, ${telemetry.longitude.toFixed(5)}` : '텔레메트리(Telemetry) 없음'}
         </span>
-        <small>Mock 마커, 경로 폴리라인, 읽기 전용 작업 구역(Work Zone) Polygon입니다.</small>
+        <small>샘플 마커, 경로 폴리라인, 읽기 전용 작업 구역(Work Zone) Polygon을 표시합니다.</small>
       </div>
     </div>
   );

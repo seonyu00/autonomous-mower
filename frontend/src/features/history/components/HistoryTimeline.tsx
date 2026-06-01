@@ -8,7 +8,7 @@ export function HistoryTimeline({ entry }: HistoryTimelineProps) {
   if (!entry) {
     return (
       <div className="phase-placeholder">
-        <p>이벤트 타임라인 자리표시자입니다. Mock 이벤트를 보려면 작업 기록을 선택하세요.</p>
+        <p>작업 기록을 선택하면 관련 이벤트를 볼 수 있습니다.</p>
       </div>
     );
   }

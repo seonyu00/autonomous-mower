@@ -14,18 +14,18 @@ import type { ControlLockState } from './types';
 const lockStates: ControlLockState[] = ['none', 'requesting', 'held', 'held-by-other', 'expired', 'revoked'];
 
 const reasonLabels: Record<string, string> = {
-  'not-authenticated': '인증된 작업자 세션이 필요합니다.',
-  'missing-control-permission': '현재 역할에는 제어 권한이 없습니다.',
-  'robot-not-selected': '선택한 로봇이 이 제어 패널과 일치하지 않습니다.',
-  'control-lock-not-held': '수동 제어권(Control Lock)을 보유하고 있지 않습니다.',
-  'control-owned-by-other-user': '다른 사용자가 제어권(Control Lock)을 보유하고 있습니다.',
+  'not-authenticated': '작업자 세션이 없습니다.',
+  'missing-control-permission': '현재 역할로는 제어할 수 없습니다.',
+  'robot-not-selected': '제어할 로봇을 먼저 선택합니다.',
+  'control-lock-not-held': '수동 제어권(Control Lock)이 없습니다.',
+  'control-owned-by-other-user': '다른 사용자가 제어권(Control Lock)을 잡고 있습니다.',
   'realtime-connecting': '실시간 연결을 설정하는 중입니다.',
   'realtime-reconnecting': '실시간 연결을 다시 연결하는 중입니다.',
   'realtime-degraded': '실시간 연결 상태가 저하되었습니다.',
   'realtime-disconnected': '실시간 연결이 끊겼습니다.',
   'robot-in-emergency': '로봇이 긴급 정지(E-Stop) 상태입니다.',
   'robot-not-in-emergency': '로봇이 긴급 정지(E-Stop) 상태가 아닙니다.',
-  'transport-not-ready': '보안 전송 경로가 준비되지 않았습니다.',
+  'transport-not-ready': '보안 연결이 아직 준비되지 않았습니다.',
 };
 
 export function ControlPanel() {
@@ -47,7 +47,7 @@ export function ControlPanel() {
 
   const handleAction = async (action: 'claim' | 'release' | 'takeover' | 'reset-after-emergency') => {
     if (!selectedRobotId) {
-      setActionError('선택된 로봇이 없습니다.');
+      setActionError('먼저 로봇을 선택합니다.');
       return;
     }
 
@@ -75,7 +75,7 @@ export function ControlPanel() {
         return;
       }
 
-      setActionError(error instanceof Error ? error.message : '제어 작업에 실패했습니다.');
+      setActionError(error instanceof Error ? error.message : '제어 요청을 처리하지 못했습니다.');
     }
   };
 
@@ -110,7 +110,7 @@ export function ControlPanel() {
       {emergencyActive ? (
         <section className="estop-recovery-panel" aria-label="긴급 정지 복구 상태">
           <strong>긴급 정지(E-Stop)가 활성화되었습니다.</strong>
-          <p>이전 명령은 차단되며 자동으로 재개되지 않습니다. 초기화는 로봇을 대기 상태로만 되돌립니다.</p>
+          <p>이전 명령은 자동으로 재개되지 않습니다. 초기화하면 로봇은 대기 상태로 돌아갑니다.</p>
           <Button type="button" disabled={!resetEligibility.allowed} onClick={() => void handleAction('reset-after-emergency')}>
             긴급 정지 후 초기화
           </Button>
@@ -162,7 +162,7 @@ export function ControlPanel() {
       </div>
 
       <section className="control-reasons" aria-label="제어 가능 여부">
-        <strong>{eligibility.allowed ? '제어 사전 점검을 통과했습니다.' : '제어할 수 없습니다.'}</strong>
+        <strong>{eligibility.allowed ? '제어 가능 상태입니다.' : '현재 제어할 수 없습니다.'}</strong>
         {eligibility.reasons.length > 0 ? (
           <ul>
             {eligibility.reasons.map((reason) => (

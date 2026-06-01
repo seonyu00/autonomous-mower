@@ -57,7 +57,7 @@ export class WebRTCClient {
       useVideoStore.getState().patchSession(robotId, {
         connectionState: 'failed',
         loading: false,
-        error: error instanceof Error ? error.message : '영상 스트림에 실패했습니다.',
+        error: error instanceof Error ? error.message : '영상 스트림을 시작하지 못했습니다.',
       });
     }
   }
@@ -85,7 +85,7 @@ export class WebRTCClient {
       useVideoStore.getState().patchSession(robotId, {
         connectionState: 'failed',
         loading: false,
-        error: error instanceof Error ? error.message : '영상 중지에 실패했습니다.',
+        error: error instanceof Error ? error.message : '영상 스트림을 중지하지 못했습니다.',
       });
     } finally {
       this.robotId = null;
@@ -112,7 +112,7 @@ export class WebRTCClient {
       useVideoStore.getState().patchSession(robotId, {
         connectionState: 'failed',
         loading: false,
-        error: error instanceof Error ? error.message : '영상 재연결에 실패했습니다.',
+        error: error instanceof Error ? error.message : '영상 스트림을 다시 연결하지 못했습니다.',
       });
     }
   }
@@ -149,7 +149,7 @@ export class WebRTCClient {
     };
     peerConnection.oniceconnectionstatechange = () => {
       if (peerConnection.iceConnectionState === 'failed') {
-        this.failConnection(robotId, 'WebRTC ICE 연결에 실패했습니다.');
+        this.failConnection(robotId, 'WebRTC ICE 연결을 맺지 못했습니다.');
       }
 
       if (peerConnection.iceConnectionState === 'disconnected') {

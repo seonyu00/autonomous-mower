@@ -34,7 +34,7 @@ export function HistoryPage() {
             <p className="eyebrow">2단계</p>
             <h2>작업 이력</h2>
           </div>
-          <span className="status-pill connected">Mock 데이터</span>
+          <span className="status-pill connected">샘플 데이터</span>
         </div>
 
         <div className="history-filters">
@@ -92,14 +92,14 @@ export function HistoryPage() {
               </small>
             </button>
           ))}
-          {entries.length === 0 ? <p className="muted">선택한 필터와 일치하는 Mock 이력 데이터가 없습니다.</p> : null}
+          {entries.length === 0 ? <p className="muted">선택한 조건에 맞는 작업 이력이 없습니다.</p> : null}
         </div>
       </section>
 
       <section className="workspace-panel">
         <div className="panel-heading compact">
           <div>
-            <p className="eyebrow">자리표시자</p>
+            <p className="eyebrow">이벤트</p>
             <h2>이벤트 타임라인</h2>
           </div>
         </div>

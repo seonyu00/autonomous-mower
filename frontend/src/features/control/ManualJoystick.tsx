@@ -44,7 +44,7 @@ export function ManualJoystick() {
       if (error instanceof ControlPrecheckError) {
         setLocalError(error.reasons.join(', '));
       } else {
-        setLocalError(error instanceof Error ? error.message : '정지 명령에 실패했습니다.');
+        setLocalError(error instanceof Error ? error.message : '정지 명령을 처리하지 못했습니다.');
       }
     } finally {
       stopInFlightRef.current = false;
@@ -112,7 +112,7 @@ export function ManualJoystick() {
       if (error instanceof ControlPrecheckError) {
         setLocalError(error.reasons.join(', '));
       } else {
-        setLocalError(error instanceof Error ? error.message : '수동 명령에 실패했습니다.');
+        setLocalError(error instanceof Error ? error.message : '수동 명령을 처리하지 못했습니다.');
       }
     }
   };
@@ -156,7 +156,7 @@ export function ManualJoystick() {
       {controlState?.lastCommandPayload ? (
         <pre className="payload-preview">{JSON.stringify(controlState.lastCommandPayload, null, 2)}</pre>
       ) : (
-        <p className="muted">조이스틱 입력 후 Mock 명령 payload가 여기에 표시됩니다.</p>
+        <p className="muted">조이스틱을 입력하면 명령 payload가 여기에 표시됩니다.</p>
       )}
 
       {disabled && reasonText ? <p className="warning-line">{reasonText}</p> : null}

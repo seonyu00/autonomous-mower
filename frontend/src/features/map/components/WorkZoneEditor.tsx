@@ -37,7 +37,7 @@ export function WorkZoneEditor() {
       </div>
 
       <p className="muted">
-        Mock Polygon은 읽기/검증과 저장 요청 payload 생성까지만 처리합니다. 지도 편집과 실제 저장은 아직 비활성화되어 있습니다.
+        현재는 샘플 Polygon을 읽고 검증한 뒤 저장 요청 payload를 만들어 보는 단계입니다. 지도 편집과 실제 저장은 아직 연결하지 않았습니다.
       </p>
 
       <div className="coordinate-list" aria-label="Polygon 좌표 목록">
@@ -67,12 +67,12 @@ export function WorkZoneEditor() {
       {postGisPayload ? (
         <pre className="payload-preview">{JSON.stringify(postGisPayload, null, 2)}</pre>
       ) : (
-        <p className="warning-line">선택한 로봇에 사용할 수 있는 Mock 작업 구역(Work Zone)이 없습니다.</p>
+        <p className="warning-line">선택한 로봇에 등록된 샘플 작업 구역(Work Zone)이 없습니다.</p>
       )}
 
       {lastSaveRequest ? (
         <p className="save-note">
-          SRID {lastSaveRequest.srid}용 Mock 저장 요청을 생성했습니다. Geometry 유형:{' '}
+          SRID {lastSaveRequest.srid} 기준 저장 요청 payload를 만들었습니다. Geometry 유형:{' '}
           {fromPostGisPolygonPayload(lastSaveRequest).type}
         </p>
       ) : null}
