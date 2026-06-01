@@ -155,10 +155,15 @@ QoS: 1
 
 Rules:
 
-- E-Stop outranks every normal command, mode command, and attachment command.
-- Jetson must stop drive output and mower attachment output immediately.
-- Jetson must enter emergency state and reject all normal commands until backend sends an explicit reset over a future reset contract. In the current contract, reset is backend state only and does not command Jetson to resume.
-- E-Stop must still be accepted if there is no active control lock.
+- E-Stop은 모든 일반 명령, mode 명령, attachment 명령보다 우선한다.
+- Jetson은 주행 출력과 작업 장치 출력을 즉시 정지해야 한다.
+- 현재 Jetson ROS 2 edge client는 하드웨어 브릿지 상태 머신 출력을 다음 순서로 publish해야 한다.
+  1. `/cmd_vel` `geometry_msgs/Twist` 속도 0.
+  2. `/mower/set_mode` `std_msgs/Int8` 값 `2`. 의미는 EMERGENCY mode이다.
+  3. `/mower/engine` `std_msgs/Bool` 값 `false`. 의미는 가솔린 엔진 릴레이 강제 차단이다.
+- Jetson은 emergency state에 진입하고, 향후 reset contract로 명시적인 reset이 오기 전까지 모든 일반 명령을 거부해야 한다. 현재 contract에서 reset은 backend 상태만 다루며 Jetson에 재개 명령을 보내지 않는다.
+- reset-after-emergency는 엔진 릴레이를 자동으로 다시 켜거나 이전 주행/작업 장치 출력을 자동 복구하면 안 된다.
+- 활성 control lock이 없어도 E-Stop은 수락해야 한다.
 
 ### Mode Command
 

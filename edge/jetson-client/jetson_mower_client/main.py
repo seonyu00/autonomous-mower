@@ -10,9 +10,12 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import Imu, NavSatFix
+from std_msgs.msg import Bool, Int8
 
+from .command_ack import publish_command_ack
 from .command_mapping import TwistCommand, is_stale_client_command, manual_to_twist
 from .config import EdgeConfig, load_config
+from .hardware_safety import publish_emergency_stop_outputs
 from .mqtt_edge import MqttEdgeClient
 from .topics import MowerTopics, command_type_from_topic
 
@@ -32,6 +35,8 @@ class JetsonMowerClientNode(Node):
         self._recent_command_keys: OrderedDict[str, None] = OrderedDict()
 
         self._cmd_vel_publisher = self.create_publisher(Twist, config.ros.cmd_vel_topic, 10)
+        self._mower_set_mode_publisher = self.create_publisher(Int8, config.ros.mower_set_mode_topic, 10)
+        self._mower_engine_publisher = self.create_publisher(Bool, config.ros.mower_engine_topic, 10)
         self.create_subscription(NavSatFix, config.ros.fix_topic, self._handle_fix, 10)
         self.create_subscription(Imu, config.ros.imu_topic, self._handle_imu, 10)
 
@@ -120,12 +125,11 @@ class JetsonMowerClientNode(Node):
         self._publish_status()
 
     def _handle_estop(self, command: dict[str, Any], received_at: str) -> None:
-        self._publish_zero_twist()
+        self._publish_emergency_stop_outputs()
         self._emergency_active = True
         self._mode = "emergency"
         self._work_state = "error"
         self._last_manual_command_monotonic = None
-        # TODO: publish mower attachment cut command through a future ROS interface.
         self._publish_ack(command, "emergency-stop", "accepted", None, received_at)
         self._publish_status()
 
@@ -148,7 +152,7 @@ class JetsonMowerClientNode(Node):
         action = str(_parameters(command).get("attachmentAction", ""))
         if action not in {"blade-start", "blade-stop", "raise", "lower"}:
             raise ValueError("invalid-attachment-action")
-        # TODO: bridge attachment commands through a dedicated ROS interface.
+        # TODO: 작업 장치 명령은 이후 별도 ROS 인터페이스로 연결한다.
         self._publish_ack(command, "mower-attachment", "accepted", None, received_at)
         self._publish_status()
 
@@ -171,6 +175,19 @@ class JetsonMowerClientNode(Node):
     def _publish_zero_twist(self) -> None:
         self._publish_twist(TwistCommand())
 
+    def _publish_emergency_stop_outputs(self) -> None:
+        # 하드웨어 브릿지 E-Stop 순서:
+        # 1. 주행 속도를 먼저 0으로 만들고, 2. STM32 브릿지 상태 머신을 EMERGENCY로 전환한 뒤,
+        # 3. 엔진 릴레이를 강제로 차단한다. 이후 엔진 상태를 자동 복구하면 안 된다.
+        publish_emergency_stop_outputs(
+            self._cmd_vel_publisher,
+            self._mower_set_mode_publisher,
+            self._mower_engine_publisher,
+            Twist,
+            Int8,
+            Bool,
+        )
+
     def _publish_ack(
         self,
         command: dict[str, Any] | None,
@@ -179,17 +196,18 @@ class JetsonMowerClientNode(Node):
         reason: str | None,
         received_at: str,
     ) -> None:
-        payload = {
-            "commandId": command.get("commandId") if command else None,
-            "robotId": self._config.robot_id,
-            "commandType": command.get("commandType", command_type) if command else command_type,
-            "status": status,
-            "reason": reason,
-            "edgeNodeId": self._config.edge_node_id,
-            "receivedAt": received_at,
-            "ackedAt": utc_now(),
-        }
-        self._mqtt.publish_json(self._topics.command_ack, payload, qos=1)
+        publish_command_ack(
+            self._mqtt,
+            self._topics.command_ack,
+            self._config.robot_id,
+            self._config.edge_node_id,
+            command,
+            command_type,
+            status,
+            reason,
+            received_at,
+            utc_now,
+        )
 
     def _is_duplicate_command(self, command: dict[str, Any]) -> bool:
         key = command.get("idempotencyKey") or command.get("commandId")
@@ -219,8 +237,8 @@ class JetsonMowerClientNode(Node):
             "receivedAt": utc_now(),
             "errorState": "emergency-stop-active" if self._emergency_active else None,
         }
-        # TODO: derive speed, battery, and signal from real ROS/Jetson sources.
-        # TODO: add camera/WebRTC status once media streaming is implemented.
+        # TODO: 속도, 배터리, 신호 세기는 실제 ROS/Jetson 소스에서 계산한다.
+        # TODO: 영상 송출 구현 후 카메라/WebRTC 상태를 추가한다.
         self._mqtt.publish_json(self._topics.telemetry, payload, qos=1)
 
     def _publish_status(self) -> None:

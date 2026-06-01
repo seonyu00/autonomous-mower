@@ -114,3 +114,29 @@ cd edge/jetson-client
 python -m compileall jetson_mower_client tests
 python -m unittest discover -s tests
 ```
+
+## Stop과 E-Stop 하드웨어 출력 차이
+
+Stop과 E-Stop은 의도적으로 다르게 처리한다.
+
+Stop은 일반 정지 명령이다. 다음 topic에 속도 0만 publish한다.
+
+- `/cmd_vel`
+  - type: `geometry_msgs/Twist`
+  - 값: 속도 0
+
+E-Stop은 Jetson/STM32 하드웨어 브릿지 상태 머신을 위한 안전 비상정지 명령이다. publish 순서는 다음과 같다.
+
+1. `/cmd_vel`
+   - type: `geometry_msgs/Twist`
+   - 값: 속도 0
+2. `/mower/set_mode`
+   - type: `std_msgs/Int8`
+   - 값: `2`
+   - 의미: EMERGENCY mode
+3. `/mower/engine`
+   - type: `std_msgs/Bool`
+   - 값: `false`
+   - 의미: 가솔린 엔진 릴레이 강제 차단
+
+E-Stop 이후 client는 로컬 emergency state를 유지하고 일반 명령을 거부한다. 향후 reset-after-emergency 흐름이 추가되더라도 엔진을 자동으로 다시 켜거나 이전 주행/작업 장치 출력을 자동 복구하면 안 된다.

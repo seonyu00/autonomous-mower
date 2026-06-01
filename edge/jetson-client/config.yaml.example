@@ -11,7 +11,11 @@ mqtt:
   recent_command_cache_size: 256
 
 ros:
+  # Stop 명령은 cmd_vel_topic에 속도 0만 publish한다.
+  # E-Stop은 속도 0, EMERGENCY mode, 엔진 릴레이 차단을 함께 publish한다.
   cmd_vel_topic: /cmd_vel
+  mower_set_mode_topic: /mower/set_mode
+  mower_engine_topic: /mower/engine
   fix_topic: /fix
   imu_topic: /camera/imu
   telemetry_publish_period_seconds: 1.0

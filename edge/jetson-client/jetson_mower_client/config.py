@@ -38,6 +38,8 @@ class MqttConfig:
 @dataclass(frozen=True)
 class RosConfig:
     cmd_vel_topic: str
+    mower_set_mode_topic: str
+    mower_engine_topic: str
     fix_topic: str
     imu_topic: str
     telemetry_publish_period_seconds: float
@@ -92,6 +94,8 @@ def _mqtt_config(raw: dict[str, Any], robot_id: str) -> MqttConfig:
 def _ros_config(raw: dict[str, Any]) -> RosConfig:
     return RosConfig(
         cmd_vel_topic=str(raw.get("cmd_vel_topic", "/cmd_vel")),
+        mower_set_mode_topic=str(raw.get("mower_set_mode_topic", "/mower/set_mode")),
+        mower_engine_topic=str(raw.get("mower_engine_topic", "/mower/engine")),
         fix_topic=str(raw.get("fix_topic", "/fix")),
         imu_topic=str(raw.get("imu_topic", "/camera/imu")),
         telemetry_publish_period_seconds=float(raw.get("telemetry_publish_period_seconds", 1.0)),
