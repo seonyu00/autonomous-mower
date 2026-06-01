@@ -8,6 +8,11 @@
 *.log
 **/integration-*.log
 
+# Python artifacts
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
 # Node artifacts
 node_modules/
 **/node_modules/

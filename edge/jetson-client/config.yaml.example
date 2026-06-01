@@ -1,0 +1,25 @@
+robot_id: MOWER-01
+edge_node_id: jetson-MOWER-01
+
+mqtt:
+  broker_url: mqtt://localhost:1883
+  username:
+  password:
+  client_id: jetson-MOWER-01
+  keepalive_seconds: 30
+  reconnect_delay_seconds: 2
+  recent_command_cache_size: 256
+
+ros:
+  cmd_vel_topic: /cmd_vel
+  fix_topic: /fix
+  imu_topic: /camera/imu
+  telemetry_publish_period_seconds: 1.0
+  status_publish_period_seconds: 3.0
+  manual_timeout_ms: 500
+  max_linear_mps: 1.0
+  max_angular_radps: 1.0
+
+telemetry:
+  default_battery_level: 100
+  default_signal_strength: 100
