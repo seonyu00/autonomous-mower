@@ -13,13 +13,11 @@ Local development uses Docker Compose for infrastructure and runs the Spring Boo
 
 Copy `.env.example` to `.env` if you want a local editable environment file.
 
-Default local integration account:
+Default local integration robot:
 
-- Admin ID: `admin`
-- Password: `admin`
 - Robot ID: `MOWER-01`
 
-The local seed data is installed by Flyway migration `V4__seed_local_integration_data.sql`.
+Flyway migration `V4__seed_local_integration_data.sql` installs robot-only local seed data. Provision local admin credentials outside committed migrations.
 
 ## 1. Start Docker Dependencies
 
@@ -50,6 +48,7 @@ $env:SERVER_PORT="8080"
 $env:SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5432/mower"
 $env:SPRING_DATASOURCE_USERNAME="mower"
 $env:SPRING_DATASOURCE_PASSWORD="mower"
+$env:JWT_SECRET="change-me-to-a-32-byte-minimum-secret"
 $env:MQTT_ENABLED="true"
 $env:MQTT_BROKER_URL="tcp://localhost:1883"
 
@@ -108,7 +107,7 @@ Open:
 http://localhost:5173/login
 ```
 
-Login with `admin / admin`, then use the Map View control panel.
+Login with your locally provisioned admin account, then use the Map View control panel.
 
 ## Integration Smoke Flow
 
@@ -116,7 +115,7 @@ Use the UI or call through the frontend dev server proxy:
 
 ```powershell
 $base="http://localhost:5173"
-$login = Invoke-RestMethod -Method Post -Uri "$base/api/auth/login" -ContentType "application/json" -Body (@{adminId="admin"; password="admin"} | ConvertTo-Json)
+$login = Invoke-RestMethod -Method Post -Uri "$base/api/auth/login" -ContentType "application/json" -Body (@{adminId=$env:LOCAL_ADMIN_ID; password=$env:LOCAL_ADMIN_PASSWORD} | ConvertTo-Json)
 $headers = @{ Authorization = "Bearer $($login.data.accessToken)" }
 
 Invoke-RestMethod -Method Post -Uri "$base/api/control/MOWER-01/claim" -Headers $headers -ContentType "application/json" -Body (@{idempotencyKey="smoke-claim"; requestedMode="manual"} | ConvertTo-Json)

@@ -8,8 +8,8 @@ import { env } from '../shared/config/env';
 export function LoginPage() {
   const { isAuthenticated, loginAsMock } = useAuth();
   const setSession = useAuthStore((state) => state.setSession);
-  const [adminId, setAdminId] = useState('admin');
-  const [password, setPassword] = useState('admin');
+  const [adminId, setAdminId] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   if (isAuthenticated) {
@@ -32,7 +32,7 @@ export function LoginPage() {
       <section className="login-panel">
         <p className="eyebrow">Secure Access</p>
         <h1>Control Dashboard Login</h1>
-        <p className="muted">Use the local integration account when mock auth is disabled.</p>
+        <p className="muted">Use your provisioned admin credentials when mock auth is disabled.</p>
         {env.enableMockAuth ? (
           <button className="primary-button" type="button" onClick={() => loginAsMock('admin')}>
             Mock Admin Login
