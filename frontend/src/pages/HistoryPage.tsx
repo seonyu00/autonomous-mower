@@ -31,15 +31,15 @@ export function HistoryPage() {
       <section className="workspace-panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">Phase 2</p>
-            <h2>History</h2>
+            <p className="eyebrow">2단계</p>
+            <h2>작업 이력</h2>
           </div>
-          <span className="status-pill connected">mock data</span>
+          <span className="status-pill connected">Mock 데이터</span>
         </div>
 
         <div className="history-filters">
           <label>
-            Robot
+            로봇
             <select value={robotId} onChange={(event) => setRobotId(event.target.value)}>
               {mockRobots.map((robot) => (
                 <option key={robot.id} value={robot.id}>
@@ -50,17 +50,17 @@ export function HistoryPage() {
           </label>
 
           <label>
-            From
+            시작일
             <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
           </label>
 
           <label>
-            To
+            종료일
             <input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
           </label>
 
           <button className="primary-button" type="button" onClick={handleSearch}>
-            Search
+            검색
           </button>
         </div>
       </section>
@@ -72,10 +72,10 @@ export function HistoryPage() {
       <section className="workspace-panel">
         <div className="panel-heading compact">
           <div>
-            <p className="eyebrow">Runs</p>
-            <h2>Search Results</h2>
+            <p className="eyebrow">작업 기록</p>
+            <h2>검색 결과</h2>
           </div>
-          <span className="status-pill connected">{entries.length} runs</span>
+          <span className="status-pill connected">{entries.length}건</span>
         </div>
         <div className="history-result-list">
           {entries.map((entry) => (
@@ -88,19 +88,19 @@ export function HistoryPage() {
               <strong>{entry.robotId}</strong>
               <span>{formatRange(entry.startedAt, entry.endedAt)}</span>
               <small>
-                {entry.distanceMeters} m | {entry.coveragePercent ?? '-'}% coverage
+                {entry.distanceMeters} m | 커버리지 {entry.coveragePercent ?? '-'}%
               </small>
             </button>
           ))}
-          {entries.length === 0 ? <p className="muted">No mock history data matches the selected filters.</p> : null}
+          {entries.length === 0 ? <p className="muted">선택한 필터와 일치하는 Mock 이력 데이터가 없습니다.</p> : null}
         </div>
       </section>
 
       <section className="workspace-panel">
         <div className="panel-heading compact">
           <div>
-            <p className="eyebrow">Placeholder</p>
-            <h2>Event Timeline</h2>
+            <p className="eyebrow">자리표시자</p>
+            <h2>이벤트 타임라인</h2>
           </div>
         </div>
         <HistoryTimeline entry={selectedEntry} />
@@ -115,5 +115,5 @@ function formatRange(startedAt: string, endedAt?: string) {
     timeStyle: 'short',
   });
 
-  return `${formatter.format(new Date(startedAt))} - ${endedAt ? formatter.format(new Date(endedAt)) : 'running'}`;
+  return `${formatter.format(new Date(startedAt))} - ${endedAt ? formatter.format(new Date(endedAt)) : '진행 중'}`;
 }

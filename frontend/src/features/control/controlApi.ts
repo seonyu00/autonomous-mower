@@ -21,7 +21,7 @@ export class ControlPrecheckError extends Error {
   readonly reasons: string[];
 
   constructor(reasons: string[]) {
-    super(`Control command blocked: ${reasons.join(', ')}`);
+    super(`제어 명령이 차단되었습니다: ${reasons.join(', ')}`);
     this.name = 'ControlPrecheckError';
     this.reasons = reasons;
   }
@@ -213,7 +213,7 @@ async function requestControlCommand(
     applyBackendControlResult(robotId, result);
     return result;
   } catch (error) {
-    useControlStore.getState().setCommandError(robotId, error instanceof Error ? error.message : 'Control command failed');
+    useControlStore.getState().setCommandError(robotId, error instanceof Error ? error.message : '제어 명령에 실패했습니다.');
     throw error;
   } finally {
     useControlStore.getState().setPendingCommand(robotId, null);

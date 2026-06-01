@@ -6,10 +6,10 @@ import { canSendEmergencyStop } from './controlSelectors';
 import { ControlPrecheckError, sendEmergencyStop } from './controlApi';
 
 const reasonLabels: Record<string, string> = {
-  'not-authenticated': 'Authenticated operator session is required.',
-  'missing-control-permission': 'Current role does not have E-Stop permission.',
-  'robot-not-selected': 'Select a robot before sending E-Stop.',
-  'transport-not-ready': 'Secure transport is not ready.',
+  'not-authenticated': '인증된 작업자 세션이 필요합니다.',
+  'missing-control-permission': '현재 역할에는 긴급 정지(E-Stop) 권한이 없습니다.',
+  'robot-not-selected': '긴급 정지(E-Stop) 전송 전에 로봇을 선택하세요.',
+  'transport-not-ready': '보안 전송 경로가 준비되지 않았습니다.',
 };
 
 export function EmergencyStopButton() {
@@ -27,7 +27,7 @@ export function EmergencyStopButton() {
 
   const handleConfirm = async () => {
     if (!selectedRobotId) {
-      setError('No robot selected.');
+      setError('선택된 로봇이 없습니다.');
       return;
     }
 
@@ -42,7 +42,7 @@ export function EmergencyStopButton() {
         return;
       }
 
-      setError(caught instanceof Error ? caught.message : 'Emergency stop failed.');
+      setError(caught instanceof Error ? caught.message : '긴급 정지(E-Stop)에 실패했습니다.');
     }
   };
 
@@ -51,23 +51,22 @@ export function EmergencyStopButton() {
       <button
         className="estop-button"
         type="button"
-        aria-label={selectedRobotId ? `Emergency stop ${selectedRobotId}` : 'Emergency stop unavailable'}
+        aria-label={selectedRobotId ? `${selectedRobotId} 긴급 정지` : '긴급 정지를 사용할 수 없음'}
         disabled={disabled}
         onClick={() => setConfirmOpen(true)}
       >
         E-STOP
       </button>
       <span className={emergencyActive ? 'estop-state active' : 'estop-state'}>
-        {emergencyActive ? 'Emergency active' : 'Ready'}
+        {emergencyActive ? '긴급 정지 활성' : '준비'}
       </span>
 
-      <Dialog title="Confirm Emergency Stop" open={confirmOpen} onClose={() => setConfirmOpen(false)}>
+      <Dialog title="긴급 정지 확인" open={confirmOpen} onClose={() => setConfirmOpen(false)}>
         <div className="estop-dialog-content">
           <p>
-            This will immediately request all drive and mower outputs to stop for{' '}
-            <strong>{selectedRobotId ?? 'the selected robot'}</strong>.
+            <strong>{selectedRobotId ?? '선택한 로봇'}</strong>의 모든 주행 및 예초 출력을 즉시 정지하도록 요청합니다.
           </p>
-          <p className="warning-line">After E-Stop, previous commands must not resume automatically.</p>
+          <p className="warning-line">긴급 정지(E-Stop) 후에는 이전 명령이 자동으로 재개되면 안 됩니다.</p>
           {eligibility.reasons.length > 0 ? (
             <ul className="validation-list">
               {eligibility.reasons.map((reason) => (
@@ -78,16 +77,16 @@ export function EmergencyStopButton() {
           {error ? <p className="warning-line">{error}</p> : null}
           <div className="dialog-actions">
             <button className="secondary-button" type="button" onClick={() => setConfirmOpen(false)}>
-              Cancel
+              취소
             </button>
             <button
               className="danger-button"
               type="button"
-              aria-label="Confirm emergency stop command"
+              aria-label="긴급 정지 명령 확인"
               disabled={!eligibility.allowed}
               onClick={() => void handleConfirm()}
             >
-              Confirm E-Stop
+              긴급 정지 실행
             </button>
           </div>
         </div>

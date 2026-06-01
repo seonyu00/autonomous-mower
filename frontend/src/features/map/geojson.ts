@@ -22,36 +22,36 @@ export function validatePolygonGeometry(polygon: PolygonGeometry | null | undefi
   if (!polygon) {
     return {
       valid: false,
-      errors: ['Polygon geometry is missing.'],
+      errors: ['Polygon geometry가 없습니다.'],
     };
   }
 
   if (polygon.type !== 'Polygon') {
-    errors.push('Geometry type must be Polygon.');
+    errors.push('Geometry 유형은 Polygon이어야 합니다.');
   }
 
   if (!Array.isArray(polygon.coordinates) || polygon.coordinates.length === 0) {
-    errors.push('Polygon must contain at least one linear ring.');
+    errors.push('Polygon에는 하나 이상의 linear ring이 있어야 합니다.');
   }
 
   const exteriorRing = polygon.coordinates[0] ?? [];
 
   if (exteriorRing.length < 4) {
-    errors.push('Exterior ring must contain at least four positions including the closing position.');
+    errors.push('Exterior ring에는 닫는 좌표를 포함해 최소 4개 위치가 있어야 합니다.');
   }
 
   exteriorRing.forEach(([longitude, latitude], index) => {
     if (!isValidLngLat(longitude, latitude)) {
-      errors.push(`Position ${index + 1} must be a valid WGS84 longitude/latitude pair.`);
+      errors.push(`${index + 1}번 위치는 유효한 WGS84 경도/위도 쌍이어야 합니다.`);
     }
   });
 
   if (exteriorRing.length >= 2 && !samePosition(exteriorRing[0], exteriorRing[exteriorRing.length - 1])) {
-    errors.push('Exterior ring must be closed by repeating the first position as the last position.');
+    errors.push('Exterior ring은 첫 위치를 마지막 위치에 반복해 닫아야 합니다.');
   }
 
   if (hasSelfIntersection(exteriorRing)) {
-    errors.push('Exterior ring must not self-intersect.');
+    errors.push('Exterior ring은 자기 교차가 없어야 합니다.');
   }
 
   return {

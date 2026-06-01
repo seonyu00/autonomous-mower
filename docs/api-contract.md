@@ -1,4 +1,4 @@
-# API and Realtime Contract
+# API 및 실시간 계약
 
 이 문서는 `SRS.md`, `docs/frontend-masterplan.md`, `docs/development-log.md`와 현재 프론트엔드 구현을 기준으로 Spring Boot 백엔드가 우선 맞춰야 할 REST/STOMP/WebRTC signalling 계약을 정의한다.
 
@@ -42,7 +42,7 @@ SRS에 endpoint 경로와 signalling 방식은 상세 명시되어 있지 않다
 
 ## 2. 인증과 RBAC
 
-### Roles
+### 역할(Roles)
 
 프론트엔드 현재 role:
 
@@ -51,7 +51,7 @@ SRS에 endpoint 경로와 signalling 방식은 상세 명시되어 있지 않다
 - `supervisor`
 - `admin`
 
-### Permissions
+### 권한(Permissions)
 
 프론트엔드 현재 permission:
 
@@ -67,7 +67,7 @@ WebRTC 영상은 SRS상 별도 권한명이 없으므로 현재 프론트엔드�
 
 ## 3. REST API
 
-### 3.1 Auth
+### 3.1 인증(Auth)
 
 #### `POST /api/auth/login`
 
@@ -96,7 +96,7 @@ Response `200`:
 }
 ```
 
-### 3.2 Robots
+### 3.2 로봇(Robots)
 
 #### `GET /api/robots`
 
@@ -140,13 +140,13 @@ Response `200`:
 }
 ```
 
-### 3.3 Work Zone
+### 3.3 작업 구역(Work Zone)
 
-PostGIS storage requirement: `GEOMETRY(Polygon, 4326)`.
+PostGIS 저장 요구사항: `GEOMETRY(Polygon, 4326)`.
 
 #### `GET /api/robots/{robotId}/work-zone`
 
-Permission: `robots:read`
+권한: `robots:read`
 
 Response `200`:
 
@@ -179,7 +179,7 @@ No active zone response may be `200 null` or `404 WORK_ZONE_NOT_FOUND`. Pick one
 
 #### `PUT /api/robots/{robotId}/work-zone`
 
-Permission: `control:write` or backend-defined work-zone write permission. Current frontend has no separate work-zone permission, so `control:write` is the default assumption.
+권한: `control:write` 또는 백엔드에서 정의한 작업 구역(Work Zone) 쓰기 권한. 현재 프론트엔드에는 별도 작업 구역 권한이 없으므로 `control:write`를 기본 가정으로 둔다.
 
 Request:
 
@@ -218,17 +218,17 @@ Response `200`:
 }
 ```
 
-Validation requirements:
+검증 요구사항:
 
-- geometry type must be `Polygon`
-- SRID must be `4326`
-- exterior ring must have at least 4 positions
-- ring must be closed
-- longitude range: `-180..180`
-- latitude range: `-90..90`
-- exterior ring must not self-intersect
+- geometry type은 `Polygon`이어야 한다.
+- SRID는 `4326`이어야 한다.
+- exterior ring은 최소 4개 position을 가져야 한다.
+- ring은 닫혀 있어야 한다.
+- longitude 범위: `-180..180`
+- latitude 범위: `-90..90`
+- exterior ring은 자기 교차가 없어야 한다.
 
-### 3.4 History
+### 3.4 이력(History)
 
 #### `GET /api/history?robotId=&from=&to=`
 
@@ -282,7 +282,7 @@ Response `200`:
 ]
 ```
 
-### 3.5 Logs and Snapshots
+### 3.5 로그 및 스냅샷
 
 #### `GET /api/logs?robotId=&from=&to=&severity=&text=`
 
@@ -326,7 +326,7 @@ Response:
 - `200 image/jpeg`
 - `404` if missing
 
-### 3.6 Control
+### 3.6 제어(Control)
 
 All control endpoints must re-check RBAC and robot/control state server-side. Frontend checks are UI safety only.
 
@@ -528,7 +528,7 @@ Request:
 
 `attachmentAction`: `blade-start | blade-stop | raise | lower`
 
-### 3.7 WebRTC Video Signalling
+### 3.7 WebRTC 영상 시그널링
 
 The frontend currently uses REST-style signalling. STOMP signalling is not implemented on the frontend.
 
@@ -616,7 +616,7 @@ Open backend decisions:
 - Snapshot capture owner: frontend frame capture, backend video frame capture, or robot-side JPEG capture.
 - Codec and hardware encoder policy: H.264/H.265, NVENC, browser fallback.
 
-## 4. STOMP Topics
+## 4. STOMP Topic
 
 Endpoint: `wss://{host}/ws`
 
@@ -764,17 +764,17 @@ Payload:
 
 `state`: `idle | connecting | connected | reconnecting | disconnected | failed`
 
-## 5. Backend Safety Responsibilities
+## 5. 백엔드 안전 책임
 
-- Frontend RBAC and state prechecks are not sufficient. Backend must enforce every control permission and state transition.
-- E-Stop must have priority over all normal control, work, mower attachment, and mode commands.
-- Emergency reset must not resume previous commands.
-- Manual joystick commands should not be queued.
-- Stop command must be accepted through a low-latency path and backed by server/edge fail-safe.
-- If browser lifecycle prevents stop delivery, server/edge must still stop on session loss, lock expiry, telemetry gap, or control heartbeat loss.
-- Jetson/STM32 fail-safe from SRS remains mandatory: STM32 should stop PWM if upper control communication is interrupted beyond the defined threshold.
+- 프론트엔드 RBAC와 상태 사전 점검만으로는 충분하지 않다. 백엔드는 모든 제어 권한과 상태 전이를 강제해야 한다.
+- 긴급 정지(E-Stop)는 모든 일반 제어, 작업, 예초 장치, 모드 명령보다 우선해야 한다.
+- 긴급 상태 초기화는 이전 명령을 재개하면 안 된다.
+- 수동 조이스틱 명령은 queue에 쌓이면 안 된다.
+- 정지 명령은 저지연 경로로 수락되어야 하며 server/edge fail-safe가 뒷받침되어야 한다.
+- 브라우저 lifecycle 때문에 정지 전달이 실패하더라도 server/edge는 세션 손실, lock 만료, 텔레메트리(Telemetry) 공백, 제어 heartbeat 손실 시 정지해야 한다.
+- SRS의 Jetson/STM32 fail-safe는 여전히 필수다. 상위 제어 통신이 정의된 임계값을 넘겨 중단되면 STM32는 PWM을 정지해야 한다.
 
-## 6. Open Decisions
+## 6. 미결정 사항
 
 - Whether to add explicit `video:read` permission.
 - Whether work-zone write should use `control:write` or a separate `work-zone:write`.

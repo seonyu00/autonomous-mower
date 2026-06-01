@@ -1,21 +1,21 @@
-# Backend Masterplan
+# 백엔드 마스터플랜
 
 이 문서는 `SRS.md`와 `docs/api-contract.md`를 기준으로 Spring Boot 백엔드 구현 방향을 정의한다. 정확한 REST 경로, STOMP topic, WebRTC signalling payload 중 SRS에 명시되지 않은 부분은 `docs/api-contract.md`의 프론트엔드 계약을 따른다. 해당 계약 자체가 SRS에서 직접 지정되지 않은 경우는 본 문서에서도 "추정"으로 표시한다.
 
-## 1. Backend Scope
+## 1. 백엔드 범위
 
 백엔드는 다음 책임을 가진다.
 
 - React 관제 대시보드용 REST API 제공
 - JWT 기반 인증과 RBAC 권한 검증
 - PostgreSQL/PostGIS 기반 로봇, 작업 구역, 텔레메트리, 이력, 로그 저장
-- WebSocket/STOMP 기반 실시간 telemetry/status/event/control-lock/video-status 전파
-- MQTT 기반 Jetson/STM32 계층과의 telemetry 수신 및 command 송신
-- E-Stop, 500ms deadman, control-lock 등 안전 제어 규칙의 서버 측 강제
-- WebRTC video stream signalling 중계
+- WebSocket/STOMP 기반 실시간 텔레메트리(Telemetry)/status/event/control-lock/video-status 전파
+- MQTT 기반 Jetson/STM32 계층과의 텔레메트리(Telemetry) 수신 및 command 송신
+- 긴급 정지(E-Stop), 500ms 데드맨 스위치(Deadman Switch), 제어권(Control Lock) 등 안전 제어 규칙의 서버 측 강제
+- WebRTC video stream 시그널링 중계
 - Docker Compose 기반 로컬/통합 실행 환경 제공
 
-## 2. Recommended Stack
+## 2. 권장 기술 스택
 
 - Java 21
 - Spring Boot 3.x
@@ -39,7 +39,7 @@
 - SRS는 Spring Boot, PostgreSQL/PostGIS, MQTT, WebSocket/STOMP, WebRTC를 요구하지만 Java/Spring Boot 세부 버전은 명시하지 않는다.
 - Java 21과 Spring Boot 3.x는 장기 유지보수성과 Hibernate Spatial/PostGIS 호환성을 고려한 권장안이다.
 
-## 3. Package Structure
+## 3. 패키지 구조
 
 ```text
 src/main/java/com/autonomousmower/
@@ -233,9 +233,9 @@ src/main/java/com/autonomousmower/
       SnapshotCaptureService.java
 ```
 
-## 4. Major Domain And Entity Design
+## 4. 주요 도메인 및 엔티티 설계
 
-### 4.1 Auth And RBAC
+### 4.1 인증(Auth) 및 RBAC
 
 `AdminAccount`
 - `id`
@@ -254,7 +254,7 @@ src/main/java/com/autonomousmower/
 `AccountRole`
 - account to role mapping
 
-Permission model:
+권한 모델:
 - `robots:read`
 - `telemetry:read`
 - `history:read`
@@ -294,7 +294,7 @@ Permission model:
 - `lastStatusAt`
 - `updatedAt`
 
-### 4.3 Work Zone
+### 4.3 작업 구역(Work Zone)
 
 `WorkZone`
 - `id`
@@ -311,7 +311,7 @@ SRS 근거:
 - `WorkZone`은 `org.locationtech.jts.geom.Polygon zonePolygon` 구조를 가진다.
 - PostGIS Polygon 작업 구역이 요구된다.
 
-### 4.4 Telemetry And History
+### 4.4 텔레메트리(Telemetry) 및 이력
 
 `TelemetryLog`
 - `id`
@@ -330,7 +330,7 @@ SRS 근거:
 
 History API는 별도 entity보다 `TelemetryLog`와 `RobotEvent`를 시간 범위로 조합해 응답한다.
 
-### 4.5 Logs And Snapshots
+### 4.5 로그 및 스냅샷
 
 `RobotEvent`
 - `id`
@@ -354,7 +354,7 @@ History API는 별도 entity보다 `TelemetryLog`와 `RobotEvent`를 시간 범�
 추정:
 - SRS는 로그/스냅샷 상세 schema를 명시하지 않는다. 프론트엔드 Log Viewer와 `docs/api-contract.md`의 snapshot placeholder를 기준으로 설계한다.
 
-### 4.6 Control
+### 4.6 제어(Control)
 
 `ControlLock`
 - `robotId`
@@ -383,7 +383,7 @@ History API는 별도 entity보다 `TelemetryLog`와 `RobotEvent`를 시간 범�
 
 Safety state is not only persisted. It must also be held in a transactional service layer to guarantee command ordering and E-Stop priority.
 
-### 4.7 Video
+### 4.7 영상(Video)
 
 `VideoSession`
 - `id`
@@ -399,9 +399,9 @@ Safety state is not only persisted. It must also be held in a transactional serv
 - `closedAt`
 
 추정:
-- SRS requires WebRTC but does not define backend signalling persistence. This table supports observability and reconnect handling.
+- SRS는 WebRTC를 요구하지만 백엔드 시그널링 영속성은 정의하지 않는다. 이 테이블은 관측성과 재연결 처리를 지원한다.
 
-## 5. PostgreSQL/PostGIS Schema
+## 5. PostgreSQL/PostGIS 스키마
 
 Flyway migrations should own schema evolution. Baseline migration:
 
@@ -410,7 +410,7 @@ CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 ```
 
-Core tables:
+핵심 테이블:
 
 ```sql
 CREATE TABLE admin_account (
@@ -552,7 +552,7 @@ CREATE TABLE video_session (
 );
 ```
 
-Recommended indexes:
+권장 인덱스:
 
 ```sql
 CREATE INDEX idx_robot_status_location_gist ON robot_status USING gist (last_location);
@@ -567,18 +567,18 @@ CREATE INDEX idx_command_idempotency ON control_command (robot_id, idempotency_k
   WHERE idempotency_key IS NOT NULL;
 ```
 
-## 6. JWT And RBAC Authentication
+## 6. JWT 및 RBAC 인증
 
-### 6.1 REST Authentication
+### 6.1 REST 인증
 
-Flow:
+흐름:
 
 1. `POST /api/auth/login` validates username/password.
 2. Server returns access token and user profile.
 3. `JwtAuthenticationFilter` validates `Authorization: Bearer <token>`.
 4. Controllers use method-level authorization or `ControlPrecheckService`.
 
-Token claims:
+Token claim:
 
 - `sub`: account id
 - `username`
@@ -587,14 +587,14 @@ Token claims:
 - `iat`
 - `exp`
 
-Password storage:
+비밀번호 저장:
 
 - BCrypt hash
 - No plaintext or reversible credentials
 
-### 6.2 RBAC Policy
+### 6.2 RBAC 정책
 
-Recommended role mapping:
+권장 역할 매핑:
 
 | Role | Permissions |
 | --- | --- |
@@ -606,14 +606,14 @@ Recommended role mapping:
 추정:
 - `settings:write`, `work-zone:write`, `video:read`는 프론트엔드 요구사항과 api-contract open decision을 반영한 확장이다.
 
-### 6.3 STOMP Authentication
+### 6.3 STOMP 인증
 
 - WebSocket endpoint: `/ws`
 - CONNECT frame에서 JWT를 전달한다.
 - `StompAuthChannelInterceptor`가 token을 검증하고 Principal을 설정한다.
 - 구독 시 topic의 `robotId`에 대해 최소 `telemetry:read` 또는 해당 topic 권한을 검증한다.
 
-## 7. REST Controller Plan
+## 7. REST Controller 계획
 
 SRS에 정확한 path는 명시되지 않았으므로 아래 REST path는 `docs/api-contract.md` 기준 추정 계약이다.
 
@@ -632,7 +632,7 @@ SRS에 정확한 path는 명시되지 않았으므로 아래 REST path는 `docs/
 - `GET /api/robots/{robotId}/work-zone`
 - `PUT /api/robots/{robotId}/work-zone`
 
-Rules:
+규칙:
 - GeoJSON Polygon only
 - SRID must be 4326
 - Polygon ring must be closed
@@ -643,7 +643,7 @@ Rules:
 
 - `GET /api/history?robotId=&from=&to=`
 
-Response:
+응답:
 - robot id
 - time range
 - track points from `TelemetryLog`
@@ -666,7 +666,7 @@ Response:
 - `POST /api/robots/{robotId}/control/reset-after-emergency`
 - `POST /api/robots/{robotId}/control/attachment`
 
-All command endpoints must:
+모든 명령 endpoint는 다음을 수행해야 한다.
 
 - authenticate user
 - authorize permission
@@ -689,13 +689,13 @@ All command endpoints must:
 - Path and payloads are from `docs/api-contract.md`.
 - Trickle ICE is an open decision. Initial implementation can use offer/answer without trickle ICE and leave DTO room for `iceCandidates`.
 
-## 8. STOMP WebSocket Structure
+## 8. STOMP WebSocket 구조
 
 Endpoint:
 
 - `/ws`
 
-Broker prefixes:
+Broker prefix:
 
 - publish to clients: `/topic`
 - optional app inbound prefix: `/app`
@@ -709,7 +709,7 @@ Required topics from `docs/api-contract.md`:
 - `/topic/robots/{robotId}/control-events`
 - `/topic/robots/{robotId}/video-status`
 
-Publishing rules:
+Publish 규칙:
 
 - MQTT telemetry inbound -> persist `TelemetryLog` -> update `RobotStatus` -> publish telemetry/status
 - MQTT event inbound -> persist `RobotEvent` -> publish events
@@ -717,14 +717,14 @@ Publishing rules:
 - MQTT command ack -> update `ControlCommand` -> publish control-events/status
 - WebRTC session state change -> publish video-status
 
-Payload conventions:
+Payload 규칙:
 
 - All messages include `robotId`
 - All messages include ISO-8601 `timestamp`
 - Control messages include `commandId` when tied to a command
 - Error messages use stable machine-readable `code`
 
-Security:
+보안:
 
 - Reject unauthenticated CONNECT
 - Reject SUBSCRIBE without required read permission
@@ -733,11 +733,11 @@ Security:
 추정:
 - SRS requires WebSocket/STOMP updates but does not define whether clients may send STOMP commands. This plan keeps commands on REST to match existing frontend skeleton and simplify safety auditing.
 
-## 9. MQTT Integration Structure
+## 9. MQTT 통합 구조
 
 SRS requires MQTT between backend and Jetson/STM32 side. Exact topic names are not specified, so this topic map is a backend proposal aligned with `docs/api-contract.md`.
 
-### 9.1 Inbound Topics
+### 9.1 Inbound Topic
 
 - `mowers/{robotId}/telemetry`
 - `mowers/{robotId}/status`
@@ -745,7 +745,7 @@ SRS requires MQTT between backend and Jetson/STM32 side. Exact topic names are n
 - `mowers/{robotId}/commands/ack`
 - `mowers/{robotId}/video/status`
 
-### 9.2 Outbound Topics
+### 9.2 Outbound Topic
 
 - `mowers/{robotId}/commands/manual`
 - `mowers/{robotId}/commands/stop`
@@ -754,7 +754,7 @@ SRS requires MQTT between backend and Jetson/STM32 side. Exact topic names are n
 - `mowers/{robotId}/commands/attachment`
 - `mowers/{robotId}/video/signalling`
 
-### 9.3 QoS Policy
+### 9.3 QoS 정책
 
 SRS mentions QoS separation. Recommended policy:
 
@@ -768,7 +768,7 @@ SRS mentions QoS separation. Recommended policy:
 | Mode/Attachment | 1 | Requires ack tracking |
 | Video signalling | 0 or 1 | Depends on Jetson implementation; start with 1 for state changes |
 
-### 9.4 MQTT Handler Responsibilities
+### 9.4 MQTT Handler 책임
 
 `MqttInboundHandler`
 - Parse payload
@@ -789,13 +789,13 @@ SRS mentions QoS separation. Recommended policy:
 - Update command status
 - Emit STOMP control event
 
-## 10. Safety Architecture
+## 10. 안전 아키텍처
 
 Safety is not a UI concern only. Backend must enforce safety state even when frontend code is bypassed.
 
-### 10.1 Control Lock
+### 10.1 제어권(Control Lock)
 
-Rules:
+규칙:
 
 - Only users with `control:write` can claim control.
 - Only one active lock per robot.
@@ -805,13 +805,13 @@ Rules:
 - Release command is allowed only by owner or takeover authority.
 - Lock state is published to `/topic/robots/{robotId}/control-lock`.
 
-Implementation:
+구현:
 
 - `ControlLockService` uses DB transaction and optimistic versioning.
 - `SELECT ... FOR UPDATE` or JPA pessimistic lock should be used for lock transitions.
 - Lock transitions are recorded as `ControlCommand` or audit events.
 
-### 10.2 Command Precheck
+### 10.2 명령 사전 점검
 
 `ControlPrecheckService` should evaluate:
 

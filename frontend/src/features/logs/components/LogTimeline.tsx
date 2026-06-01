@@ -8,7 +8,7 @@ type LogTimelineProps = {
 
 export function LogTimeline({ logs, selectedLogId, onSelectLog }: LogTimelineProps) {
   if (logs.length === 0) {
-    return <p className="muted">No mock logs match the selected filters.</p>;
+    return <p className="muted">선택한 필터와 일치하는 Mock 로그가 없습니다.</p>;
   }
 
   return (

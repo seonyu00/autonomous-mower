@@ -32,7 +32,7 @@ export const mockHistoryEntries: HistoryEntry[] = [
         occurredAt: '2026-05-29T00:10:00.000Z',
         severity: 'info',
         type: 'job-started',
-        message: 'Autonomous mowing job started.',
+        message: '자율 예초 작업이 시작되었습니다.',
       },
       {
         id: 'evt-01-obstacle',
@@ -40,7 +40,7 @@ export const mockHistoryEntries: HistoryEntry[] = [
         occurredAt: '2026-05-29T00:31:00.000Z',
         severity: 'warning',
         type: 'obstacle-detected',
-        message: 'Obstacle detected near north boundary.',
+        message: '북쪽 경계 근처에서 장애물이 감지되었습니다.',
         location: {
           type: 'Feature',
           properties: { srid: 4326 },
@@ -53,7 +53,7 @@ export const mockHistoryEntries: HistoryEntry[] = [
         occurredAt: '2026-05-29T01:05:00.000Z',
         severity: 'info',
         type: 'job-completed',
-        message: 'Coverage path completed.',
+        message: '커버리지 경로가 완료되었습니다.',
       },
     ],
   },
@@ -85,7 +85,7 @@ export const mockHistoryEntries: HistoryEntry[] = [
         occurredAt: '2026-05-28T07:20:00.000Z',
         severity: 'info',
         type: 'job-started',
-        message: 'Manual review run started.',
+        message: '수동 점검 주행이 시작되었습니다.',
       },
       {
         id: 'evt-02-paused',
@@ -93,7 +93,7 @@ export const mockHistoryEntries: HistoryEntry[] = [
         occurredAt: '2026-05-28T07:44:00.000Z',
         severity: 'warning',
         type: 'job-paused',
-        message: 'Job paused for operator inspection.',
+        message: '작업자 점검을 위해 작업이 일시 정지되었습니다.',
       },
     ],
   },
@@ -125,7 +125,7 @@ export const mockHistoryEntries: HistoryEntry[] = [
         occurredAt: '2026-05-29T02:30:00.000Z',
         severity: 'info',
         type: 'job-started',
-        message: 'Autonomous mowing job started.',
+        message: '자율 예초 작업이 시작되었습니다.',
       },
       {
         id: 'evt-03-link',
@@ -133,7 +133,7 @@ export const mockHistoryEntries: HistoryEntry[] = [
         occurredAt: '2026-05-29T02:52:00.000Z',
         severity: 'critical',
         type: 'communication-lost',
-        message: 'Telemetry gap exceeded watchdog threshold.',
+        message: '텔레메트리(Telemetry) 공백이 Watchdog 임계값을 초과했습니다.',
         location: {
           type: 'Feature',
           properties: { srid: 4326 },

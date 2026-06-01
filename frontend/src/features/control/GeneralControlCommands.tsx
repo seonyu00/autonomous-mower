@@ -13,10 +13,10 @@ const modeActions: Array<{ label: string; mode: ControlMode }> = [
 ];
 
 const mowerActions: Array<{ label: string; action: MowerAttachmentAction }> = [
-  { label: 'Blade Start', action: 'blade-start' },
-  { label: 'Blade Stop', action: 'blade-stop' },
-  { label: 'Raise', action: 'raise' },
-  { label: 'Lower', action: 'lower' },
+  { label: '날 구동', action: 'blade-start' },
+  { label: '날 정지', action: 'blade-stop' },
+  { label: '상승', action: 'raise' },
+  { label: '하강', action: 'lower' },
 ];
 
 export function GeneralControlCommands() {
@@ -41,7 +41,7 @@ export function GeneralControlCommands() {
     try {
       await changeMode(selectedRobotId, mode);
     } catch (error) {
-      setLocalError(formatError(error, 'Mode change failed.'));
+      setLocalError(formatError(error, '모드 변경에 실패했습니다.'));
     }
   };
 
@@ -55,24 +55,24 @@ export function GeneralControlCommands() {
     try {
       await sendMowerAttachmentCommand(selectedRobotId, action);
     } catch (error) {
-      setLocalError(formatError(error, 'Mower attachment command failed.'));
+      setLocalError(formatError(error, '예초 장치 명령에 실패했습니다.'));
     }
   };
 
   return (
-    <section className="general-control-commands" aria-label="Mode and mower attachment commands">
+    <section className="general-control-commands" aria-label="모드 및 예초 장치 명령">
       <div className="panel-heading compact">
         <div>
-          <p className="eyebrow">Commands</p>
-          <h2>Mode and Attachment</h2>
+          <p className="eyebrow">명령</p>
+          <h2>모드와 작업 장치</h2>
         </div>
         <span className={disabled ? 'status-pill degraded' : 'status-pill connected'}>
-          {disabled ? 'blocked' : 'ready'}
+          {disabled ? '차단됨' : '준비됨'}
         </span>
       </div>
 
       <div className="command-section">
-        <strong>Mode</strong>
+        <strong>모드</strong>
         <div className="command-actions">
           {modeActions.map((item) => (
             <Button
@@ -89,19 +89,19 @@ export function GeneralControlCommands() {
       </div>
 
       <div className="command-section">
-        <strong>Work</strong>
+        <strong>작업</strong>
         <div className="command-actions">
           <Button type="button" variant="primary" disabled={disabled} onClick={() => void handleMode('autonomous')}>
-            Start Work
+            작업 시작
           </Button>
           <Button type="button" disabled={disabled} onClick={() => void handleMode('idle')}>
-            Stop Work
+            작업 정지
           </Button>
         </div>
       </div>
 
       <div className="command-section">
-        <strong>Mower Attachment</strong>
+        <strong>예초 장치</strong>
         <div className="command-actions">
           {mowerActions.map((item) => (
             <Button

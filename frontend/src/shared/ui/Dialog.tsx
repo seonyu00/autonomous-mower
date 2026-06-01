@@ -17,7 +17,7 @@ export function Dialog({ title, open, onClose, children }: DialogProps) {
         <div className="panel-heading compact">
           <h2 id="dialog-title">{title}</h2>
           <button className="secondary-button" type="button" onClick={onClose}>
-            Close
+            닫기
           </button>
         </div>
         {children}

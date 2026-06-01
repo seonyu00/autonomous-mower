@@ -9,11 +9,11 @@ import type { ManualCommand, ManualDirection } from './types';
 const DEADMAN_TIMEOUT_MS = 500;
 
 const directionButtons: Array<{ direction: ManualDirection; label: string; speed: number }> = [
-  { direction: 'forward', label: 'Forward', speed: 0.6 },
-  { direction: 'left', label: 'Left', speed: 0.35 },
-  { direction: 'stop', label: 'Stop', speed: 0 },
-  { direction: 'right', label: 'Right', speed: 0.35 },
-  { direction: 'reverse', label: 'Reverse', speed: 0.45 },
+  { direction: 'forward', label: '전진', speed: 0.6 },
+  { direction: 'left', label: '좌회전', speed: 0.35 },
+  { direction: 'stop', label: '정지', speed: 0 },
+  { direction: 'right', label: '우회전', speed: 0.35 },
+  { direction: 'reverse', label: '후진', speed: 0.45 },
 ];
 
 export function ManualJoystick() {
@@ -44,7 +44,7 @@ export function ManualJoystick() {
       if (error instanceof ControlPrecheckError) {
         setLocalError(error.reasons.join(', '));
       } else {
-        setLocalError(error instanceof Error ? error.message : 'Stop command failed.');
+        setLocalError(error instanceof Error ? error.message : '정지 명령에 실패했습니다.');
       }
     } finally {
       stopInFlightRef.current = false;
@@ -112,7 +112,7 @@ export function ManualJoystick() {
       if (error instanceof ControlPrecheckError) {
         setLocalError(error.reasons.join(', '));
       } else {
-        setLocalError(error instanceof Error ? error.message : 'Manual command failed.');
+        setLocalError(error instanceof Error ? error.message : '수동 명령에 실패했습니다.');
       }
     }
   };
@@ -120,14 +120,14 @@ export function ManualJoystick() {
   const reasonText = useMemo(() => eligibility.reasons.join(', '), [eligibility.reasons]);
 
   return (
-    <div className="manual-joystick" aria-label="Manual joystick control">
+    <div className="manual-joystick" aria-label="수동 조이스틱 제어">
       <div className="panel-heading compact">
         <div>
-          <p className="eyebrow">Manual</p>
-          <h2>Joystick</h2>
+          <p className="eyebrow">수동</p>
+          <h2>조이스틱</h2>
         </div>
         <span className={disabled ? 'status-pill degraded' : 'status-pill connected'}>
-          {disabled ? 'disabled' : 'enabled'}
+          {disabled ? '비활성' : '활성'}
         </span>
       </div>
 
@@ -138,7 +138,7 @@ export function ManualJoystick() {
             className={`joystick-button ${item.direction}`}
             type="button"
             disabled={disabled}
-            aria-label={`Manual ${item.label}`}
+            aria-label={`수동 ${item.label}`}
             onPointerDown={() => void sendDirection(item.direction, item.speed)}
             onPointerUp={() => void stopRobot()}
             onPointerCancel={() => void stopRobot()}
@@ -149,14 +149,14 @@ export function ManualJoystick() {
       </div>
 
       <div className="control-summary">
-        <Metric label="Manual Active" value={controlState?.manualActive ? 'yes' : 'no'} />
-        <Metric label="Last Input" value={controlState?.lastInputAt ? new Date(controlState.lastInputAt).toLocaleTimeString() : 'none'} />
+        <Metric label="수동 활성" value={controlState?.manualActive ? '예' : '아니요'} />
+        <Metric label="마지막 입력" value={controlState?.lastInputAt ? new Date(controlState.lastInputAt).toLocaleTimeString() : '없음'} />
       </div>
 
       {controlState?.lastCommandPayload ? (
         <pre className="payload-preview">{JSON.stringify(controlState.lastCommandPayload, null, 2)}</pre>
       ) : (
-        <p className="muted">Mock command payload will appear here after joystick input.</p>
+        <p className="muted">조이스틱 입력 후 Mock 명령 payload가 여기에 표시됩니다.</p>
       )}
 
       {disabled && reasonText ? <p className="warning-line">{reasonText}</p> : null}

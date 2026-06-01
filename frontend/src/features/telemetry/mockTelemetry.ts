@@ -22,7 +22,7 @@ export const mockTelemetry: Record<string, Telemetry> = {
     speedMps: 0,
     signalStrength: 58,
     lastReceivedAt: new Date(Date.now() - 4000).toISOString(),
-    errorState: 'Telemetry delayed',
+    errorState: '텔레메트리(Telemetry) 지연',
   },
   'MOWER-03': {
     robotId: 'MOWER-03',
@@ -34,6 +34,6 @@ export const mockTelemetry: Record<string, Telemetry> = {
     speedMps: 0,
     signalStrength: 0,
     lastReceivedAt: new Date(Date.now() - 12000).toISOString(),
-    errorState: 'Communication lost',
+    errorState: '통신 끊김',
   },
 };

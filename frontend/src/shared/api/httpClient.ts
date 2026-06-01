@@ -35,11 +35,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       headers,
     });
   } catch (error) {
-    throw new ApiError(error instanceof Error ? error.message : 'Network request failed', 'network');
+    throw new ApiError(error instanceof Error ? error.message : '네트워크 요청에 실패했습니다.', 'network');
   }
 
   if (!response.ok) {
-    throw new ApiError(response.statusText || 'Request failed', classifyStatus(response.status), response.status);
+    throw new ApiError(response.statusText || '요청에 실패했습니다.', classifyStatus(response.status), response.status);
   }
 
   if (response.status === 204) {

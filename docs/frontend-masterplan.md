@@ -1,4 +1,4 @@
-# Frontend Masterplan
+# 프론트엔드 마스터플랜
 
 본 문서는 `SRS.md`와 `AGENTS.md`를 근거로 자율주행 예초기 웹 관제 대시보드 프론트엔드 개발 계획을 정의한다. 현재 `docs/`, `frontend/`, `backend/` 디렉토리는 비어 있어 기존 구현 근거는 없으며, 구현 세부는 SRS 요구사항을 우선한다.
 

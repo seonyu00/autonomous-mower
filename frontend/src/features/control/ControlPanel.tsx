@@ -14,18 +14,18 @@ import type { ControlLockState } from './types';
 const lockStates: ControlLockState[] = ['none', 'requesting', 'held', 'held-by-other', 'expired', 'revoked'];
 
 const reasonLabels: Record<string, string> = {
-  'not-authenticated': 'Authenticated operator session is required.',
-  'missing-control-permission': 'Current role does not have control permission.',
-  'robot-not-selected': 'Selected robot does not match this control panel.',
-  'control-lock-not-held': 'Manual control lock is not held.',
-  'control-owned-by-other-user': 'Control lock is owned by another user.',
-  'realtime-connecting': 'Realtime connection is still connecting.',
-  'realtime-reconnecting': 'Realtime connection is reconnecting.',
-  'realtime-degraded': 'Realtime connection is degraded.',
-  'realtime-disconnected': 'Realtime connection is disconnected.',
-  'robot-in-emergency': 'Robot is in emergency state.',
-  'robot-not-in-emergency': 'Robot is not in emergency state.',
-  'transport-not-ready': 'Secure transport is not ready.',
+  'not-authenticated': '인증된 작업자 세션이 필요합니다.',
+  'missing-control-permission': '현재 역할에는 제어 권한이 없습니다.',
+  'robot-not-selected': '선택한 로봇이 이 제어 패널과 일치하지 않습니다.',
+  'control-lock-not-held': '수동 제어권(Control Lock)을 보유하고 있지 않습니다.',
+  'control-owned-by-other-user': '다른 사용자가 제어권(Control Lock)을 보유하고 있습니다.',
+  'realtime-connecting': '실시간 연결을 설정하는 중입니다.',
+  'realtime-reconnecting': '실시간 연결을 다시 연결하는 중입니다.',
+  'realtime-degraded': '실시간 연결 상태가 저하되었습니다.',
+  'realtime-disconnected': '실시간 연결이 끊겼습니다.',
+  'robot-in-emergency': '로봇이 긴급 정지(E-Stop) 상태입니다.',
+  'robot-not-in-emergency': '로봇이 긴급 정지(E-Stop) 상태가 아닙니다.',
+  'transport-not-ready': '보안 전송 경로가 준비되지 않았습니다.',
 };
 
 export function ControlPanel() {
@@ -47,7 +47,7 @@ export function ControlPanel() {
 
   const handleAction = async (action: 'claim' | 'release' | 'takeover' | 'reset-after-emergency') => {
     if (!selectedRobotId) {
-      setActionError('No robot selected.');
+      setActionError('선택된 로봇이 없습니다.');
       return;
     }
 
@@ -75,7 +75,7 @@ export function ControlPanel() {
         return;
       }
 
-      setActionError(error instanceof Error ? error.message : 'Control action failed.');
+      setActionError(error instanceof Error ? error.message : '제어 작업에 실패했습니다.');
     }
   };
 
@@ -89,30 +89,30 @@ export function ControlPanel() {
     <div className="control-panel">
       <div className="panel-heading compact">
         <div>
-          <p className="eyebrow">Phase 3</p>
-          <h2>Control Ownership</h2>
+          <p className="eyebrow">3단계</p>
+          <h2>제어권(Control Lock)</h2>
         </div>
         <span className={eligibility.allowed ? 'status-pill connected' : 'status-pill degraded'}>
-          {eligibility.allowed ? 'controllable' : 'locked'}
+          {eligibility.allowed ? '제어 가능' : '잠김'}
         </span>
       </div>
 
       <div className="control-summary">
-        <Metric label="Robot" value={selectedRobotId ?? 'None'} />
-        <Metric label="Lock" value={controlState?.lockState ?? 'none'} />
-        <Metric label="Owner" value={controlState?.controlOwner ?? 'Unassigned'} />
-        <Metric label="Mode" value={controlState?.mode ?? 'idle'} />
-        <Metric label="Emergency" value={emergencyActive ? 'active' : 'clear'} />
-        <Metric label="Realtime" value={connectionState} />
+        <Metric label="로봇" value={selectedRobotId ?? '없음'} />
+        <Metric label="제어권" value={controlState?.lockState ?? 'none'} />
+        <Metric label="소유자" value={controlState?.controlOwner ?? '미할당'} />
+        <Metric label="모드" value={controlState?.mode ?? 'idle'} />
+        <Metric label="긴급 정지" value={emergencyActive ? '활성' : '정상'} />
+        <Metric label="실시간" value={connectionState} />
         <Metric label="WSS" value={protocolState.wss} />
       </div>
 
       {emergencyActive ? (
-        <section className="estop-recovery-panel" aria-label="Emergency recovery status">
-          <strong>E-Stop is active.</strong>
-          <p>Previous commands are blocked and will not resume automatically. Reset only returns the robot to idle.</p>
+        <section className="estop-recovery-panel" aria-label="긴급 정지 복구 상태">
+          <strong>긴급 정지(E-Stop)가 활성화되었습니다.</strong>
+          <p>이전 명령은 차단되며 자동으로 재개되지 않습니다. 초기화는 로봇을 대기 상태로만 되돌립니다.</p>
           <Button type="button" disabled={!resetEligibility.allowed} onClick={() => void handleAction('reset-after-emergency')}>
-            Reset After Emergency
+            긴급 정지 후 초기화
           </Button>
           {resetEligibility.reasons.length > 0 ? (
             <ul>
@@ -124,7 +124,7 @@ export function ControlPanel() {
         </section>
       ) : null}
 
-      <div className="lock-state-list" aria-label="Control lock state list">
+      <div className="lock-state-list" aria-label="제어권 상태 목록">
         {lockStates.map((lockState) => (
           <span key={lockState} className={controlState?.lockState === lockState ? 'lock-state active' : 'lock-state'}>
             {lockState}
@@ -141,14 +141,14 @@ export function ControlPanel() {
           }
           onClick={() => void handleAction('claim')}
         >
-          Request Control
+          제어권 요청
         </Button>
         <Button
           type="button"
           disabled={emergencyActive || !selectedRobotId || !ownedByCurrentUser}
           onClick={() => void handleAction('release')}
         >
-          Release Control
+          제어권 반납
         </Button>
         <PermissionGate permission="control:takeover">
           <Button
@@ -156,13 +156,13 @@ export function ControlPanel() {
             disabled={emergencyActive || !selectedRobotId || !heldByOther}
             onClick={() => void handleAction('takeover')}
           >
-            Take Over
+            강제 회수
           </Button>
         </PermissionGate>
       </div>
 
-      <section className="control-reasons" aria-label="Control eligibility">
-        <strong>{eligibility.allowed ? 'Control precheck passed.' : 'Control unavailable.'}</strong>
+      <section className="control-reasons" aria-label="제어 가능 여부">
+        <strong>{eligibility.allowed ? '제어 사전 점검을 통과했습니다.' : '제어할 수 없습니다.'}</strong>
         {eligibility.reasons.length > 0 ? (
           <ul>
             {eligibility.reasons.map((reason) => (
@@ -173,7 +173,7 @@ export function ControlPanel() {
       </section>
 
       {controlState?.pendingCommand ? (
-        <p className="save-note">Pending command: {controlState.pendingCommand.type}</p>
+        <p className="save-note">대기 중인 명령: {controlState.pendingCommand.type}</p>
       ) : null}
       {controlState?.commandError ? <p className="warning-line">{controlState.commandError}</p> : null}
       {actionError ? <p className="warning-line">{actionError}</p> : null}

@@ -10,8 +10,8 @@ export function TelemetryPanel() {
   if (!telemetry) {
     return (
       <section className="telemetry-panel">
-        <p className="eyebrow">Telemetry</p>
-        <h2>No Robot Selected</h2>
+        <p className="eyebrow">텔레메트리(Telemetry)</p>
+        <h2>선택된 로봇 없음</h2>
       </section>
     );
   }
@@ -23,27 +23,27 @@ export function TelemetryPanel() {
     <section className="telemetry-panel">
       <div className="panel-heading compact">
         <div>
-          <p className="eyebrow">Telemetry</p>
+          <p className="eyebrow">텔레메트리(Telemetry)</p>
           <h2>{telemetry.robotId}</h2>
         </div>
         <span className={stale ? 'status-pill degraded' : 'status-pill connected'}>
-          {stale ? 'stale' : 'live'}
+          {stale ? '지연' : '실시간'}
         </span>
       </div>
 
       <div className="metric-grid">
-        <Metric label="Battery" value={`${telemetry.batteryLevel}%`} />
-        <Metric label="Mode" value={telemetry.mode.toUpperCase()} />
-        <Metric label="Work" value={telemetry.workState.toUpperCase()} />
-        <Metric label="Speed" value={`${telemetry.speedMps.toFixed(1)} m/s`} />
-        <Metric label="Signal" value={`${telemetry.signalStrength}%`} />
-        <Metric label="Last RX" value={stale ? '> 3s' : '< 3s'} />
+        <Metric label="배터리" value={`${telemetry.batteryLevel}%`} />
+        <Metric label="모드" value={telemetry.mode.toUpperCase()} />
+        <Metric label="작업" value={telemetry.workState.toUpperCase()} />
+        <Metric label="속도" value={`${telemetry.speedMps.toFixed(1)} m/s`} />
+        <Metric label="신호" value={`${telemetry.signalStrength}%`} />
+        <Metric label="마지막 수신" value={stale ? '> 3s' : '< 3s'} />
       </div>
 
       <div className="coordinate-box">
-        <span>Latitude</span>
+        <span>위도</span>
         <strong>{telemetry.latitude.toFixed(6)}</strong>
-        <span>Longitude</span>
+        <span>경도</span>
         <strong>{telemetry.longitude.toFixed(6)}</strong>
       </div>
 

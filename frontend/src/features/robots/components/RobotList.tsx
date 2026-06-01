@@ -6,10 +6,10 @@ export function RobotList() {
   const selectRobot = useRobotStore((state) => state.selectRobot);
 
   return (
-    <section className="robot-list" aria-label="Robot list">
+    <section className="robot-list" aria-label="로봇 목록">
       <div className="section-heading">
-        <span>Robot List</span>
-        <small>{robots.length} units</small>
+        <span>로봇 목록</span>
+        <small>{robots.length}대</small>
       </div>
       <div className="robot-items">
         {robots.map((robot) => (

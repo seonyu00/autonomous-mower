@@ -31,17 +31,17 @@ export function LogViewerPage() {
       <section className="workspace-panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">Phase 2</p>
-            <h2>Log Viewer</h2>
+            <p className="eyebrow">2단계</p>
+            <h2>로그 뷰어</h2>
           </div>
-          <span className="status-pill connected">mock logs</span>
+          <span className="status-pill connected">Mock 로그</span>
         </div>
 
         <div className="log-filters">
           <label>
-            Robot
+            로봇
             <select value={robotId} onChange={(event) => setRobotId(event.target.value)}>
-              <option value="all">All robots</option>
+              <option value="all">전체 로봇</option>
               {mockRobots.map((robot) => (
                 <option key={robot.id} value={robot.id}>
                   {robot.id}
@@ -51,32 +51,32 @@ export function LogViewerPage() {
           </label>
 
           <label>
-            Severity
+            심각도
             <select value={severity} onChange={(event) => setSeverity(event.target.value as LogSeverity | 'all')}>
-              <option value="all">All</option>
-              <option value="info">Info</option>
-              <option value="warning">Warning</option>
-              <option value="critical">Critical</option>
+              <option value="all">전체</option>
+              <option value="info">정보</option>
+              <option value="warning">경고</option>
+              <option value="critical">치명</option>
             </select>
           </label>
 
           <label>
-            From
+            시작일
             <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
           </label>
 
           <label>
-            To
+            종료일
             <input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
           </label>
 
           <label className="log-search-field">
-            Search
-            <input value={text} placeholder="message or event type" onChange={(event) => setText(event.target.value)} />
+            검색어
+            <input value={text} placeholder="메시지 또는 이벤트 유형" onChange={(event) => setText(event.target.value)} />
           </label>
 
           <button className="primary-button" type="button" onClick={handleSearch}>
-            Search
+            검색
           </button>
         </div>
       </section>
@@ -84,10 +84,10 @@ export function LogViewerPage() {
       <section className="workspace-panel logs-timeline-panel">
         <div className="panel-heading compact">
           <div>
-            <p className="eyebrow">Timeline</p>
-            <h2>Events</h2>
+            <p className="eyebrow">타임라인</p>
+            <h2>이벤트</h2>
           </div>
-          <span className="status-pill connected">{logs.length} logs</span>
+          <span className="status-pill connected">{logs.length}건</span>
         </div>
         <LogTimeline logs={logs} selectedLogId={selectedLog?.id ?? null} onSelectLog={setSelectedLogId} />
       </section>
@@ -95,8 +95,8 @@ export function LogViewerPage() {
       <section className="workspace-panel">
         <div className="panel-heading compact">
           <div>
-            <p className="eyebrow">Placeholder</p>
-            <h2>Snapshot Viewer</h2>
+            <p className="eyebrow">자리표시자</p>
+            <h2>스냅샷 뷰어</h2>
           </div>
         </div>
         <SnapshotViewer log={selectedLog} />
@@ -105,11 +105,11 @@ export function LogViewerPage() {
       <section className="workspace-panel">
         <div className="panel-heading compact">
           <div>
-            <p className="eyebrow">Details</p>
-            <h2>Log Metadata</h2>
+            <p className="eyebrow">상세</p>
+            <h2>로그 메타데이터</h2>
           </div>
         </div>
-        <pre className="payload-preview">{selectedLog ? JSON.stringify(selectedLog, null, 2) : 'No log selected'}</pre>
+        <pre className="payload-preview">{selectedLog ? JSON.stringify(selectedLog, null, 2) : '선택된 로그가 없습니다.'}</pre>
       </section>
     </div>
   );

@@ -145,11 +145,11 @@ export function MapViewMap() {
     <div className="maplibre-shell">
       <div ref={mapContainerRef} className="maplibre-container" />
       <div className="map-readout">
-        <strong>{selectedRobotId ?? 'No robot'}</strong>
+        <strong>{selectedRobotId ?? '로봇 없음'}</strong>
         <span>
-          {telemetry ? `${telemetry.latitude.toFixed(5)}, ${telemetry.longitude.toFixed(5)}` : 'No telemetry'}
+          {telemetry ? `${telemetry.latitude.toFixed(5)}, ${telemetry.longitude.toFixed(5)}` : '텔레메트리(Telemetry) 없음'}
         </span>
-        <small>Mock marker, route polyline, and read-only work-zone Polygon.</small>
+        <small>Mock 마커, 경로 폴리라인, 읽기 전용 작업 구역(Work Zone) Polygon입니다.</small>
       </div>
     </div>
   );

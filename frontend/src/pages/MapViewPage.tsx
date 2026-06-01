@@ -9,10 +9,10 @@ export function MapViewPage() {
       <section className="workspace-panel map-panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">Live Operations</p>
-            <h2>Map View</h2>
+            <p className="eyebrow">실시간 운용</p>
+            <h2>지도 보기</h2>
           </div>
-          <span className="status-pill connected">1Hz mock telemetry</span>
+          <span className="status-pill connected">1Hz Mock 텔레메트리(Telemetry)</span>
         </div>
         <MapViewMap />
       </section>
@@ -28,11 +28,11 @@ export function MapViewPage() {
       <section className="workspace-panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">Phase 4 Placeholder</p>
-            <h2>Live Camera</h2>
+            <p className="eyebrow">4단계 자리표시자</p>
+            <h2>실시간 카메라</h2>
           </div>
         </div>
-        <PhasePlaceholder title="WebRTC on-demand video module placeholder." />
+        <PhasePlaceholder title="WebRTC 온디맨드 영상 모듈 자리표시자입니다." />
       </section>
     </div>
   );

@@ -82,7 +82,7 @@ export function VideoPanel() {
 
   const statusText = useMemo(() => {
     if (!selectedRobotId) {
-      return 'No robot';
+      return '로봇 없음';
     }
 
     return session?.connectionState ?? 'idle';
@@ -127,58 +127,58 @@ export function VideoPanel() {
   };
 
   return (
-    <section className="video-panel" aria-label="Live camera video panel">
+    <section className="video-panel" aria-label="실시간 카메라 영상 패널">
       <div className="panel-heading compact">
         <div>
-          <p className="eyebrow">Video</p>
-          <h2>Live Camera</h2>
+          <p className="eyebrow">영상</p>
+          <h2>실시간 카메라</h2>
         </div>
         <span className={statusClassName(session?.connectionState ?? 'idle')}>{statusText}</span>
       </div>
 
       <div className="video-frame">
         {session?.stream ? (
-          <video ref={videoRef} className="video-element" autoPlay muted playsInline aria-label="Live robot camera stream" />
+          <video ref={videoRef} className="video-element" autoPlay muted playsInline aria-label="로봇 실시간 카메라 스트림" />
         ) : (
-          <div className="mock-video-placeholder" aria-label="Mock video placeholder">
-            <span>{session?.loading ? 'Connecting stream' : 'Camera stream placeholder'}</span>
-            <small>{selectedRobotId ?? 'Select a robot'}</small>
+          <div className="mock-video-placeholder" aria-label="Mock 영상 자리표시자">
+            <span>{session?.loading ? '스트림 연결 중' : '카메라 스트림 자리표시자'}</span>
+            <small>{selectedRobotId ?? '로봇 선택'}</small>
           </div>
         )}
       </div>
 
       <div className="video-actions">
         <Button type="button" variant="primary" disabled={startDisabled} onClick={() => void handleStart()}>
-          Start Stream
+          스트림 시작
         </Button>
         <Button type="button" disabled={stopDisabled} onClick={() => void handleStop()}>
-          Stop Stream
+          스트림 중지
         </Button>
         <Button type="button" disabled={reconnectDisabled} onClick={() => void handleReconnect()}>
-          Reconnect
+          재연결
         </Button>
         <Button type="button" disabled={snapshotDisabled} onClick={handleSnapshot}>
-          Snapshot
+          스냅샷
         </Button>
       </div>
 
-      {session?.loading ? <p className="muted">Loading WebRTC session through mock signalling.</p> : null}
+      {session?.loading ? <p className="muted">Mock 시그널링으로 WebRTC 세션을 불러오는 중입니다.</p> : null}
       {session?.error ? <p className="warning-line">{session.error}</p> : null}
-      {session?.connectionState === 'disconnected' ? <p className="muted">Video stream is disconnected.</p> : null}
-      {!canUseVideo ? <p className="warning-line">Telemetry permission is required for on-demand video.</p> : null}
+      {session?.connectionState === 'disconnected' ? <p className="muted">영상 스트림 연결이 끊겼습니다.</p> : null}
+      {!canUseVideo ? <p className="warning-line">온디맨드 영상을 보려면 텔레메트리(Telemetry) 권한이 필요합니다.</p> : null}
 
-      <div className="video-policy" aria-label="WebRTC stream policy">
-        <span>{session?.qualityPolicy.minFps ?? 15}fps minimum</span>
+      <div className="video-policy" aria-label="WebRTC 스트림 정책">
+        <span>{session?.qualityPolicy.minFps ?? 15}fps 최소</span>
         <span>
           {session?.qualityPolicy.width ?? 640}x{session?.qualityPolicy.height ?? 480}
         </span>
-        <span>{session?.qualityPolicy.maxBitrateKbps ?? 500}kbps max</span>
+        <span>{session?.qualityPolicy.maxBitrateKbps ?? 500}kbps 최대</span>
       </div>
 
-      <div className="snapshot-placeholder compact" aria-label="Snapshot placeholder">
-        <span>Snapshot placeholder</span>
+      <div className="snapshot-placeholder compact" aria-label="스냅샷 자리표시자">
+        <span>스냅샷 자리표시자</span>
         <small>
-          {session?.snapshot ? `Requested ${new Date(session.snapshot.capturedAt).toLocaleTimeString()}` : 'No snapshot captured'}
+          {session?.snapshot ? `${new Date(session.snapshot.capturedAt).toLocaleTimeString()} 요청됨` : '캡처된 스냅샷 없음'}
         </small>
       </div>
     </section>

@@ -23,19 +23,19 @@ export function LoginPage() {
       const response = await login({ adminId, password });
       setSession(response.user, response.accessToken);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Login failed.');
+      setError(caught instanceof Error ? caught.message : '로그인에 실패했습니다.');
     }
   };
 
   return (
     <main className="login-page">
       <section className="login-panel">
-        <p className="eyebrow">Secure Access</p>
-        <h1>Control Dashboard Login</h1>
-        <p className="muted">Use your provisioned admin credentials when mock auth is disabled.</p>
+        <p className="eyebrow">보안 접속</p>
+        <h1>관제 대시보드 로그인</h1>
+        <p className="muted">Mock 인증이 꺼져 있으면 발급된 관리자 계정으로 로그인하세요.</p>
         {env.enableMockAuth ? (
           <button className="primary-button" type="button" onClick={() => loginAsMock('admin')}>
-            Mock Admin Login
+            Mock 관리자 로그인
           </button>
         ) : (
           <form
@@ -46,15 +46,15 @@ export function LoginPage() {
             }}
           >
             <label>
-              Admin ID
+              관리자 ID
               <input value={adminId} onChange={(event) => setAdminId(event.target.value)} />
             </label>
             <label>
-              Password
+              비밀번호
               <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
             </label>
             <button className="primary-button" type="submit">
-              Login
+              로그인
             </button>
             {error ? <p className="warning-line">{error}</p> : null}
           </form>

@@ -7,10 +7,10 @@ import { TelemetryPanel } from '../features/telemetry/components/TelemetryPanel'
 import { VideoPanel } from '../features/video/components/VideoPanel';
 
 const navigationItems = [
-  { to: '/map', label: 'Map View' },
-  { to: '/history', label: 'History' },
-  { to: '/logs', label: 'Log Viewer' },
-  { to: '/settings', label: 'Settings' },
+  { to: '/map', label: '지도 보기' },
+  { to: '/history', label: '작업 이력' },
+  { to: '/logs', label: '로그 뷰어' },
+  { to: '/settings', label: '설정' },
 ];
 
 export function AppShell() {
@@ -20,14 +20,14 @@ export function AppShell() {
     <div className="app-shell">
       <header className="app-header">
         <div>
-          <p className="eyebrow">Autonomous Mower</p>
-          <h1>Control Dashboard</h1>
+          <p className="eyebrow">자율주행 예초기</p>
+          <h1>관제 대시보드</h1>
         </div>
         <ProtocolIndicators />
         <EmergencyStopButton />
         <div className="profile-block">
           <span>{new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date())}</span>
-          <strong>{user?.name ?? 'Guest'}</strong>
+          <strong>{user?.name ?? '게스트'}</strong>
         </div>
       </header>
 

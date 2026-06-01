@@ -4,7 +4,7 @@ export function ProtocolIndicators() {
   const protocolState = useTelemetryStore((state) => state.protocolState);
 
   return (
-    <div className="protocol-indicators" aria-label="Protocol status">
+    <div className="protocol-indicators" aria-label="프로토콜 상태">
       <Protocol name="HTTPS" state={protocolState.https} />
       <Protocol name="WSS" state={protocolState.wss} />
       <Protocol name="MQTT" state={protocolState.mqtt} />

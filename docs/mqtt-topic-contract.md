@@ -1,4 +1,4 @@
-# MQTT Topic Contract
+# MQTT Topic 계약
 
 This document is the frozen local integration contract between the Spring Boot backend and the Jetson edge process before Jetson implementation starts.
 

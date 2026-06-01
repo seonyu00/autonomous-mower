@@ -1,45 +1,45 @@
-# Autonomous Mower
+# 자율주행 예초기
 
-Local development uses Docker Compose for infrastructure and runs the Spring Boot backend, React frontend, and Edge Mock as local processes.
+로컬 개발 환경은 Docker Compose로 인프라를 띄우고, Spring Boot 백엔드, React 프론트엔드, Edge Mock을 각각 로컬 프로세스로 실행합니다.
 
-## Prerequisites
+## 사전 준비
 
 - Docker Desktop
 - Java 21
 - Node.js 20+
 - PowerShell
 
-## Environment
+## 환경 설정
 
-Copy `.env.example` to `.env` if you want a local editable environment file.
+로컬에서 수정 가능한 환경 파일이 필요하면 `.env.example`을 `.env`로 복사하세요.
 
-Default local integration robot:
+기본 로컬 통합 로봇:
 
 - Robot ID: `MOWER-01`
 
-Flyway migration `V4__seed_local_integration_data.sql` installs robot-only local seed data. Provision local admin credentials outside committed migrations.
+Flyway migration `V4__seed_local_integration_data.sql`은 로봇 전용 로컬 seed 데이터만 설치합니다. 로컬 관리자 계정 정보는 커밋된 migration이 아닌 별도 절차로 준비하세요.
 
-## 1. Start Docker Dependencies
+## 1. Docker 의존성 시작
 
-Start PostgreSQL/PostGIS and Mosquitto:
+PostgreSQL/PostGIS와 Mosquitto를 시작합니다.
 
 ```powershell
 docker compose up -d postgres mosquitto
 docker compose ps
 ```
 
-Useful checks:
+유용한 확인 명령:
 
 ```powershell
 docker compose logs -f mosquitto
 docker compose logs -f postgres
 ```
 
-Mosquitto listens on `localhost:1883`. The backend default integration URL is `tcp://localhost:1883`; Node MQTT clients use `mqtt://localhost:1883`.
+Mosquitto는 `localhost:1883`에서 대기합니다. 백엔드 기본 통합 URL은 `tcp://localhost:1883`이고, Node MQTT 클라이언트는 `mqtt://localhost:1883`을 사용합니다.
 
-## 2. Start Backend
+## 2. 백엔드 시작
 
-Open a new PowerShell terminal:
+새 PowerShell 터미널을 엽니다.
 
 ```powershell
 cd backend
@@ -61,11 +61,11 @@ Health check:
 Invoke-RestMethod http://localhost:8080/actuator/health
 ```
 
-Backend MQTT command publish logs are emitted by `MqttCommandPublisher`.
+백엔드 MQTT 명령 publish 로그는 `MqttCommandPublisher`에서 출력됩니다.
 
-## 3. Start Edge Mock
+## 3. Edge Mock 시작
 
-Open a new PowerShell terminal:
+새 PowerShell 터미널을 엽니다.
 
 ```powershell
 cd tools\edge-mock-client
@@ -76,17 +76,17 @@ $env:ROBOT_ID="MOWER-01"
 npm start
 ```
 
-The Edge Mock subscribes to:
+Edge Mock은 다음 topic을 구독합니다.
 
 - `mowers/MOWER-01/commands/manual`
 - `mowers/MOWER-01/commands/stop`
 - `mowers/MOWER-01/commands/estop`
 
-It prints received MQTT commands as JSON logs.
+수신한 MQTT 명령은 JSON 로그로 출력됩니다.
 
-## 4. Start Frontend
+## 4. 프론트엔드 시작
 
-Open a new PowerShell terminal:
+새 PowerShell 터미널을 엽니다.
 
 ```powershell
 cd frontend
@@ -101,17 +101,17 @@ $env:VITE_ENABLE_MOCK_REALTIME="true"
 npm run dev
 ```
 
-Open:
+브라우저에서 엽니다.
 
 ```text
 http://localhost:5173/login
 ```
 
-Login with your locally provisioned admin account, then use the Map View control panel.
+로컬에 준비한 관리자 계정으로 로그인한 뒤 지도 보기의 제어 패널을 사용하세요.
 
-## Integration Smoke Flow
+## 통합 Smoke Flow
 
-Use the UI or call through the frontend dev server proxy:
+UI를 사용하거나 프론트엔드 개발 서버 proxy를 통해 호출합니다.
 
 ```powershell
 $base="http://localhost:5173"
@@ -124,23 +124,23 @@ Invoke-RestMethod -Method Post -Uri "$base/api/control/MOWER-01/stop" -Headers $
 Invoke-RestMethod -Method Post -Uri "$base/api/control/MOWER-01/estop" -Headers $headers -ContentType "application/json" -Body (@{idempotencyKey="smoke-estop"; reason="smoke-test"} | ConvertTo-Json)
 ```
 
-Expected observations:
+예상 관찰 결과:
 
-- Backend logs show MQTT publish for manual, stop, and E-Stop.
-- Edge Mock logs show `command-received` for manual, stop, and E-Stop.
-- Mosquitto logs show backend and Edge Mock client connections.
+- 백엔드 로그에 manual, stop, 긴급 정지(E-Stop) MQTT publish가 표시됩니다.
+- Edge Mock 로그에 manual, stop, 긴급 정지(E-Stop)에 대한 `command-received`가 표시됩니다.
+- Mosquitto 로그에 백엔드와 Edge Mock 클라이언트 연결이 표시됩니다.
 
-## Shutdown
+## 종료
 
-Stop local backend/frontend/edge mock with `Ctrl+C` in each terminal.
+각 터미널에서 `Ctrl+C`로 로컬 백엔드, 프론트엔드, Edge Mock을 중지합니다.
 
-Stop Docker dependencies:
+Docker 의존성을 중지합니다.
 
 ```powershell
 docker compose down
 ```
 
-To also remove dependency volumes:
+의존성 volume까지 제거하려면 다음을 실행합니다.
 
 ```powershell
 docker compose down -v

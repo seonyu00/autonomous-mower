@@ -1,8 +1,8 @@
-# Development Log
+# 개발 로그
 
 ## 2026-05-30
 
-### Local MQTT Broker
+### 로컬 MQTT Broker
 
 - Docker Compose local development now includes Mosquitto.
 - Run only the broker: `docker compose up -d mosquitto`

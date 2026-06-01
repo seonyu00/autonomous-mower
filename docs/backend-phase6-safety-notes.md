@@ -1,25 +1,25 @@
-# Backend Phase 6 Safety Notes
+# 백엔드 Phase 6 안전 참고 사항
 
-Phase 6 control safety state is a mock backend foundation only.
+Phase 6 제어 안전 상태는 Mock 백엔드 기반 구현입니다.
 
-## Current Scope
+## 현재 범위
 
-- Control lock state is stored in process memory by `robotId`.
-- Emergency state is stored in process memory by `robotId`.
-- Deadman timeout currently emits a server-side synthetic stop event through STOMP `control-events`.
-- No MQTT, Jetson, STM32, motor, blade, relay, or hardware fail-safe command is sent in this phase.
+- 제어권(Control Lock) 상태는 `robotId` 기준 process memory에 저장됩니다.
+- 긴급 상태는 `robotId` 기준 process memory에 저장됩니다.
+- 데드맨 스위치(Deadman Switch) timeout은 현재 STOMP `control-events`를 통해 서버 측 synthetic stop event만 발행합니다.
+- 이 phase에서는 MQTT, Jetson, STM32, motor, blade, relay, hardware fail-safe 명령을 전송하지 않습니다.
 
-## Operational Limits
+## 운용 제한
 
-- In-memory control state is lost on backend restart.
-- In-memory control state is not shared across multiple backend instances.
-- A production deployment must move control lock, emergency state, command sequence, and idempotency records to a shared transactional store.
-- A production deployment must ensure only one active safety authority evaluates lock expiration and deadman timeout per robot, or use distributed locking.
-- Deadman timeout events in this phase are observability skeletons. Hardware stop output still requires MQTT/edge/STM32 integration.
+- In-memory 제어 상태는 백엔드 재시작 시 사라집니다.
+- In-memory 제어 상태는 여러 백엔드 instance 간 공유되지 않습니다.
+- production 배포에서는 제어권(Control Lock), 긴급 상태, 명령 sequence, idempotency record를 공유 transactional store로 옮겨야 합니다.
+- production 배포에서는 로봇별 lock 만료와 데드맨 스위치(Deadman Switch) timeout을 평가하는 활성 safety authority가 하나만 존재하도록 보장하거나 distributed locking을 사용해야 합니다.
+- 이 phase의 데드맨 스위치(Deadman Switch) timeout event는 관측용 skeleton입니다. hardware stop 출력은 여전히 MQTT/edge/STM32 통합이 필요합니다.
 
-## Reset Policy
+## 초기화 정책
 
-- E-Stop activation requires `control:write` and does not require current lock ownership.
-- Emergency reset requires `control:write`.
-- If a control owner exists, reset is accepted only from that owner or from a user with `control:takeover`.
-- If no owner exists, an authenticated `control:write` user may reset after verifying safe state.
+- 긴급 정지(E-Stop) 활성화에는 `control:write`가 필요하며 현재 제어권(Control Lock) 소유는 필요하지 않습니다.
+- 긴급 상태 초기화에는 `control:write`가 필요합니다.
+- 제어권 소유자가 있으면 해당 소유자 또는 `control:takeover` 권한 사용자만 초기화할 수 있습니다.
+- 소유자가 없으면 인증된 `control:write` 사용자가 안전 상태를 확인한 뒤 초기화할 수 있습니다.

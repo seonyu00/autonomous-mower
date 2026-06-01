@@ -28,19 +28,19 @@ export function WorkZoneEditor() {
     <div className="work-zone-editor">
       <div className="panel-heading compact">
         <div>
-          <p className="eyebrow">Phase 2</p>
-          <h2>Work Zone</h2>
+          <p className="eyebrow">2단계</p>
+          <h2>작업 구역(Work Zone)</h2>
         </div>
         <span className={validation.valid ? 'status-pill connected' : 'status-pill degraded'}>
-          {validation.valid ? 'valid 4326' : 'invalid'}
+          {validation.valid ? '4326 유효' : '유효하지 않음'}
         </span>
       </div>
 
       <p className="muted">
-        Mock Polygon을 읽기/검증/저장 요청 payload로만 처리합니다. 지도 위 편집과 실제 저장은 아직 비활성화되어 있습니다.
+        Mock Polygon은 읽기/검증과 저장 요청 payload 생성까지만 처리합니다. 지도 편집과 실제 저장은 아직 비활성화되어 있습니다.
       </p>
 
-      <div className="coordinate-list" aria-label="Polygon coordinate list">
+      <div className="coordinate-list" aria-label="Polygon 좌표 목록">
         {exteriorRing.map(([longitude, latitude], index) => (
           <div key={`${longitude}-${latitude}-${index}`} className="coordinate-row">
             <span>{index + 1}</span>
@@ -60,19 +60,19 @@ export function WorkZoneEditor() {
 
       <div className="work-zone-actions">
         <Button type="button" variant="primary" disabled={!validation.valid} onClick={handleMockSave}>
-          Build Save Request
+          저장 요청 생성
         </Button>
       </div>
 
       {postGisPayload ? (
         <pre className="payload-preview">{JSON.stringify(postGisPayload, null, 2)}</pre>
       ) : (
-        <p className="warning-line">No mock work zone is available for the selected robot.</p>
+        <p className="warning-line">선택한 로봇에 사용할 수 있는 Mock 작업 구역(Work Zone)이 없습니다.</p>
       )}
 
       {lastSaveRequest ? (
         <p className="save-note">
-          Mock save request built for SRID {lastSaveRequest.srid}. Geometry type:{' '}
+          SRID {lastSaveRequest.srid}용 Mock 저장 요청을 생성했습니다. Geometry 유형:{' '}
           {fromPostGisPolygonPayload(lastSaveRequest).type}
         </p>
       ) : null}

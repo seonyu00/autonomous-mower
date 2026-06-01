@@ -129,9 +129,9 @@ export function HistoryMap({ selectedEntry }: HistoryMapProps) {
     <div className="history-map-shell">
       <div ref={mapContainerRef} className="maplibre-container" />
       <div className="map-readout">
-        <strong>{selectedEntry?.robotId ?? 'No history selected'}</strong>
-        <span>{selectedEntry ? `${selectedEntry.distanceMeters} m route` : 'Select a run to inspect route data'}</span>
-        <small>Read-only historical LineString and event point layers.</small>
+        <strong>{selectedEntry?.robotId ?? '선택된 이력 없음'}</strong>
+        <span>{selectedEntry ? `${selectedEntry.distanceMeters} m 경로` : '경로 데이터를 보려면 작업 기록을 선택하세요.'}</span>
+        <small>읽기 전용 과거 LineString 및 이벤트 지점 레이어입니다.</small>
       </div>
     </div>
   );
