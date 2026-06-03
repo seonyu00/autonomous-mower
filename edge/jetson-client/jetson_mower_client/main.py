@@ -9,6 +9,7 @@ from typing import Any
 import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Imu, NavSatFix
 from std_msgs.msg import Bool, Int8
 
@@ -34,7 +35,7 @@ class JetsonMowerClientNode(Node):
         self._last_manual_command_monotonic: float | None = None
         self._recent_command_keys: OrderedDict[str, None] = OrderedDict()
 
-        self._cmd_vel_publisher = self.create_publisher(Twist, config.ros.cmd_vel_topic, 10)
+        self._cmd_vel_publisher = self.create_publisher(Twist, config.ros.cmd_vel_topic, _cmd_vel_qos(config))
         self._mower_set_mode_publisher = self.create_publisher(Int8, config.ros.mower_set_mode_topic, 10)
         self._mower_engine_publisher = self.create_publisher(Bool, config.ros.mower_engine_topic, 10)
         self.create_subscription(NavSatFix, config.ros.fix_topic, self._handle_fix, 10)
@@ -256,6 +257,24 @@ class JetsonMowerClientNode(Node):
 def _parameters(command: dict[str, Any]) -> dict[str, Any]:
     parameters = command.get("parameters")
     return parameters if isinstance(parameters, dict) else {}
+
+
+def _cmd_vel_qos(config: EdgeConfig) -> QoSProfile:
+    durability = {
+        "volatile": DurabilityPolicy.VOLATILE,
+        "transient_local": DurabilityPolicy.TRANSIENT_LOCAL,
+    }[config.ros.cmd_vel_qos_durability]
+    reliability = {
+        "reliable": ReliabilityPolicy.RELIABLE,
+        "best_effort": ReliabilityPolicy.BEST_EFFORT,
+    }[config.ros.cmd_vel_qos_reliability]
+
+    return QoSProfile(
+        history=HistoryPolicy.KEEP_LAST,
+        depth=config.ros.cmd_vel_qos_depth,
+        durability=durability,
+        reliability=reliability,
+    )
 
 
 def utc_now() -> str:

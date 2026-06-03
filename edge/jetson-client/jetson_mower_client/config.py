@@ -7,6 +7,8 @@ from urllib.parse import urlparse
 
 import yaml
 
+from .qos_config import normalize_durability, normalize_reliability
+
 
 @dataclass(frozen=True)
 class MqttConfig:
@@ -38,6 +40,9 @@ class MqttConfig:
 @dataclass(frozen=True)
 class RosConfig:
     cmd_vel_topic: str
+    cmd_vel_qos_depth: int
+    cmd_vel_qos_durability: str
+    cmd_vel_qos_reliability: str
     mower_set_mode_topic: str
     mower_engine_topic: str
     fix_topic: str
@@ -94,6 +99,9 @@ def _mqtt_config(raw: dict[str, Any], robot_id: str) -> MqttConfig:
 def _ros_config(raw: dict[str, Any]) -> RosConfig:
     return RosConfig(
         cmd_vel_topic=str(raw.get("cmd_vel_topic", "/cmd_vel")),
+        cmd_vel_qos_depth=max(1, int(raw.get("cmd_vel_qos_depth", 10))),
+        cmd_vel_qos_durability=normalize_durability(str(raw.get("cmd_vel_qos_durability", "volatile"))),
+        cmd_vel_qos_reliability=normalize_reliability(str(raw.get("cmd_vel_qos_reliability", "reliable"))),
         mower_set_mode_topic=str(raw.get("mower_set_mode_topic", "/mower/set_mode")),
         mower_engine_topic=str(raw.get("mower_engine_topic", "/mower/engine")),
         fix_topic=str(raw.get("fix_topic", "/fix")),

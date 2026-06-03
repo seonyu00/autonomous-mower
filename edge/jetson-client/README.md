@@ -70,9 +70,12 @@ cp config.yaml.example config.yaml
 
 - `robot_id`: MQTT topic의 `{robotId}`와 payload `robotId`
 - `mqtt.broker_url`: MQTT broker URL
-- `ros.cmd_vel_topic`: drive command publish topic. 기본값은 `/cmd_vel`
-- `ros.fix_topic`: GPS skeleton 구독 topic. 기본값은 `/fix`
-- `ros.imu_topic`: IMU skeleton 구독 topic. 기본값은 `/camera/imu`
+- `ros.cmd_vel_topic`: 주행 명령 publish topic. 기본값은 `/cmd_vel`
+- `ros.cmd_vel_qos_depth`: `/cmd_vel` publisher의 `keep_last` depth. 기본값은 `10`
+- `ros.cmd_vel_qos_durability`: `/cmd_vel` publisher durability. 기본값은 `volatile`
+- `ros.cmd_vel_qos_reliability`: `/cmd_vel` publisher reliability. 기본값은 `reliable`
+- `ros.fix_topic`: GPS 구독 skeleton topic. 기본값은 `/fix`
+- `ros.imu_topic`: IMU 구독 skeleton topic. 기본값은 `/camera/imu`
 
 ## 실행
 
@@ -87,6 +90,21 @@ ros2 run jetson_mower_client jetson_mower_client --config edge/jetson-client/con
 ```bash
 cd edge/jetson-client
 python3 -m jetson_mower_client.main --config config.yaml
+```
+
+`__main__.py`가 포함되어 있으므로 다음처럼 더 짧게 실행할 수 있다.
+
+```bash
+cd edge/jetson-client
+python3 -m jetson_mower_client --config config.yaml
+```
+
+Jetson에서 반복 실행할 때는 제공된 스크립트를 사용한다. 이 스크립트는 ROS 2 Humble 환경을 source하고 현재 디렉터리를 `PYTHONPATH`에 추가한다.
+
+```bash
+cd edge/jetson-client
+chmod +x scripts/run-jetson-client.sh
+./scripts/run-jetson-client.sh --config config.yaml
 ```
 
 ## 현재 동작
@@ -140,3 +158,49 @@ E-Stop은 Jetson/STM32 하드웨어 브릿지 상태 머신을 위한 안전 비
    - 의미: 가솔린 엔진 릴레이 강제 차단
 
 E-Stop 이후 client는 로컬 emergency state를 유지하고 일반 명령을 거부한다. 향후 reset-after-emergency 흐름이 추가되더라도 엔진을 자동으로 다시 켜거나 이전 주행/작업 장치 출력을 자동 복구하면 안 된다.
+
+## `/cmd_vel` QoS 설정
+
+`/cmd_vel` publisher는 일반적인 ROS 2 제어 topic과 `ros2 topic echo`에 맞춰 다음 QoS를 기본으로 사용한다.
+
+- history: `keep_last`
+- depth: `10`
+- durability: `volatile`
+- reliability: `reliable`
+
+설정 파일에서 다음 값을 변경할 수 있다.
+
+```yaml
+ros:
+  cmd_vel_qos_depth: 10
+  cmd_vel_qos_durability: volatile
+  cmd_vel_qos_reliability: reliable
+```
+
+지원 값:
+
+- `cmd_vel_qos_durability`: `volatile`, `transient_local`
+- `cmd_vel_qos_reliability`: `reliable`, `best_effort`
+
+다음 경고가 발생하면 publisher와 subscriber의 durability가 서로 맞지 않는 상태이다.
+
+```text
+New subscription discovered on topic '/cmd_vel', requesting incompatible QoS.
+Last incompatible policy: DURABILITY
+```
+
+먼저 Jetson에서 subscriber QoS를 확인한다.
+
+```bash
+ros2 topic info /cmd_vel --verbose
+```
+
+하드웨어 브릿지 subscriber가 `transient_local`을 요청한다면 일반적인 제어 topic 동작에 맞게 브릿지 subscriber를 `volatile`로 변경하는 것을 우선 권장한다. 브릿지를 즉시 변경할 수 없는 경우에만 `cmd_vel_qos_durability: transient_local`로 publisher 설정을 맞춘다.
+
+`ros2 topic echo`로 확인할 때는 다음처럼 QoS를 명시할 수 있다.
+
+```bash
+ros2 topic echo /cmd_vel geometry_msgs/msg/Twist \
+  --qos-durability volatile \
+  --qos-reliability reliable
+```

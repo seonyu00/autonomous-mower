@@ -14,6 +14,10 @@ ros:
   # Stop 명령은 cmd_vel_topic에 속도 0만 publish한다.
   # E-Stop은 속도 0, EMERGENCY mode, 엔진 릴레이 차단을 함께 publish한다.
   cmd_vel_topic: /cmd_vel
+  # 일반적인 ROS 2 제어 topic과 ros2 topic echo에 맞춘 기본 QoS이다.
+  cmd_vel_qos_depth: 10
+  cmd_vel_qos_durability: volatile
+  cmd_vel_qos_reliability: reliable
   mower_set_mode_topic: /mower/set_mode
   mower_engine_topic: /mower/engine
   fix_topic: /fix
