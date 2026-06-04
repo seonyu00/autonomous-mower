@@ -19,7 +19,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Application error boundary caught an error', error, errorInfo);
+    console.error('애플리케이션 오류 경계에서 오류를 감지했습니다.', error, errorInfo);
   }
 
   render() {

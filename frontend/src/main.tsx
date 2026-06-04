@@ -5,18 +5,24 @@ import { App } from './app/App';
 import { AuthProvider } from './app/providers/AuthProvider';
 import { QueryProvider } from './app/providers/QueryProvider';
 import { RealtimeProvider } from './app/providers/RealtimeProvider';
+import { RobotDataProvider } from './features/robots/RobotDataProvider';
+import { ErrorBoundary } from './shared/ui/ErrorBoundary';
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <QueryProvider>
-          <RealtimeProvider>
-            <App />
-          </RealtimeProvider>
-        </QueryProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <QueryProvider>
+            <RobotDataProvider>
+              <RealtimeProvider>
+                <App />
+              </RealtimeProvider>
+            </RobotDataProvider>
+          </QueryProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </StrictMode>,
 );

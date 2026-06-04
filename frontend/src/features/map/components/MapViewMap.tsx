@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection, LineString, Point, Polygon } from 'geojson';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -15,6 +15,7 @@ export function MapViewMap() {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
+  const [mapError, setMapError] = useState<string | null>(null);
 
   const selectedRobotId = useRobotStore((state) => state.selectedRobotId);
   const telemetry = useTelemetryStore((state) =>
@@ -26,16 +27,25 @@ export function MapViewMap() {
       return;
     }
 
-    mapRef.current = new maplibregl.Map({
-      container: mapContainerRef.current,
-      style: 'https://demotiles.maplibre.org/style.json',
-      center: [127.4564, 36.6285],
-      zoom: 16,
-      attributionControl: false,
-    });
+    try {
+      mapRef.current = new maplibregl.Map({
+        container: mapContainerRef.current,
+        style: 'https://demotiles.maplibre.org/style.json',
+        center: [127.4564, 36.6285],
+        zoom: 16,
+        attributionControl: false,
+      });
+    } catch {
+      setMapError('지도를 초기화하지 못했습니다.');
+      return;
+    }
 
     mapRef.current.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
     mapRef.current.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+
+    mapRef.current.on('error', () => {
+      setMapError('지도 스타일을 불러오지 못했습니다.');
+    });
 
     mapRef.current.on('load', () => {
       const map = mapRef.current;
@@ -144,6 +154,7 @@ export function MapViewMap() {
   return (
     <div className="maplibre-shell">
       <div ref={mapContainerRef} className="maplibre-container" />
+      {mapError ? <div className="map-error-panel">{mapError}</div> : null}
       <div className="map-readout">
         <strong>{selectedRobotId ?? '로봇 없음'}</strong>
         <span>
