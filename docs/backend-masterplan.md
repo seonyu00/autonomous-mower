@@ -957,9 +957,9 @@ services:
     build: ./backend
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/mower
-      SPRING_DATASOURCE_USERNAME: mower
-      SPRING_DATASOURCE_PASSWORD: mower
-      JWT_SECRET: change-me
+      SPRING_DATASOURCE_USERNAME: <DB_USERNAME>
+      SPRING_DATASOURCE_PASSWORD: <DB_PASSWORD>
+      JWT_SECRET: <JWT_SECRET>
       MQTT_BROKER_URL: tcp://mosquitto:1883
       CORS_ALLOWED_ORIGINS: http://localhost:5173
     depends_on:
@@ -972,8 +972,8 @@ services:
     image: postgis/postgis:16-3.4
     environment:
       POSTGRES_DB: mower
-      POSTGRES_USER: mower
-      POSTGRES_PASSWORD: mower
+      POSTGRES_USER: <DB_USERNAME>
+      POSTGRES_PASSWORD: <DB_PASSWORD>
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:

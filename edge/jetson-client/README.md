@@ -1,8 +1,8 @@
 # Jetson Edge Client
 
-Jetson Orin Nano에서 Spring Boot 백엔드의 MQTT command topic을 구독하고 ROS 2 topic으로 넘기는 edge client skeleton입니다.
+Jetson Orin Nano에서 Spring Boot 백엔드의 MQTT command topic을 구독하고 ROS 2 topic으로 전달하는 Phase 1 Edge Client입니다.
 
-현재 Phase 1 범위는 MQTT와 ROS 2 사이의 연결 골격입니다. STM32 USB CDC serial 처리는 이 패키지에서 하지 않습니다. `/cmd_vel`을 구독하는 별도 Jetson bridge node가 STM32 NUCLEO-F439ZI(`/dev/ttyACM0`, 115200bps)로 전달한다고 가정합니다.
+현재 Phase 1은 MQTT command 검증, ROS 2 제어 출력, command ACK, telemetry/status 발행, 로컬 데드맨 스위치와 E-Stop 상태 처리를 제공한다. STM32 USB CDC serial 처리는 이 패키지에서 하지 않습니다. `/cmd_vel`을 구독하는 별도 Jetson bridge node가 STM32 NUCLEO-F439ZI(`/dev/ttyACM0`, 115200bps)로 전달한다고 가정합니다.
 
 ## 대상 환경
 
@@ -74,8 +74,8 @@ cp config.yaml.example config.yaml
 - `ros.cmd_vel_qos_depth`: `/cmd_vel` publisher의 `keep_last` depth. 기본값은 `10`
 - `ros.cmd_vel_qos_durability`: `/cmd_vel` publisher durability. 기본값은 `volatile`
 - `ros.cmd_vel_qos_reliability`: `/cmd_vel` publisher reliability. 기본값은 `reliable`
-- `ros.fix_topic`: GPS 구독 skeleton topic. 기본값은 `/fix`
-- `ros.imu_topic`: IMU 구독 skeleton topic. 기본값은 `/camera/imu`
+- `ros.fix_topic`: GPS 구독 topic. 기본값은 `/fix`
+- `ros.imu_topic`: IMU 구독 topic. 기본값은 `/camera/imu`
 
 ## 실행
 

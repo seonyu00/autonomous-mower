@@ -24,3 +24,7 @@ dist/
 **/.gradle/
 build/
 **/build/
+
+# Local analysis and private notes
+.understand-anything/
+.local-docs/

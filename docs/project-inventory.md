@@ -4,8 +4,8 @@
 
 기준:
 
-- 확인일: 2026-06-01
-- 확인 범위: `frontend/`, `backend/`, `tools/edge-mock-client/`, `docker-compose.yml`, `docs/`, `.env.example`, `README.md`
+- 확인일: 2026-06-06
+- 확인 범위: `frontend/`, `backend/`, `edge/jetson-client/`, `tools/edge-mock-client/`, `docker-compose.yml`, `docs/`, `.env.example`, `README.md`
 - 실제 파일 기준으로 정리했다.
 - 구현 여부가 불명확하거나 실제 장비 연동이 없는 부분은 `미구현/확인 필요` 또는 `Mock/Skeleton`으로 표시했다.
 
@@ -28,7 +28,7 @@ Spring Boot Backend
 Mosquitto MQTT Broker
   ^
   | telemetry/status/event/ack publish, command subscribe
-Edge Mock Client
+Jetson Edge Client 또는 Edge Mock Client
 ```
 
 ### Frontend
@@ -78,10 +78,23 @@ Edge Mock Client
 - 위치: `tools/edge-mock-client/`
 - 기술: Node.js 20+, `mqtt`
 - 역할:
-  - 실제 Jetson client 대신 로컬 MQTT 통합 테스트 수행
+  - 실제 장비 없이 로컬 MQTT 통합 테스트 수행
   - command topic 구독
   - telemetry/status/event/ack publish
   - E-Stop, stop, mode command 수신 시 mock 상태 변경
+
+### Jetson Edge Client
+
+- 위치: `edge/jetson-client/`
+- 기술: Python 3.10, ROS 2 Humble, Paho MQTT
+- 역할:
+  - backend command topic 구독과 payload 검증
+  - 수동 명령 최신성 검사, QoS 1 중복 억제, 500ms 로컬 deadman 처리
+  - `/cmd_vel`, `/mower/set_mode`, `/mower/engine` ROS 2 topic 발행
+  - GPS/IMU topic 구독과 telemetry/status/command ACK 발행
+- 제한:
+  - STM32 USB CDC serial bridge와 attachment 실제 출력은 아직 구현되지 않았다.
+  - battery, speed, signal strength 등 일부 telemetry 값은 기본값 또는 후속 구현 대상이다.
 
 ### STOMP/WebSocket
 
@@ -776,7 +789,8 @@ Topic:
 
 주의:
 
-- 실제 STM32/Jetson side TTL enforcement는 이 저장소 밖의 미구현 영역이다.
+- Jetson Edge Client의 500ms 로컬 timeout은 구현되어 있다.
+- STM32 자체 TTL enforcement와 drive PWM 중립 복귀는 아직 구현 및 실장 검증이 필요하다.
 
 ### MQTT bridge
 
@@ -870,7 +884,7 @@ Backend env:
 - `.env`는 `.gitignore` 대상
 - JWT secret은 runtime env 필수
 - committed admin password seed 없음
-- docs/example 값 `mower`, `change-me...`는 로컬 예시/placeholder
+- 공개 문서의 자격 증명 예시는 `<DB_USERNAME>`, `<DB_PASSWORD>`, `<JWT_SECRET>` placeholder를 사용한다.
 
 Production 확인 필요:
 
@@ -1053,9 +1067,9 @@ cd backend
 
 $env:SERVER_PORT="8080"
 $env:SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5432/mower"
-$env:SPRING_DATASOURCE_USERNAME="mower"
-$env:SPRING_DATASOURCE_PASSWORD="mower"
-$env:JWT_SECRET="change-me-to-a-32-byte-minimum-secret"
+$env:SPRING_DATASOURCE_USERNAME="<DB_USERNAME>"
+$env:SPRING_DATASOURCE_PASSWORD="<DB_PASSWORD>"
+$env:JWT_SECRET="<JWT_SECRET>"
 $env:MQTT_ENABLED="true"
 $env:MQTT_BROKER_URL="tcp://localhost:1883"
 
@@ -1095,7 +1109,7 @@ cd tools\edge-mock-client
 
 npm install
 $env:MQTT_BROKER_URL="mqtt://localhost:1883"
-$env:ROBOT_ID="MOWER-01"
+$env:ROBOT_ID="<ROBOT_ID>"
 npm start
 ```
 
@@ -1147,11 +1161,12 @@ README와 현재 구현 기준으로 확인 가능한 local integration flow:
 
 ## 7. 아직 mock/skeleton/TODO인 것
 
-### Jetson 실제 client
+### Jetson client 후속 범위
 
-- 미구현
-- 현재 대체: `tools/edge-mock-client/`
-- Jetson 구현 전 `docs/mqtt-topic-contract.md`와 topic/QoS/payload 정합성 유지 필요
+- Phase 1 구현됨: `edge/jetson-client/`
+- MQTT command 구독, ROS 2 주행·안전 출력, ACK, telemetry/status 발행, 중복 억제, stale manual 차단, 로컬 deadman을 제공한다.
+- STM32 serial bridge, attachment 실제 출력, 완전한 센서 telemetry 계산은 후속 구현이 필요하다.
+- 실제 장비가 없는 로컬 통합 테스트에는 `tools/edge-mock-client/`를 계속 사용한다.
 
 ### STM32 serial bridge
 
@@ -1167,8 +1182,10 @@ README와 현재 구현 기준으로 확인 가능한 local integration flow:
 
 ### 실제 센서/GPS/IMU
 
-- 미구현
-- 현재 telemetry는 Edge Mock이 좌표와 상태를 synthetic publish
+- Jetson Edge Client는 GPS `/fix`와 IMU `/camera/imu` topic을 구독한다.
+- GPS 수신값은 telemetry의 위도와 경도에 반영한다.
+- IMU 기반 자세·속도 계산과 battery/signal 등 전체 telemetry 센서 연동은 아직 구현되지 않았다.
+- Edge Mock 경로에서는 좌표와 상태를 synthetic publish한다.
 
 ### production 보안 설정
 

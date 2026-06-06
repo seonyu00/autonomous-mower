@@ -1,8 +1,8 @@
 # MQTT Topic 계약
 
-This document is the frozen local integration contract between the Spring Boot backend and the Jetson edge process before Jetson implementation starts.
+이 문서는 Spring Boot 백엔드와 Jetson Edge Client 사이의 MQTT 통합 계약이다.
 
-Jetson code is not implemented in this repository yet. The Edge Mock must follow this document so backend, frontend, and Jetson integration tests use the same topic and payload contract.
+현재 `edge/jetson-client/`와 `tools/edge-mock-client/`가 이 계약을 기준으로 구현되어 있다. 백엔드, Jetson Edge Client, Edge Mock의 topic, QoS, payload를 변경할 때는 이 문서와 각 구현을 함께 갱신해야 한다.
 
 ## Version
 
@@ -41,7 +41,7 @@ All backend-to-edge command messages use the same envelope:
 ```json
 {
   "commandId": "cmd-uuid-or-server-id",
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "commandType": "manual-command",
   "idempotencyKey": "manual-uuid-from-client",
   "lockVersion": 7,
@@ -77,7 +77,7 @@ QoS: 0
 ```json
 {
   "commandId": "cmd-manual-001",
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "commandType": "manual-command",
   "idempotencyKey": "manual-uuid",
   "lockVersion": 7,
@@ -108,7 +108,7 @@ QoS: 1
 ```json
 {
   "commandId": "cmd-stop-001",
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "commandType": "stop",
   "idempotencyKey": "stop-uuid",
   "lockVersion": 7,
@@ -139,7 +139,7 @@ QoS: 1
 ```json
 {
   "commandId": "cmd-estop-001",
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "commandType": "emergency-stop",
   "idempotencyKey": "estop-uuid",
   "lockVersion": null,
@@ -174,7 +174,7 @@ QoS: 1
 ```json
 {
   "commandId": "cmd-mode-001",
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "commandType": "change-mode",
   "idempotencyKey": "mode-uuid",
   "lockVersion": 7,
@@ -203,7 +203,7 @@ QoS: 1
 ```json
 {
   "commandId": "cmd-attachment-001",
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "commandType": "mower-attachment",
   "idempotencyKey": "attachment-uuid",
   "lockVersion": 7,
@@ -233,7 +233,7 @@ Publish rate: nominal 1 Hz.
 
 ```json
 {
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "latitude": 37.50011,
   "longitude": 127.00011,
   "batteryLevel": 82,
@@ -266,7 +266,7 @@ Publish rate: nominal every 3 seconds and immediately after command state change
 
 ```json
 {
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "connectionState": "online",
   "mqttState": "connected",
   "edgeState": "connected",
@@ -293,7 +293,7 @@ Publish when an edge event occurs.
 ```json
 {
   "id": "event-1717118631000",
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "severity": "warning",
   "eventType": "obstacle-detected",
   "message": "Obstacle detected by front sensor.",
@@ -320,11 +320,11 @@ Jetson must publish one ack for every non-duplicate command it accepts, rejects,
 ```json
 {
   "commandId": "cmd-stop-001",
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "commandType": "stop",
   "status": "accepted",
   "reason": null,
-  "edgeNodeId": "jetson-MOWER-01",
+  "edgeNodeId": "jetson-<ROBOT_ID>",
   "receivedAt": "2026-05-31T01:23:46.020Z",
   "ackedAt": "2026-05-31T01:23:46.030Z"
 }
@@ -408,12 +408,13 @@ STM32 safety rules:
 - E-Stop must force drive PWM neutral and disable mower attachment output.
 - Serial payload should add checksum or framed CRC before field deployment; JSON line format is only the integration draft.
 
-## Backend And Edge Mock Verification Targets
+## 구현 정합성 검증 대상
 
-Current backend constants and Edge Mock topics must match this contract:
+다음 구현의 topic과 QoS는 이 계약과 일치해야 한다.
 
-- `MqttTopicResolver`: backend topic construction
-- `MqttInboundSubscriber`: inbound wildcard subscriptions
-- `tools/edge-mock-client/src/index.js`: mock publish/subscribe topics and QoS
+- `MqttTopicResolver`: 백엔드 topic 생성
+- `MqttInboundSubscriber`: 백엔드 inbound wildcard 구독
+- `edge/jetson-client/jetson_mower_client/main.py`: Jetson command 구독, ACK와 telemetry/status 발행
+- `tools/edge-mock-client/src/index.js`: 로컬 통합 테스트용 publish/subscribe topic과 QoS
 
-Any topic change must update this document and both implementations in the same commit.
+topic 계약을 변경할 때는 이 문서와 영향을 받는 구현을 같은 변경 단위에서 갱신한다.

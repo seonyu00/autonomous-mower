@@ -1,6 +1,8 @@
 # 프론트엔드 작업 분해
 
-본 작업 목록은 `docs/frontend-masterplan.md`의 reviewer 검토 결과를 반영한 epics/tasks 단위 계획이다. 아직 프론트엔드 코드는 생성하지 않는다.
+> 문서 상태: 이 문서는 프론트엔드 구현 전에 작성한 역사적 작업 계획이다. 현재 구현 상태는 `docs/project-inventory.md`와 `docs/ONBOARDING.md`를 기준으로 확인한다. 아래 항목은 최신 완료 여부를 나타내는 체크리스트가 아니다.
+
+본 작업 목록은 `docs/frontend-masterplan.md`의 reviewer 검토 결과를 반영한 epics/tasks 단위 계획이다. 작성 당시에는 프론트엔드 코드를 생성하지 않고 구현 범위를 먼저 분해했다.
 
 ## Reviewer 검토 결과
 

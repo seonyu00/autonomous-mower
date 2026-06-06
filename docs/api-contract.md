@@ -20,7 +20,7 @@ SRS에 endpoint 경로와 signalling 방식은 상세 명시되어 있지 않다
     "code": "CONTROL_LOCK_NOT_HELD",
     "message": "Control lock is not held by the requester.",
     "details": {
-      "robotId": "MOWER-01"
+      "robotId": "<ROBOT_ID>"
     },
     "timestamp": "2026-05-30T01:00:00.000Z",
     "requestId": "req-20260530-0001"
@@ -75,8 +75,8 @@ Request:
 
 ```json
 {
-  "adminId": "admin",
-  "password": "plain-password"
+  "adminId": "<ADMIN_ID>",
+  "password": "<ADMIN_PASSWORD>"
 }
 ```
 
@@ -84,12 +84,12 @@ Response `200`:
 
 ```json
 {
-  "accessToken": "jwt-access-token",
+  "accessToken": "<JWT_TOKEN>",
   "tokenType": "Bearer",
   "expiresAt": "2026-05-30T09:00:00.000Z",
   "user": {
-    "id": "admin",
-    "name": "ADMIN USER",
+    "id": "<ADMIN_ID>",
+    "name": "<ADMIN_NAME>",
     "role": "admin",
     "permissions": ["robots:read", "telemetry:read", "control:write", "control:takeover"]
   }
@@ -107,7 +107,7 @@ Response `200`:
 ```json
 [
   {
-    "id": "MOWER-01",
+    "id": "<ROBOT_ID>",
     "modelName": "Orin NX Model-A",
     "connectionState": "online",
     "active": true,
@@ -126,7 +126,7 @@ Response `200`:
 
 ```json
 {
-  "id": "MOWER-01",
+  "id": "<ROBOT_ID>",
   "modelName": "Orin NX Model-A",
   "connectionState": "online",
   "active": true,
@@ -153,7 +153,7 @@ Response `200`:
 ```json
 {
   "zoneId": 12,
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "version": 4,
   "updatedAt": "2026-05-30T01:00:00.000Z",
   "zone": {
@@ -185,7 +185,7 @@ Request:
 
 ```json
 {
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "expectedVersion": 4,
   "zone": {
     "type": "Polygon",
@@ -211,7 +211,7 @@ Response `200`:
 ```json
 {
   "saved": true,
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "zoneId": 12,
   "version": 5,
   "updatedAt": "2026-05-30T01:01:00.000Z"
@@ -240,7 +240,7 @@ Response `200`:
 [
   {
     "id": "history-001",
-    "robotId": "MOWER-01",
+    "robotId": "<ROBOT_ID>",
     "startedAt": "2026-05-30T00:00:00.000Z",
     "endedAt": "2026-05-30T00:30:00.000Z",
     "route": {
@@ -259,7 +259,7 @@ Response `200`:
     "events": [
       {
         "id": "event-001",
-        "robotId": "MOWER-01",
+        "robotId": "<ROBOT_ID>",
         "occurredAt": "2026-05-30T00:10:00.000Z",
         "severity": "warning",
         "type": "obstacle-detected",
@@ -296,7 +296,7 @@ Response `200`:
 [
   {
     "id": "log-001",
-    "robotId": "MOWER-01",
+    "robotId": "<ROBOT_ID>",
     "severity": "critical",
     "eventType": "estop",
     "message": "Emergency stop command acknowledged.",
@@ -335,7 +335,7 @@ Shared response:
 ```json
 {
   "accepted": true,
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "commandId": "cmd-20260530-0001",
   "commandType": "manual-command",
   "requestedAt": "2026-05-30T01:00:00.000Z",
@@ -411,7 +411,7 @@ Request:
 ```json
 {
   "action": "change-mode",
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "mode": "autonomous",
   "idempotencyKey": "uuid",
   "lockVersion": 7
@@ -431,7 +431,7 @@ Request:
 ```json
 {
   "action": "manual",
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "direction": "forward",
   "speed": 0.6,
   "idempotencyKey": "uuid",
@@ -458,7 +458,7 @@ Request:
 ```json
 {
   "action": "stop",
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "direction": "stop",
   "speed": 0,
   "idempotencyKey": "uuid",
@@ -519,7 +519,7 @@ Request:
 ```json
 {
   "action": "mower-attachment",
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "attachmentAction": "blade-start",
   "idempotencyKey": "uuid",
   "lockVersion": 7
@@ -540,7 +540,7 @@ Request:
 
 ```json
 {
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "type": "offer",
   "sdp": "v=0...",
   "qualityPolicy": {
@@ -581,7 +581,7 @@ Request:
 
 ```json
 {
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "sessionId": "video-session-001"
 }
 ```
@@ -599,7 +599,7 @@ Request:
 
 ```json
 {
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "sessionId": "video-session-001"
 }
 ```
@@ -632,7 +632,7 @@ Payload:
 
 ```json
 {
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "latitude": 37.5001,
   "longitude": 127.0001,
   "batteryLevel": 82,
@@ -655,7 +655,7 @@ Payload:
 
 ```json
 {
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "connectionState": "online",
   "mqttState": "connected",
   "wssState": "connected",
@@ -674,7 +674,7 @@ Payload:
 ```json
 {
   "id": "event-001",
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "severity": "warning",
   "eventType": "obstacle-detected",
   "message": "Obstacle detected.",
@@ -705,7 +705,7 @@ Payload:
 
 ```json
 {
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "lockState": "held",
   "controlOwner": "admin",
   "controlOwnerName": "ADMIN USER",
@@ -730,7 +730,7 @@ Payload:
 
 ```json
 {
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "commandId": "cmd-20260530-0001",
   "commandType": "manual-command",
   "status": "accepted",
@@ -749,7 +749,7 @@ Payload:
 
 ```json
 {
-  "robotId": "MOWER-01",
+  "robotId": "<ROBOT_ID>",
   "sessionId": "video-session-001",
   "state": "connected",
   "fps": 15,
