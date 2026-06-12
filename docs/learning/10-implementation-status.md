@@ -20,19 +20,23 @@
 - 지도 경로와 작업 구역 편집
 - 이력·로그 화면 데이터
 - WebRTC 영상과 스냅샷
+- RealSense D455 ROS 2 실행 환경과 카메라 노드
 - Edge Mock의 장비 동작
 - 배터리, 속도, 신호 세기 센서값
 
 ## 미구현
 
-- STM32 firmware와 Jetson-STM32 통신
-- 실제 모터·블레이드 제어 및 피드백
-- 하드웨어 watchdog과 물리 E-Stop 검증
+- 저장소에서 재현 가능한 STM32 firmware와 HIL 시험 자료
+- STM32 완료 ACK를 백엔드 명령 lifecycle까지 전달하는 경로
 - 작업 구역 이탈 감지와 자동 정지
 - 실제 WebRTC/NVENC 영상
 - 자율주행, Coverage Path Planning, 장애물 인식
 - 운영용 HTTPS/WSS/MQTTS와 비밀정보 관리
 - 실제 장비를 포함한 전체 E2E 시험
+
+HW 팀은 Jetson-STM32 USB CDC 통신, PWM 출력과 watchdog을 HIL 환경에서 검증했다고 공유했다. 다만 해당 firmware와 시험 결과는 현재 저장소에서 독립적으로 재현할 수 없으므로 소프트웨어 팀의 완료 항목과 구분한다.
+
+RealSense D455와 ROS 2 카메라 노드는 2026년 6월 12일 재확인에서 연결됐다. 원본 컬러 영상은 1280x720 약 28fps로 실제 프레임을 발행하지만 요청한 640x480 15fps 프로파일은 적용되지 않았다. 압축 컬러 토픽은 약 30Hz로 발행되지만 JPEG payload가 비어 있다. 카메라 원본 영상 발행과 웹 영상 송출 완료를 같은 상태로 취급하지 않는다.
 
 ## 실제 장비 연결 전 필수 조건
 

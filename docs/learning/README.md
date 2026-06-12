@@ -38,5 +38,6 @@
 8. [MQTT ACK lifecycle](08-mqtt-ack-lifecycle.md)
 9. [로컬 실행과 디버깅](09-local-run-debugging.md)
 10. [구현 상태와 실제 장비 연동 전 점검](10-implementation-status.md)
+11. [Jetson 카메라와 웹 영상 연동](11-jetson-camera-video-flow.md)
 
 상세한 프로젝트 입문 설명은 [`docs/ONBOARDING.md`](../ONBOARDING.md), 현재 코드 기준 인벤토리는 [`docs/project-inventory.md`](../project-inventory.md)를 함께 참고한다.

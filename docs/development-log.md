@@ -2,6 +2,76 @@
 
 > 이 문서는 작업 시점의 상태를 시간순으로 보존한다. 과거 항목의 `미구현`, `skeleton`, phase 설명은 당시 상태이며, 현재 구현 여부는 `docs/project-inventory.md`와 실제 코드를 기준으로 확인한다.
 
+## 2026-06-12
+
+### 로컬 통합 실행과 방향 명령 검증
+
+- Docker Desktop을 실행하고 PostgreSQL/PostGIS와 Mosquitto를 기동했다.
+- Spring Boot 백엔드 health endpoint가 `UP`을 반환하는 것을 확인했다.
+- 프론트엔드, 백엔드와 Edge Mock을 각각 별도 터미널에서 실행했다.
+- 로컬 DB에만 통합 시험용 관리자 계정을 준비했다. 자격 증명은 문서와 Git에 기록하지 않는다.
+- `MOWER-01` 제어권 획득 후 전진 명령을 REST로 전송했다.
+- 백엔드가 `mowers/MOWER-01/commands/manual`로 MQTT 명령을 발행하고 Edge Mock이 ACK를 반환하는 흐름을 확인했다.
+- 수동 명령 약 500ms 후 백엔드 데드맨 스위치(Deadman Switch)가 정지 명령을 발행하고 ACK를 받는 것을 확인했다.
+- Edge Mock이 `accepted` ACK만 보내므로 명령 상태가 처음 `ACKED`가 된 뒤 완료 ACK 부재로 약 5초 후 `TIMED_OUT`이 되는 현재 동작을 재확인했다.
+- 프론트엔드 테스트 24개, Jetson Python 테스트 14개와 백엔드 Gradle 테스트가 통과했다.
+- 프론트엔드 production build가 성공했다. MapLibre를 포함한 큰 번들 chunk 경고는 남아 있다.
+
+### 방향 버튼 비활성 원인
+
+- Vite 개발 서버가 두 개 실행되어 이전 환경변수를 가진 프로세스가 `5173`, 새 프로세스가 `5174`를 사용하고 있었다.
+- 브라우저가 이전 프로세스에 접속하면서 실제 STOMP 연결 실패 상태를 유지했고, `canControlRobot()`의 실시간 연결 검사가 방향 버튼을 차단했다.
+- 중복 Vite 프로세스를 종료하고 다음 설정의 단일 프론트엔드를 `5173`에 실행해 상태를 정상화했다.
+  - 실제 로그인 API 사용
+  - 실제 제어 REST API 사용
+  - 실제 로봇 API 사용
+  - 프론트 실시간 상태만 Mock 사용
+- 방향 버튼은 로봇 선택, 현재 사용자의 제어권 `held`, 실시간 상태 `mock` 또는 `connected`, 비상 정지 비활성, 전송 상태 정상 조건을 모두 만족해야 활성화된다.
+
+### Tailscale Jetson 상태 확인
+
+- Jetson Tailscale 주소 `100.92.7.56`에 ping과 SSH 22번 포트 연결이 가능한 것을 확인했다.
+- SSH 사용자 `jangwoo`로 접속했다. 비밀번호는 저장소와 문서에 기록하지 않는다.
+- Jetson 호스트명은 `jetson-mower`, 저장소 위치는 `/home/jangwoo/autonomous-mower`다.
+- Jetson 저장소의 최근 확인 commit은 `747ddd2 fix(edge): E-Stop을 하드웨어 상태 머신과 연동`이다.
+- `edge/jetson-client/config.yaml`은 Git에 추적되지 않는 로컬 파일이며 MQTT broker가 `mqtt://localhost:1883`으로 설정되어 있었다.
+- Mosquitto는 개발 PC에서 실행되므로 Jetson 설정을 개발 PC의 Tailscale IP와 `1883` 포트로 변경해야 한다.
+- 확인 당시 개발 PC Tailscale IP는 `100.124.51.102`였다. 실행 시 `tailscale ip -4`로 다시 확인해야 한다.
+- 실제 Jetson을 연결할 때 동일한 `MOWER-01`을 사용하는 Edge Mock은 종료해야 한다.
+
+### Jetson ROS 2와 영상 상태
+
+- Foxglove Bridge가 `0.0.0.0:8765`에서 실행 중이었다.
+- `mower_controller mower_node` 프로세스와 동일 이름의 ROS 2 노드가 두 개 존재했다. 중복 실행 원인을 확인하기 전까지 실제 구동 시험을 진행하지 않는다.
+- `/cmd_vel`, `/cmd_vel_auto`, `/mower/current_status`, `/mower/engine`, `/mower/set_mode` topic이 존재했다.
+- `/cmd_vel`에는 복수 publisher와 subscription이 있으며 Foxglove publisher는 `TRANSIENT_LOCAL`, 하드웨어 브릿지 subscription은 별도 QoS를 사용한다. Edge Client 실행 전 QoS 정합성을 다시 확인해야 한다.
+- `jetson_mower_client`와 MQTT 연결 프로세스는 실행되지 않고 있었다.
+- 카메라, image, compressed 또는 video ROS topic은 확인되지 않았다.
+- 백엔드 영상 signalling controller와 Jetson WebRTC/NVENC 송출이 미구현이므로 현재 프론트 영상 패널은 실제 카메라 송출이 아니다.
+
+### RealSense D455 재실행 확인
+
+- HW 팀으로부터 RealSense D455 실행 명령을 전달받았다.
+- `/opt/ros/humble/setup.bash`와 `/home/jangwoo/mower_ws/install/setup.bash`를 불러온 뒤 `/usr/local/lib/librealsense2.so.2.57.6`을 `LD_PRELOAD`하는 실행 방식이다.
+- 목표 설정은 컬러·깊이 640x480, 15fps이며 pointcloud와 gyro/accel은 비활성화한다.
+- 원격 확인 시 `realsense2_camera` 프로세스와 `/camera/camera` 노드는 실행 중이었다.
+- `/camera/camera`는 영상 publisher 없이 `/parameter_events`와 `/rosout`만 발행했다.
+- `lsusb`에 Intel RealSense 장치가 없었고 `/dev/video*`도 생성되지 않았다.
+- `rs-enumerate-devices -s`는 `No device detected. Is it plugged in?`을 반환했다.
+- `/camera/camera/color/image_raw`와 `/camera/camera/color/image_raw/compressed`는 존재하지 않았다.
+- 현재 실패 지점은 WebRTC나 프론트가 아니라 D455 USB 장치 인식 단계다.
+- 실행과 검증 절차는 `docs/learning/11-jetson-camera-video-flow.md`에 정리했다.
+
+### RealSense D455 재연결 후 검증
+
+- HW 팀이 카메라를 다시 연결한 뒤 `lsusb`에서 `Intel(R) RealSense(TM) Depth Camera 455`를 확인했다.
+- `/camera/camera/color/image_raw`와 `/camera/camera/color/image_raw/compressed`에 각각 publisher가 존재했다.
+- 원본 컬러 토픽에서 1280x720 `rgb8` 프레임을 직접 수신했다.
+- 원본 컬러 토픽은 약 28fps, 약 85MB/s로 발행됐다.
+- 실행 명령은 640x480 15fps를 요청하지만 실제 원본 프로파일은 1280x720 약 28fps로 적용되어 설정 불일치가 있다.
+- 압축 컬러 토픽은 약 30Hz로 발행되지만 평균 메시지 크기가 약 80바이트이고 JPEG `data`가 비어 있었다.
+- 카메라 USB 연결과 원본 프레임 발행은 확인됐지만 압축 스트림과 웹 WebRTC 연결은 아직 완료되지 않았다.
+
 ## 2026-06-06
 
 ### 문서와 현재 구현 정합성 갱신
