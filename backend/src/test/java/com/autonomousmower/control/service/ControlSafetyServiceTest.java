@@ -184,6 +184,18 @@ class ControlSafetyServiceTest {
     }
 
     @Test
+    void expiredControlLockCannotAuthorizeCommand() {
+        ControlStateStore.MutableControlState state = stateStore.stateFor("MOWER-01");
+        state.claim("operator", "Operator", "manual", Instant.now().minus(Duration.ofMinutes(6)));
+
+        assertThatThrownBy(() -> state.requireOwner("operator"))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.CONTROL_LOCK_NOT_HELD);
+        assertThat(state.snapshot().lockState()).isEqualTo("expired");
+    }
+
+    @Test
     void deadmanTimeoutPublishesSyntheticStopEvent() {
         Instant commandAt = Instant.parse("2026-05-30T01:00:00Z");
         deadmanService.recordCommand("MOWER-01", commandAt);

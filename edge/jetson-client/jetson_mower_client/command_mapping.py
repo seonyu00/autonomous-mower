@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import re
 from typing import Any
 
 
@@ -61,6 +62,7 @@ def is_stale_client_command(client_sent_at: str | None, max_age_ms: int, now: da
 def parse_iso_utc(value: str) -> datetime | None:
     try:
         normalized = value.replace("Z", "+00:00")
+        normalized = re.sub(r"(\.\d{6})\d+(?=[+-]\d{2}:\d{2}$)", r"\1", normalized)
         parsed = datetime.fromisoformat(normalized)
     except ValueError:
         return None

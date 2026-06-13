@@ -146,6 +146,7 @@ public class ControlStateStore {
         }
 
         public synchronized void requireOwner(String owner) {
+            refreshExpiration(Instant.now());
             if (!"held".equals(lockState) || controlOwner == null) {
                 throw new com.autonomousmower.common.exception.BusinessException(
                         com.autonomousmower.common.exception.ErrorCode.CONTROL_LOCK_NOT_HELD

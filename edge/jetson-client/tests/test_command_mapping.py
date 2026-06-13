@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timedelta, timezone
 
-from jetson_mower_client.command_mapping import is_stale_client_command, manual_to_twist
+from jetson_mower_client.command_mapping import is_stale_client_command, manual_to_twist, parse_iso_utc
 from jetson_mower_client.topics import MowerTopics, command_type_from_topic
 
 
@@ -39,6 +39,12 @@ class ManualToTwistTest(unittest.TestCase):
 
 
 class StalenessTest(unittest.TestCase):
+    def test_parses_nanosecond_fraction_from_backend_timestamp(self) -> None:
+        parsed = parse_iso_utc("2026-06-12T13:38:47.626032900Z")
+
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed.microsecond, 626032)
+
     def test_detects_stale_client_command(self) -> None:
         now = datetime(2026, 6, 1, 1, 0, 1, tzinfo=timezone.utc)
         old = (now - timedelta(milliseconds=600)).isoformat().replace("+00:00", "Z")

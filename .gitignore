@@ -28,3 +28,5 @@ build/
 # Local analysis and private notes
 .understand-anything/
 .local-docs/
+AGENTS.md
+docs/learning/12-development-roadmap.md

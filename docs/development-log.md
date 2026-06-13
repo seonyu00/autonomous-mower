@@ -72,6 +72,24 @@
 - 압축 컬러 토픽은 약 30Hz로 발행되지만 평균 메시지 크기가 약 80바이트이고 JPEG `data`가 비어 있었다.
 - 카메라 USB 연결과 원본 프레임 발행은 확인됐지만 압축 스트림과 웹 WebRTC 연결은 아직 완료되지 않았다.
 
+### 실제 Jetson 방향 제어 E2E 검증
+
+- `MOWER-01` Edge Mock을 종료하고 Jetson `config.yaml`의 MQTT broker를 개발 PC Tailscale 주소로 변경했다.
+- Jetson에서 개발 PC Mosquitto `1883` 포트 연결과 `jetson-MOWER-01` MQTT client 접속을 확인했다.
+- Jetson Edge Client가 telemetry와 status를 발행해 DB에 배터리 기본값 `100`, 상태 `IDLE`이 1초 주기로 저장되는 것을 확인했다.
+- `/cmd_vel` publisher와 HW Bridge subscriber가 `RELIABLE`, `VOLATILE` QoS로 연결되는 것을 확인했다.
+- 백엔드가 보내는 나노초 9자리 ISO 시각을 Jetson Python 3.10의 `datetime.fromisoformat()`이 처리하지 못해 정상 수동 명령도 `stale-command`로 거부하는 원인을 확인했다.
+- ISO 소수초를 마이크로초 6자리로 정규화하도록 수정하고 Jetson Python 3.10에서 회귀 테스트를 통과시켰다.
+- ROS setup script를 `set -u` 상태에서 불러올 때 `AMENT_TRACE_SETUP_FILES` 오류가 발생하므로 ROS setup 이후 `nounset`을 활성화하도록 실행 순서를 수정했다.
+- 전진 명령을 100ms 간격으로 전송했을 때 `/cmd_vel linear.x=0.6`이 반복 발행되고 입력 중단 후 zero `Twist`가 발행되는 것을 확인했다.
+- E-Stop 명령으로 `/cmd_vel` zero `Twist`, `/mower/set_mode=2`, `/mower/engine=false`가 함께 발행되는 것을 확인했다.
+- E-Stop 이후 telemetry의 로봇 상태가 `ERROR`로 저장되는 것을 확인했다.
+- Jetson의 `accepted` ACK는 DB에 저장되지만 최종 완료 ACK가 없어 약 5초 뒤 `TIMED_OUT`으로 바뀌는 현재 lifecycle을 재확인했다.
+- Windows 개발 PC 시각이 공인 NTP보다 약 1.3초 빠르고 동기화되지 않은 상태라 `sent_at`과 Jetson `receivedAt` 기반 지연값이 음수가 된다. 관리자 권한으로 Windows Time 재동기화가 필요하다.
+- 만료된 제어권에서 `requireOwner()`가 만료를 갱신하지 않은 채 통과하고 뒤의 `snapshot()`에서 `expired`로 바뀌어 명령이 한 번 발행될 수 있는 백엔드 검증 순서 문제를 발견했다.
+- `requireOwner()`가 소유권 검사 전에 현재 시각으로 만료 상태를 갱신하도록 수정하고, 6분 전에 획득한 제어권으로 명령을 승인할 수 없는 회귀 테스트를 추가했다.
+- 최종 확인 시 D455 USB 장치는 인식됐지만 `realsense2_camera` 프로세스와 컬러 영상 토픽은 실행되지 않았다. 카메라 재기동과 프로파일 정상화는 로드맵 우선순위 3에서 이어간다.
+
 ## 2026-06-06
 
 ### 문서와 현재 구현 정합성 갱신
