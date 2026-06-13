@@ -15,7 +15,7 @@ export class WhepClient {
 
   constructor(options: WhepClientOptions = {}) {
     this.createPeerConnection = options.createPeerConnection ?? (() => new RTCPeerConnection());
-    this.fetchFn = options.fetchFn ?? fetch;
+    this.fetchFn = (options.fetchFn ?? fetch).bind(globalThis);
     this.onRemoteStream = options.onRemoteStream;
     this.onConnectionStateChange = options.onConnectionStateChange;
   }
