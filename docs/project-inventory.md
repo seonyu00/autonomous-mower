@@ -4,8 +4,8 @@
 
 기준:
 
-- 확인일: 2026-06-06
-- 확인 범위: `frontend/`, `backend/`, `edge/jetson-client/`, `edge/jetson-camera/`, `tools/edge-mock-client/`, `docker-compose.yml`, `docs/`, `.env.example`, `README.md`
+- 확인일: 2026-06-14
+- 확인 범위: `frontend/`, `backend/`, `edge/jetson-client/`, `edge/jetson-camera/`, `edge/jetson-video/`, `tools/edge-mock-client/`, `docker-compose.yml`, `docs/`, `.env.example`, `README.md`
 - 실제 파일 기준으로 정리했다.
 - 구현 여부가 불명확하거나 실제 장비 연동이 없는 부분은 `미구현/확인 필요` 또는 `Mock/Skeleton`으로 표시했다.
 
@@ -15,7 +15,7 @@
 
 ```text
 React Dashboard
-  | REST API, STOMP/WebSocket, WebRTC signalling skeleton
+  | REST API, STOMP/WebSocket, MediaMTX WHEP
   v
 Spring Boot Backend
   | JPA/Flyway/PostGIS
@@ -29,6 +29,17 @@ Mosquitto MQTT Broker
   ^
   | telemetry/status/event/ack publish, command subscribe
 Jetson Edge Client 또는 Edge Mock Client
+
+RealSense D455
+  | ROS 2 raw image
+  v
+Jetson Video Streamer
+  | NVENC H.264 / RTSP
+  v
+MediaMTX
+  | WHEP/WebRTC
+  v
+React VideoPanel
 ```
 
 ### Frontend
@@ -39,8 +50,8 @@ Jetson Edge Client 또는 Edge Mock Client
   - 관리자 로그인 화면과 관제 대시보드 UI 제공
   - 로봇 선택, 지도, 텔레메트리, 작업 구역, 제어 패널, 히스토리, 로그, 영상 패널 표시
   - REST API 호출과 개발 모드 mock 데이터 처리
-  - STOMP/WebSocket 연결 skeleton 제공
-  - WebRTC 영상 signalling skeleton 및 mock signalling 제공
+  - STOMP/WebSocket으로 실제 텔레메트리, 상태, 제어권과 제어 이벤트 반영
+  - 백엔드 영상 세션 API와 MediaMTX WHEP를 통한 실제 WebRTC 영상 재생
 
 ### Backend
 
@@ -106,7 +117,8 @@ Jetson Edge Client 또는 Edge Mock Client
   - USB, ROS 2 노드, 원본 해상도·주기와 JPEG payload 자동 검증
 - 제한:
   - systemd 자동 실행은 아직 구성하지 않았다.
-  - Foxglove 화면 확인과 웹 WebRTC 송출은 별도 단계다.
+  - Foxglove 화면 확인은 아직 별도 검증이 필요하다.
+  - 웹 WebRTC 송출은 `edge/jetson-video/`에서 별도 프로세스로 실행한다.
 
 ### STOMP/WebSocket
 
@@ -142,6 +154,16 @@ Jetson Edge Client 또는 Edge Mock Client
   - ROS 2 raw image를 NVENC H.264로 인코딩
   - RTSP로 MediaMTX에 발행
   - MediaMTX WHEP로 브라우저에 전달
+- 실제 검증:
+  - RealSense 컬러 원본 640x480, 약 15fps 발행 확인
+  - MediaMTX에서 H.264 Baseline 트랙 온라인 확인
+  - Chrome WHEP 연결 상태 `connected` 확인
+  - 8초 동안 119프레임, 629,869바이트 수신 확인
+- 제한:
+  - 백엔드 stop은 세션 상태와 브라우저 WHEP 연결을 종료하지만 Jetson 인코더와 RTSP publisher 프로세스까지 중단하지는 않는다.
+  - Jetson 카메라, MediaMTX와 영상 송출기는 수동 실행이며 재부팅 후 자동 복구되지 않는다.
+  - HTTPS/WSS, MediaMTX TLS, TURN과 외부 인터넷 공개는 아직 적용하지 않았다.
+  - Snapshot 버튼은 실제 이미지 저장이 아닌 프론트 상태 placeholder다.
 
 ## 2. 프론트엔드 기능 목록
 
@@ -505,15 +527,21 @@ Backend:
   - min 15fps
   - 640x480
   - max 500kbps
+- 실제 영상 연결:
+  - 백엔드 `/api/video/{robotId}/offer`에서 WHEP URL과 세션 ID 발급
+  - `WhepClient`가 MediaMTX에 SDP offer를 전송하고 H.264 WebRTC stream 수신
+  - 중지 시 WHEP resource에 `DELETE`를 보내고 백엔드 세션 종료
+  - 재연결 시 새 영상 세션과 WHEP 연결 생성
 - mock signalling:
-  - development mode 또는 `VITE_ENABLE_MOCK_REALTIME=true`이면 mock answer 반환
+  - `VITE_ENABLE_MOCK_VIDEO=true`이면 mock 영상 세션 사용
 - snapshot은 placeholder state만 생성
 
-Mock/Skeleton:
+제한:
 
-- 실제 media stream 송수신은 backend/edge signalling 구현이 없어 동작 확인 불가
-- backend video API controller 미구현
-- ICE candidate/trickle ICE 정책 미구현
+- Jetson 송출 프로세스는 영상 시청 여부와 무관하게 계속 실행된다.
+- 영상 품질 정책 값은 세션 상태에 표시되지만 네트워크 상태에 따른 자동 품질 조정은 구현되지 않았다.
+- ICE는 MediaMTX의 WHEP 구현을 사용하며 별도 trickle ICE API는 제공하지 않는다.
+- 실제 snapshot binary 저장/조회는 미구현이다.
 
 ### API client/proxy/mock 처리
 
@@ -535,6 +563,7 @@ Mock/Skeleton:
   - `VITE_ENABLE_MOCK_CONTROL`
   - `VITE_ENABLE_MOCK_ROBOTS`
   - `VITE_ENABLE_MOCK_REALTIME`
+  - `VITE_ENABLE_MOCK_VIDEO`
 - 기능별 API module이 개발 모드/mock flag에 따라 mock data 또는 REST API 사용
 
 Mock 처리 예:
@@ -555,6 +584,8 @@ Frontend test files:
 - `frontend/src/features/control/DeadmanSwitch.test.ts`
 - `frontend/src/features/control/controlApi.test.ts`
 - `frontend/src/features/video/videoStore.test.ts`
+- `frontend/src/features/video/WebRtcClient.test.ts`
+- `frontend/src/features/video/WhepClient.test.ts`
 - setup: `frontend/src/test/setupTests.ts`
 - helper stores: `frontend/src/test/testStores.ts`
 - runner wrapper: `frontend/scripts/run-vitest.mjs`
@@ -592,6 +623,7 @@ npm run build
 - `control`: control lock, command, E-Stop, deadman, command execution
 - `mqtt`: MQTT transport, topic, inbound/outbound bridge
 - `realtime`: STOMP topic publish/security
+- `video`: WHEP 영상 세션 발급, 중지, 재연결과 상태 발행
 - `common`: API response/error/exception
 
 ### JWT/RBAC
@@ -658,6 +690,11 @@ npm run build
   - `POST /api/control/{robotId}/estop`
   - `POST /api/control/{robotId}/reset-after-emergency`
   - `backend/src/main/java/com/autonomousmower/control/controller/ControlController.java`
+- Video:
+  - `POST /api/video/{robotId}/offer`
+  - `POST /api/video/{robotId}/stop`
+  - `POST /api/video/{robotId}/reconnect`
+  - `backend/src/main/java/com/autonomousmower/video/controller/VideoController.java`
 - Health:
   - `backend/src/main/java/com/autonomousmower/health/HealthController.java`
 - Mock realtime:
@@ -896,6 +933,7 @@ Backend env:
 - `MQTT_USERNAME`
 - `MQTT_PASSWORD`
 - `MQTT_CLIENT_ID`
+- `VIDEO_WHEP_BASE_URL`
 
 보안 상태:
 
@@ -943,6 +981,9 @@ Backend test files:
   - `ApiResponseTest.java`
   - `HealthControllerTest.java`
   - `BackendPhase4ControllerTest.java`
+- video:
+  - `VideoControllerSecurityTest.java`
+  - `VideoSessionServiceTest.java`
 
 명령:
 
@@ -1163,6 +1204,11 @@ README와 현재 구현 기준으로 확인 가능한 local integration flow:
   - Frontend confirm button 구현됨
   - Backend REST -> MQTT estop QoS 1 구현됨
   - Edge Mock emergency state 변경/ack 구현됨
+- WebRTC 영상:
+  - Jetson RealSense 640x480 약 15fps 원본 발행 확인
+  - NVENC H.264 -> MediaMTX RTSP publish 확인
+  - Backend 영상 세션 API와 video-status STOMP 발행 구현
+  - Frontend WHEP 수신과 Chrome WebRTC 연결 확인
 - Telemetry persistence:
   - Edge Mock telemetry publish
   - Backend `MqttInboundPersistenceService.persistTelemetry()`
@@ -1174,7 +1220,10 @@ README와 현재 구현 기준으로 확인 가능한 local integration flow:
 최근 검증 명령:
 
 - `.\gradlew.bat test` 통과
+- `.\gradlew.bat test --tests "com.autonomousmower.video.*"` 통과
+- `npm run test`: 39개 테스트 통과
 - `npm run build` 통과
+- `python -m unittest discover -s edge\jetson-video\tests -v`: 5개 테스트 통과
 - `npm run build`에서 Vite chunk size warning은 발생하지만 build 실패는 아님
 
 ## 7. 아직 mock/skeleton/TODO인 것
@@ -1192,11 +1241,16 @@ README와 현재 구현 기준으로 확인 가능한 local integration flow:
 - `docs/mqtt-topic-contract.md`에 draft line protocol만 있음
 - 실제 UART framing/checksum/CRC/ACK/timeout 구현 필요
 
-### WebRTC 실제 signalling/media
+### WebRTC 영상 후속 범위
 
-- Frontend skeleton만 있음
-- Backend `/api/video/...` controller 미구현
-- 실제 media source, signalling server, ICE candidate 처리, codec/NVENC 정책 미구현
+- 실제 media source, MediaMTX WHEP와 NVENC H.264 송출은 구현 및 장비 검증을 완료했다.
+- 후속 구현:
+  - 마지막 시청자가 중지하면 Jetson 인코더와 RTSP publisher도 실제 종료
+  - 카메라, MediaMTX와 영상 송출기 systemd 자동 시작 및 장애 재시작
+  - 실제 fps, bitrate, 해상도와 오류 상태 수집
+  - 네트워크 상태별 해상도, fps와 bitrate 자동 조정
+  - HTTPS/WSS, MediaMTX TLS와 필요 시 TURN 적용
+  - Snapshot binary 저장/조회
 
 ### 실제 센서/GPS/IMU
 
@@ -1240,13 +1294,35 @@ README와 현재 구현 기준으로 확인 가능한 local integration flow:
 ### 추가 확인 필요
 
 - Frontend route-level auth guard
-- Frontend STOMP telemetry/status/event/control-lock message를 실제 store에 반영하는 wiring
 - Work zone map drawing/editing UX
 - Snapshot binary upload/storage/serving
 - History distance/coverage/event aggregation
 - MQTT contract의 `reverse` vs `backward` direction 정합성
 
-## 8. GitHub 공유 전 주의사항
+## 8. 기능 시연 우선순위
+
+시연까지 남은 기간에는 내부 구조 고도화보다 관람자가 화면에서 즉시 확인할 수 있는 흐름을 우선한다.
+
+1. 실제 영상 재생 안정화
+   - 한 번의 버튼 조작으로 카메라, MediaMTX와 송출기를 실행할 수 있게 한다.
+   - `Start Stream`, `Stop Stream`, `Reconnect`를 반복해도 영상이 복구되는지 확인한다.
+   - 영상 연결 실패 원인을 UI에 한국어로 표시한다.
+2. 실시간 로봇 상태 시각화
+   - 실제 Jetson telemetry와 status가 지도 위치, 배터리, 모드, 연결 상태에 즉시 반영되는지 검증한다.
+   - 시연 중 값이 정지하면 명확한 통신 지연 또는 연결 끊김 상태를 표시한다.
+3. 수동 주행과 긴급 정지 시연
+   - 제어권 획득, 방향 제어, 데드맨 정지와 긴급 정지(E-Stop)가 화면과 실기체에서 같은 상태로 보이게 한다.
+   - 긴급 정지 해제 후 재개 절차를 시연 전에 확정한다.
+4. 지도와 주행 이력 시각화
+   - 실제 위치 경로를 지도에 표시하고 시연 종료 후 History 화면에서 같은 이동 경로를 조회한다.
+   - 현재 `0`으로 표시되는 거리와 커버리지 값은 실제 계산하거나 시연 화면에서 오해되지 않도록 구분한다.
+5. 이벤트와 스냅샷
+   - 장애물 또는 긴급 정지 이벤트가 Log Viewer에 즉시 나타나도록 한다.
+   - 시간이 부족하면 Snapshot 저장보다 이벤트 발생과 로그 표시를 우선한다.
+
+시연 이후로 미뤄도 되는 항목은 다중 백엔드 인스턴스, secret manager, 외부 인터넷용 TURN, 완전한 자동 화질 조정과 STM32 serial protocol 고도화다. 다만 긴급 정지와 데드맨 스위치처럼 실기체 안전에 직접 관련된 기능은 시연 범위에서도 생략하지 않는다.
+
+## 9. GitHub 공유 전 주의사항
 
 ### 커밋 금지
 
@@ -1320,7 +1396,7 @@ cd tools\edge-mock-client
 npm start
 ```
 
-## 9. 문서 인벤토리
+## 10. 문서 인벤토리
 
 기존 문서:
 
