@@ -161,7 +161,7 @@ React VideoPanel
   - 8초 동안 119프레임, 629,869바이트 수신 확인
 - 제한:
   - 백엔드 stop은 세션 상태와 브라우저 WHEP 연결을 종료하지만 Jetson 인코더와 RTSP publisher 프로세스까지 중단하지는 않는다.
-  - Jetson 카메라, MediaMTX와 영상 송출기는 수동 실행이며 재부팅 후 자동 복구되지 않는다.
+  - Jetson 카메라, MediaMTX와 영상 송출기는 `run-video-demo.sh` 한 명령으로 실행할 수 있지만 재부팅 후 자동 복구되지는 않는다.
   - HTTPS/WSS, MediaMTX TLS, TURN과 외부 인터넷 공개는 아직 적용하지 않았다.
   - Snapshot 버튼은 실제 이미지 저장이 아닌 프론트 상태 placeholder다.
 
@@ -1304,7 +1304,7 @@ README와 현재 구현 기준으로 확인 가능한 local integration flow:
 시연까지 남은 기간에는 내부 구조 고도화보다 관람자가 화면에서 즉시 확인할 수 있는 흐름을 우선한다.
 
 1. 실제 영상 재생 안정화
-   - 한 번의 버튼 조작으로 카메라, MediaMTX와 송출기를 실행할 수 있게 한다.
+   - `run-video-demo.sh` 한 명령으로 카메라, MediaMTX와 송출기를 순서대로 실행하고 함께 종료하도록 구현했다.
    - `Start Stream`, `Stop Stream`, `Reconnect`를 반복해도 영상이 복구되는지 확인한다.
    - 영상 연결 실패 원인을 UI에 한국어로 표시한다.
 2. 실시간 로봇 상태 시각화

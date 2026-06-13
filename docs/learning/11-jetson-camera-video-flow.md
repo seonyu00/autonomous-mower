@@ -178,7 +178,7 @@ SRS의 최소 15fps, 480p, 최대 500kbps, WebRTC와 NVENC 요구사항을 만�
 | 압축 컬러 토픽 발행 | 약 30Hz |
 | 압축 JPEG payload | 비어 있음 |
 | Foxglove 영상 표시 | 미검증 |
-| 웹 WebRTC 영상 송출 | 미구현 |
+| 웹 WebRTC 영상 송출 | 당시 미구현, 2026년 6월 13일 완료 |
 
 재확인 당시 `lsusb`에서 `Intel(R) RealSense(TM) Depth Camera 455`가 표시됐다. `/camera/camera/color/image_raw`에서 1280x720 RGB 프레임을 직접 수신했고 약 28fps, 약 85MB/s로 발행되는 것을 확인했다.
 
@@ -196,13 +196,13 @@ SRS의 최소 15fps, 480p, 최대 500kbps, WebRTC와 NVENC 요구사항을 만�
 
 ## 10. 2026년 6월 13일 웹 송출 검증
 
-Jetson에는 `gstreamer1.0-plugins-bad`, `gstreamer1.0-rtsp`와 MediaMTX v1.19.1이 필요하다. 현재 수동 실행 순서는 다음과 같다.
+Jetson에는 `gstreamer1.0-plugins-bad`, `gstreamer1.0-rtsp`와 MediaMTX v1.19.1이 필요하다. 시연 시에는 다음 통합 실행 명령을 사용한다.
 
 ```bash
-~/autonomous-mower-video/run-realsense-camera.sh
-~/autonomous-mower-video/scripts/run-mediamtx.sh
-~/autonomous-mower-video/scripts/run-video-streamer.sh
+edge/jetson-video/scripts/run-video-demo.sh
 ```
+
+통합 실행기는 카메라 원본 토픽과 MediaMTX API의 준비 상태를 확인한 뒤 NVENC 송출기를 시작한다. 구성요소 하나가 종료되거나 사용자가 `Ctrl+C`를 누르면 함께 실행한 프로세스를 모두 정리한다. 개별 장애를 확인할 때는 `edge/jetson-camera/scripts/run-realsense-camera.sh`, `run-mediamtx.sh`, `run-video-streamer.sh`를 각각 실행한다.
 
 MediaMTX는 RTSP TCP 8554, WHEP HTTP 8889, ICE UDP/TCP 8189를 사용한다. 로봇 `MOWER-01`의 WHEP 주소는 다음과 같다.
 
@@ -212,4 +212,4 @@ http://100.92.7.56:8889/mowers/MOWER-01/whep
 
 실제 검증에서 MediaMTX API는 640x480 H.264 Baseline 트랙을 온라인으로 보고했다. 직접 WHEP 연결한 Chrome 통계에서는 `connectionState=connected`, `iceConnectionState=connected`, 8초 동안 119프레임과 629,869바이트를 수신했다.
 
-현재 프로세스는 수동으로 실행되므로 Jetson 재부팅 후 자동 복구되지 않는다. 다음 단계에서 systemd 또는 컨테이너 기반 자동 시작과 상태 점검을 추가해야 한다.
+현재 프로세스는 단일 명령으로 함께 실행할 수 있지만 Jetson 재부팅 후 자동 복구되지는 않는다. 다음 단계에서 systemd 또는 컨테이너 기반 자동 시작과 상태 점검을 추가해야 한다.
