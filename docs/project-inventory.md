@@ -5,7 +5,7 @@
 기준:
 
 - 확인일: 2026-06-06
-- 확인 범위: `frontend/`, `backend/`, `edge/jetson-client/`, `tools/edge-mock-client/`, `docker-compose.yml`, `docs/`, `.env.example`, `README.md`
+- 확인 범위: `frontend/`, `backend/`, `edge/jetson-client/`, `edge/jetson-camera/`, `tools/edge-mock-client/`, `docker-compose.yml`, `docs/`, `.env.example`, `README.md`
 - 실제 파일 기준으로 정리했다.
 - 구현 여부가 불명확하거나 실제 장비 연동이 없는 부분은 `미구현/확인 필요` 또는 `Mock/Skeleton`으로 표시했다.
 
@@ -95,6 +95,18 @@ Jetson Edge Client 또는 Edge Mock Client
 - 제한:
   - STM32 USB CDC serial bridge와 attachment 실제 출력은 아직 구현되지 않았다.
   - battery, speed, signal strength 등 일부 telemetry 값은 기본값 또는 후속 구현 대상이다.
+
+### Jetson Camera Scripts
+
+- 위치: `edge/jetson-camera/`
+- 기술: Bash, ROS 2 Humble, RealSense ROS, image_transport
+- 역할:
+  - RealSense D455를 컬러·깊이 640x480, 15fps로 수동 실행
+  - RealSense 내부 compressed publisher 대신 별도 JPEG republisher 실행
+  - USB, ROS 2 노드, 원본 해상도·주기와 JPEG payload 자동 검증
+- 제한:
+  - systemd 자동 실행은 아직 구성하지 않았다.
+  - Foxglove 화면 확인과 웹 WebRTC 송출은 별도 단계다.
 
 ### STOMP/WebSocket
 

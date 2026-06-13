@@ -52,11 +52,19 @@ ros2 launch realsense2_camera rs_launch.py \
   enable_gyro:=false \
   enable_accel:=false \
   initial_reset:=true \
-  depth_module.profile:=640x480x15 \
-  rgb_camera.profile:=640x480x15
+  depth_module.depth_profile:=640,480,15 \
+  rgb_camera.color_profile:=640,480,15
 ```
 
-이 명령은 컬러와 깊이 영상을 640x480, 15fps로 요청하고 포인트 클라우드와 IMU 스트림은 비활성화한다. 쉘을 종료하면 카메라 노드도 종료되므로 장기 실행 방식은 systemd 또는 별도 프로세스 관리 정책을 정한 뒤 적용한다.
+현재 설치된 `realsense2_camera`의 launch 인자는 `depth_module.depth_profile`과 `rgb_camera.color_profile`이다. 기존에 전달받은 `depth_module.profile`, `rgb_camera.profile`은 적용되지 않는 이름이므로 사용하지 않는다.
+
+저장소의 실행 스크립트는 올바른 프로파일과 별도 JPEG republisher를 함께 실행한다.
+
+```bash
+edge/jetson-camera/scripts/run-realsense-camera.sh
+```
+
+이 명령은 컬러와 깊이 영상을 640x480, 15fps로 요청하고 포인트 클라우드와 IMU 스트림은 비활성화한다. 쉘을 종료하면 카메라 노드와 JPEG republisher도 함께 종료된다.
 
 ## 4. ROS 2 검증 기준
 
@@ -99,6 +107,12 @@ ros2 topic bw /camera/camera/color/image_raw/compressed
 ```
 
 압축 토픽의 메시지가 수십 바이트 수준이면 header와 format만 있고 JPEG payload가 비어 있을 가능성이 높다.
+
+저장소의 검증 스크립트는 USB 장치, 카메라 노드, 원본 해상도와 발행 주기, JPEG 형식과 payload 크기를 한 번에 확인한다.
+
+```bash
+edge/jetson-camera/scripts/verify-camera-output.sh
+```
 
 ## 5. Foxglove 확인
 
@@ -166,3 +180,13 @@ SRS의 최소 15fps, 480p, 최대 500kbps, WebRTC와 NVENC 요구사항을 만�
 재확인 당시 `lsusb`에서 `Intel(R) RealSense(TM) Depth Camera 455`가 표시됐다. `/camera/camera/color/image_raw`에서 1280x720 RGB 프레임을 직접 수신했고 약 28fps, 약 85MB/s로 발행되는 것을 확인했다.
 
 `/camera/camera/color/image_raw/compressed`는 약 30Hz로 발행되지만 평균 메시지 크기가 약 80바이트이고 `data`가 비어 있었다. 현재 남은 카메라 단계의 문제는 USB 연결이 아니라 실행 프로파일 미적용과 압축 JPEG 생성 실패다.
+
+## 9. 2026년 6월 13일 정상화 결과
+
+- 설치된 launch 인자명을 직접 확인해 `rgb_camera.color_profile:=640,480,15`와 `depth_module.depth_profile:=640,480,15`를 적용했다.
+- 원본 컬러 영상이 640x480, 15.36Hz로 발행되는 것을 확인했다.
+- RealSense 프로세스 내부 compressed publisher는 계속 빈 payload를 발행했다.
+- 동일한 원본 토픽을 별도 `image_transport republish` 프로세스에서 압축했을 때 JPEG가 정상 생성됐다.
+- 정상 압축 토픽은 `rgb8; jpeg compressed bgr8` 형식이며 확인 당시 payload는 109,104바이트였다.
+- 실행 스크립트는 RealSense 내부 publisher를 raw 전용으로 제한하고 별도 republisher를 함께 시작·종료한다.
+- systemd 자동 실행과 웹 WebRTC 영상 송출은 아직 구현하지 않았다.

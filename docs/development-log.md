@@ -4,6 +4,17 @@
 
 ## 2026-06-13
 
+### RealSense D455 출력 정상화
+
+- 현재 설치된 `realsense2_camera` launch 인자를 확인해 기존 `rgb_camera.profile`, `depth_module.profile`이 잘못된 이름임을 확인했다.
+- `rgb_camera.color_profile:=640,480,15`, `depth_module.depth_profile:=640,480,15`를 사용하는 수동 실행 스크립트를 추가했다.
+- 실제 Jetson에서 컬러 원본이 640x480, 15.36Hz로 발행되는 것을 확인했다.
+- RealSense 프로세스 내부 compressed publisher는 JPEG `data`가 비어 있는 기존 문제를 재현했다.
+- 원본 컬러 토픽을 별도 `image_transport republish` 프로세스에서 압축해 `rgb8; jpeg compressed bgr8`, 109,104바이트 payload를 확인했다.
+- 실행 스크립트가 카메라 노드와 외부 JPEG republisher를 함께 시작하고 종료하도록 구성했다.
+- USB, 노드, 해상도, 발행 주기와 JPEG payload를 자동 확인하는 검증 스크립트를 추가했다.
+- systemd 자동 실행과 웹 WebRTC 영상 송출은 이번 범위에서 제외했다.
+
 ### 프론트 실시간 STOMP 상태 연동
 
 - 새로고침 직후 `GET /api/control/{robotId}`로 현재 제어권, 모드와 긴급 정지(E-Stop) 상태를 먼저 복원하도록 구현했다.
