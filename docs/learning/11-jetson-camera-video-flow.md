@@ -138,9 +138,12 @@ React 브라우저는 ROS 2 `sensor_msgs/Image` 또는 `sensor_msgs/CompressedIm
 
 ```text
 RealSense D455
-  -> ROS 2 color image topic
-  -> Jetson 영상 송출 프로세스
-  -> WebRTC media stream
+  -> /camera/camera/color/image_raw
+  -> GStreamer appsrc
+  -> nvvidconv
+  -> nvv4l2h264enc
+  -> MediaMTX RTSP publish
+  -> MediaMTX WHEP
   -> React VideoPanel
 ```
 
@@ -155,9 +158,9 @@ SRS의 최소 15fps, 480p, 최대 500kbps, WebRTC와 NVENC 요구사항을 만�
 1. 요청한 640x480 15fps 프로파일이 실제 원본 토픽에 적용되도록 실행 파라미터를 수정한다.
 2. 압축 토픽에 실제 JPEG payload가 포함되도록 `compressed_image_transport` 설정을 점검한다.
 3. Foxglove에서 실제 프레임을 확인한다.
-4. Jetson 영상 송출 방식과 WebRTC 라이브러리를 결정한다.
-5. 백엔드 `/api/video/{robotId}/offer|stop|reconnect` 계약을 구현한다.
-6. 프론트 `VideoPanel`을 실제 `MediaStream`에 연결한다.
+4. Jetson 영상 송출 방식과 WebRTC 라이브러리를 결정한다. 완료
+5. 백엔드 `/api/video/{robotId}/offer|stop|reconnect` 계약을 구현한다. 완료
+6. 프론트 `VideoPanel`을 실제 `MediaStream`에 연결한다. 완료
 7. 스트림 중지 시 Jetson 인코딩과 전송이 실제로 중단되는지 확인한다.
 8. 해상도, fps, bitrate와 재연결 실패 상태를 검증한다.
 
@@ -189,4 +192,24 @@ SRS의 최소 15fps, 480p, 최대 500kbps, WebRTC와 NVENC 요구사항을 만�
 - 동일한 원본 토픽을 별도 `image_transport republish` 프로세스에서 압축했을 때 JPEG가 정상 생성됐다.
 - 정상 압축 토픽은 `rgb8; jpeg compressed bgr8` 형식이며 확인 당시 payload는 109,104바이트였다.
 - 실행 스크립트는 RealSense 내부 publisher를 raw 전용으로 제한하고 별도 republisher를 함께 시작·종료한다.
-- systemd 자동 실행과 웹 WebRTC 영상 송출은 아직 구현하지 않았다.
+- systemd 자동 실행은 아직 구현하지 않았다.
+
+## 10. 2026년 6월 13일 웹 송출 검증
+
+Jetson에는 `gstreamer1.0-plugins-bad`, `gstreamer1.0-rtsp`와 MediaMTX v1.19.1이 필요하다. 현재 수동 실행 순서는 다음과 같다.
+
+```bash
+~/autonomous-mower-video/run-realsense-camera.sh
+~/autonomous-mower-video/scripts/run-mediamtx.sh
+~/autonomous-mower-video/scripts/run-video-streamer.sh
+```
+
+MediaMTX는 RTSP TCP 8554, WHEP HTTP 8889, ICE UDP/TCP 8189를 사용한다. 로봇 `MOWER-01`의 WHEP 주소는 다음과 같다.
+
+```text
+http://100.92.7.56:8889/mowers/MOWER-01/whep
+```
+
+실제 검증에서 MediaMTX API는 640x480 H.264 Baseline 트랙을 온라인으로 보고했다. 직접 WHEP 연결한 Chrome 통계에서는 `connectionState=connected`, `iceConnectionState=connected`, 8초 동안 119프레임과 629,869바이트를 수신했다.
+
+현재 프로세스는 수동으로 실행되므로 Jetson 재부팅 후 자동 복구되지 않는다. 다음 단계에서 systemd 또는 컨테이너 기반 자동 시작과 상태 점검을 추가해야 한다.

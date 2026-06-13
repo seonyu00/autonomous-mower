@@ -46,3 +46,6 @@ app:
     username: ${MQTT_USERNAME:}
     password: ${MQTT_PASSWORD:}
     client-id: ${MQTT_CLIENT_ID:autonomous-mower-backend}
+
+video:
+  whep-base-url: ${VIDEO_WHEP_BASE_URL:http://100.92.7.56:8889}

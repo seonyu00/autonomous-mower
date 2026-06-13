@@ -28,17 +28,20 @@ export type VideoSession = {
   mock: boolean;
 };
 
-export type VideoSignalOfferRequest = {
+export type VideoSessionRequest = {
   robotId: string;
-  sdp: string | null;
-  type: RTCSdpType | 'mock-offer';
+  width: number;
+  height: number;
+  fps: number;
+  maxBitrateKbps: number;
 };
 
-export type VideoSignalAnswer = {
+export type VideoSessionResponse = {
   sessionId: string;
-  sdp: string | null;
-  type: RTCSdpType | 'mock-answer';
-  iceServers?: RTCIceServer[];
+  robotId: string;
+  whepUrl: string | null;
+  state: string;
+  createdAt: string;
   mock: boolean;
 };
 

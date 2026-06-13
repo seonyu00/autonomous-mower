@@ -530,7 +530,7 @@ Request:
 
 ### 3.7 WebRTC 영상 시그널링
 
-The frontend currently uses REST-style signalling. STOMP signalling is not implemented on the frontend.
+백엔드는 MediaMTX와 SDP를 중계하지 않는다. 인증된 사용자에게 로봇별 WHEP URL을 발급하고 논리적인 세션 상태만 관리한다. 브라우저는 발급받은 WHEP URL에 직접 SDP offer를 전송한다.
 
 #### `POST /api/video/{robotId}/offer`
 
@@ -541,14 +541,10 @@ Request:
 ```json
 {
   "robotId": "<ROBOT_ID>",
-  "type": "offer",
-  "sdp": "v=0...",
-  "qualityPolicy": {
-    "minFps": 15,
-    "width": 640,
-    "height": 480,
-    "maxBitrateKbps": 500
-  }
+  "width": 640,
+  "height": 480,
+  "fps": 15,
+  "maxBitrateKbps": 500
 }
 ```
 
@@ -557,19 +553,10 @@ Response `200`:
 ```json
 {
   "sessionId": "video-session-001",
-  "type": "answer",
-  "sdp": "v=0...",
-  "iceServers": [
-    {
-      "urls": ["stun:stun.example.com:3478"]
-    }
-  ],
-  "qualityPolicy": {
-    "minFps": 15,
-    "width": 640,
-    "height": 480,
-    "maxBitrateKbps": 500
-  }
+  "robotId": "<ROBOT_ID>",
+  "whepUrl": "http://100.92.7.56:8889/mowers/<ROBOT_ID>/whep",
+  "state": "connecting",
+  "createdAt": "2026-06-13T08:00:00Z"
 }
 ```
 
@@ -604,17 +591,15 @@ Request:
 }
 ```
 
-Response should clarify one of these policies:
+Response:
 
-- `{"requiresNewOffer": true}`: frontend creates a new offer.
-- `{"sessionId": "video-session-002", "type": "answer", "sdp": "v=0..."}`: backend returns a fresh answer.
+- 기존 세션을 중지하고 새 `sessionId`와 동일한 로봇의 `whepUrl`을 반환한다.
+- 프론트는 기존 WHEP resource에 `DELETE`를 보낸 뒤 새 WHEP 세션을 생성한다.
 
 Open backend decisions:
 
-- Trickle ICE support.
-- ICE candidate REST endpoint or STOMP topic if trickle ICE is used.
 - Snapshot capture owner: frontend frame capture, backend video frame capture, or robot-side JPEG capture.
-- Codec and hardware encoder policy: H.264/H.265, NVENC, browser fallback.
+- 인터넷 공개 시 TLS, TURN과 MediaMTX 인증을 적용할 방식.
 
 ## 4. STOMP Topic
 

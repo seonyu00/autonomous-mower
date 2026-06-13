@@ -6,4 +6,5 @@ export const env = {
   enableMockAuth: import.meta.env.VITE_ENABLE_MOCK_AUTH !== 'false',
   enableMockControl: import.meta.env.VITE_ENABLE_MOCK_CONTROL !== 'false',
   enableMockRobots: import.meta.env.VITE_ENABLE_MOCK_ROBOTS !== 'false',
+  enableMockVideo: import.meta.env.VITE_ENABLE_MOCK_VIDEO !== 'false',
 };

@@ -4,6 +4,18 @@
 
 ## 2026-06-13
 
+### MediaMTX 기반 웹 카메라 송출
+
+- Jetson의 `/camera/camera/color/image_raw`를 구독해 GStreamer `nvv4l2h264enc`로 H.264 인코딩하는 송출기를 추가했다.
+- 인코딩 결과는 RTSP로 MediaMTX의 `mowers/MOWER-01` 경로에 발행하고, 브라우저는 WHEP로 직접 수신하도록 구성했다.
+- 백엔드에 인증된 영상 세션 시작, 중지, 재연결 API와 STOMP `video-status` 발행을 추가했다.
+- 프론트의 기존 SDP 중계 skeleton을 MediaMTX WHEP client로 교체했다.
+- Jetson에 MediaMTX v1.19.1과 `gstreamer1.0-plugins-bad`, `gstreamer1.0-rtsp`를 설치했다.
+- 실제 Jetson에서 640x480 H.264 Baseline 스트림이 온라인인 것을 확인했다.
+- 브라우저 WHEP 통계에서 연결 상태 `connected`, 8초 동안 119프레임 수신과 3프레임 디코딩을 확인했다.
+- Tailscale 경로의 ICE 연결을 위해 UDP 8189와 TCP 8189 fallback을 함께 열었다.
+- systemd 자동 실행, TLS, TURN과 외부 인터넷 공개는 이번 범위에서 제외했다.
+
 ### RealSense D455 출력 정상화
 
 - 현재 설치된 `realsense2_camera` launch 인자를 확인해 기존 `rgb_camera.profile`, `depth_module.profile`이 잘못된 이름임을 확인했다.

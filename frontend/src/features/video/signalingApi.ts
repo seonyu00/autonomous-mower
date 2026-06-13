@@ -1,23 +1,28 @@
 import { httpClient } from '../../shared/api/httpClient';
 import { env } from '../../shared/config/env';
-import type { VideoSignalAnswer, VideoSignalOfferRequest, VideoStopRequest } from './types';
+import type { VideoSessionRequest, VideoSessionResponse, VideoStopRequest } from './types';
 
 const mockDelayMs = 250;
 
-export async function startStream(robotId: string, offer: VideoSignalOfferRequest): Promise<VideoSignalAnswer> {
+export async function startStream(robotId: string, request: VideoSessionRequest): Promise<VideoSessionResponse> {
   if (shouldUseMockSignaling()) {
     await delay(mockDelayMs);
 
     return {
       sessionId: `mock-video-${robotId}-${Date.now()}`,
-      sdp: null,
-      type: 'mock-answer',
-      iceServers: [],
+      robotId,
+      whepUrl: null,
+      state: 'connected',
+      createdAt: new Date().toISOString(),
       mock: true,
     };
   }
 
-  return httpClient.post<VideoSignalAnswer>(`${signalingBasePath(robotId)}/offer`, offer);
+  const response = await httpClient.post<Omit<VideoSessionResponse, 'mock'>>(
+    `${signalingBasePath(robotId)}/offer`,
+    request,
+  );
+  return { ...response, mock: false };
 }
 
 export async function stopStream(robotId: string, sessionId: string | null): Promise<void> {
@@ -34,13 +39,24 @@ export async function stopStream(robotId: string, sessionId: string | null): Pro
   await httpClient.post<void>(`${signalingBasePath(robotId)}/stop`, request);
 }
 
-export async function reconnectStream(robotId: string, sessionId: string | null): Promise<void> {
+export async function reconnectStream(robotId: string, sessionId: string | null): Promise<VideoSessionResponse> {
   if (shouldUseMockSignaling()) {
     await delay(mockDelayMs);
-    return;
+    return {
+      sessionId: `mock-video-${robotId}-${Date.now()}`,
+      robotId,
+      whepUrl: null,
+      state: 'connected',
+      createdAt: new Date().toISOString(),
+      mock: true,
+    };
   }
 
-  await httpClient.post<void>(`${signalingBasePath(robotId)}/reconnect`, { robotId, sessionId });
+  const response = await httpClient.post<Omit<VideoSessionResponse, 'mock'>>(
+    `${signalingBasePath(robotId)}/reconnect`,
+    { robotId, sessionId },
+  );
+  return { ...response, mock: false };
 }
 
 function signalingBasePath(robotId: string) {
@@ -52,7 +68,7 @@ function signalingBasePath(robotId: string) {
 }
 
 function shouldUseMockSignaling() {
-  return import.meta.env.DEV || env.enableMockRealtime || !env.webRtcSignalingUrl;
+  return env.enableMockVideo;
 }
 
 function delay(ms: number) {

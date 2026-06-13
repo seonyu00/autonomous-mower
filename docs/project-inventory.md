@@ -120,22 +120,28 @@ Jetson Edge Client 또는 Edge Mock Client
   - 현재 mock realtime이 켜져 있으면 STOMP client는 실제 연결하지 않고 `mock` 상태로 처리한다.
   - 실제 topic message를 store에 반영하는 부분은 제한적이며 추가 연결 필요.
 
-### WebRTC Skeleton
+### MediaMTX WebRTC 영상
 
-- Frontend 중심 skeleton:
+- Frontend:
   - `frontend/src/features/video/WebRtcClient.ts`
+  - `frontend/src/features/video/WhepClient.ts`
   - `frontend/src/features/video/signalingApi.ts`
   - `frontend/src/features/video/videoStore.ts`
   - `frontend/src/features/video/components/VideoPanel.tsx`
 - 기능:
-  - `RTCPeerConnection` 생성
-  - offer 생성
-  - REST-style signalling endpoint 호출 skeleton
-  - mock answer 처리
+  - 백엔드에서 로봇별 WHEP URL 발급
+  - MediaMTX WHEP SDP 교환
+  - WHEP resource 종료 시 `DELETE`
   - start/stop/reconnect/snapshot placeholder UI
 - Backend:
-  - `backend/src/main/java/com/autonomousmower/video/package-info.java`만 존재한다.
-  - `/api/video/{robotId}/offer|stop|reconnect` 실제 controller는 미구현이다.
+  - `/api/video/{robotId}/offer|stop|reconnect`
+  - `telemetry:read` 권한 검증
+  - `/topic/robots/{robotId}/video-status` 상태 발행
+- Jetson:
+  - `edge/jetson-video/`
+  - ROS 2 raw image를 NVENC H.264로 인코딩
+  - RTSP로 MediaMTX에 발행
+  - MediaMTX WHEP로 브라우저에 전달
 
 ## 2. 프론트엔드 기능 목록
 

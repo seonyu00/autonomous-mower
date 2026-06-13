@@ -25,6 +25,11 @@ dist/
 build/
 **/build/
 
+# Jetson video local runtime
+edge/jetson-video/bin/
+edge/jetson-video/config.yaml
+edge/jetson-video/mediamtx.yml
+
 # Local analysis and private notes
 .understand-anything/
 .local-docs/
