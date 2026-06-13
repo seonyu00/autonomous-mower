@@ -123,11 +123,20 @@ public class CommandExecutionService {
                 execution.getRobot().getRobotId(),
                 execution.getCommandId(),
                 execution.getCommandType(),
-                execution.getStatus().name(),
+                toControlEventStatus(execution.getStatus()),
                 execution.getReason(),
                 execution.getRequestedBy(),
                 Instant.now(clock),
                 execution.getAckedAt()
         ));
+    }
+
+    private String toControlEventStatus(CommandExecutionStatus status) {
+        return switch (status) {
+            case SENT -> "sent-to-edge";
+            case ACKED, EXECUTING, COMPLETED -> "edge-ack";
+            case FAILED -> "failed";
+            case TIMED_OUT -> "edge-timeout";
+        };
     }
 }

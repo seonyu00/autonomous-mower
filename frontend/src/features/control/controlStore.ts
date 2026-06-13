@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import type { ControlMode, ControlState, PendingCommand } from './types';
+import type {
+  ControlCommandEvent,
+  ControlLockSnapshot,
+  ControlMode,
+  ControlState,
+  PendingCommand,
+} from './types';
 
 type ControlStore = {
   controlByRobotId: Record<string, ControlState>;
@@ -9,6 +15,8 @@ type ControlStore = {
   setMode: (robotId: string, mode: ControlMode) => void;
   setPendingCommand: (robotId: string, pendingCommand: PendingCommand | null) => void;
   setCommandError: (robotId: string, commandError: string | null) => void;
+  applyLockSnapshot: (snapshot: ControlLockSnapshot) => void;
+  applyCommandEvent: (event: ControlCommandEvent) => void;
   recordManualInput: (robotId: string, at?: string) => void;
 };
 
@@ -23,6 +31,9 @@ export function createDefaultControlState(robotId: string): ControlState {
     pendingCommand: null,
     commandError: null,
     controlOwner: null,
+    lockVersion: 0,
+    expiresAt: null,
+    lastCommandEvent: null,
     lastCommandPayload: null,
   };
 }
@@ -52,6 +63,23 @@ export const useControlStore = create<ControlStore>((set, get) => ({
   setMode: (robotId, mode) => get().patchControlState(robotId, { mode }),
   setPendingCommand: (robotId, pendingCommand) => get().patchControlState(robotId, { pendingCommand }),
   setCommandError: (robotId, commandError) => get().patchControlState(robotId, { commandError }),
+  applyLockSnapshot: (snapshot) =>
+    get().patchControlState(snapshot.robotId, {
+      lockState: snapshot.lockState,
+      controlOwner: snapshot.controlOwner,
+      mode: snapshot.mode,
+      emergency: snapshot.emergency,
+      lockVersion: snapshot.lockVersion,
+      expiresAt: snapshot.expiresAt,
+    }),
+  applyCommandEvent: (event) =>
+    get().patchControlState(event.robotId, {
+      lastCommandEvent: event,
+      commandError:
+        event.status === 'rejected' || event.status === 'edge-timeout' || event.status === 'failed'
+          ? event.reason ?? event.status
+          : null,
+    }),
   recordManualInput: (robotId, at = new Date().toISOString()) =>
     get().patchControlState(robotId, {
       lastInputAt: at,

@@ -1,4 +1,4 @@
-import { Client } from '@stomp/stompjs';
+import { Client, ReconnectionTimeMode } from '@stomp/stompjs';
 import type { IMessage, StompSubscription } from '@stomp/stompjs';
 import type { RealtimeConnectionState } from '../../features/telemetry/types';
 import { stompTopics } from '../../features/telemetry/stompTopics';
@@ -6,6 +6,7 @@ import { stompTopics } from '../../features/telemetry/stompTopics';
 type StompClientOptions = {
   brokerURL: string;
   enabled: boolean;
+  accessToken: string | null;
   onStateChange: (state: RealtimeConnectionState) => void;
 };
 
@@ -25,9 +26,21 @@ export type RobotTopicHandlers = {
   status?: StompMessageHandler;
   events?: StompMessageHandler;
   controlLock?: StompMessageHandler;
+  controlEvents?: StompMessageHandler;
 };
 
-export function createStompClient({ brokerURL, enabled, onStateChange }: StompClientOptions): StompClientHandle {
+type RobotTopicRegistration = {
+  robotId: string;
+  handlers: RobotTopicHandlers;
+  subscriptions: StompSubscription[];
+};
+
+export function createStompClient({
+  brokerURL,
+  enabled,
+  accessToken,
+  onStateChange,
+}: StompClientOptions): StompClientHandle {
   if (!enabled) {
     return {
       activate: () => onStateChange('mock'),
@@ -38,12 +51,23 @@ export function createStompClient({ brokerURL, enabled, onStateChange }: StompCl
     };
   }
 
+  const registrations = new Set<RobotTopicRegistration>();
   const client = new Client({
     brokerURL,
+    connectHeaders: accessToken
+      ? {
+          Authorization: `Bearer ${accessToken}`,
+        }
+      : {},
     reconnectDelay: 3000,
+    maxReconnectDelay: 10000,
+    reconnectTimeMode: ReconnectionTimeMode.EXPONENTIAL,
     heartbeatIncoming: 10000,
     heartbeatOutgoing: 10000,
-    onConnect: () => onStateChange('connected'),
+    onConnect: () => {
+      onStateChange('connected');
+      registrations.forEach((registration) => subscribeRegistration(client, registration));
+    },
     onDisconnect: () => onStateChange('disconnected'),
     onStompError: () => onStateChange('degraded'),
     onWebSocketClose: () => onStateChange('reconnecting'),
@@ -81,26 +105,41 @@ export function createStompClient({ brokerURL, enabled, onStateChange }: StompCl
       });
     },
     subscribeToRobotTopics: (robotId, handlers) => {
-      const unsubscribers = [
-        handlers.telemetry ? subscribeIfPresent(client, stompTopics.telemetry(robotId), handlers.telemetry) : null,
-        handlers.status ? subscribeIfPresent(client, stompTopics.status(robotId), handlers.status) : null,
-        handlers.events ? subscribeIfPresent(client, stompTopics.events(robotId), handlers.events) : null,
-        handlers.controlLock ? subscribeIfPresent(client, stompTopics.controlLock(robotId), handlers.controlLock) : null,
-      ].filter((unsubscribe): unsubscribe is StompUnsubscribe => Boolean(unsubscribe));
+      const registration: RobotTopicRegistration = {
+        robotId,
+        handlers,
+        subscriptions: [],
+      };
+      registrations.add(registration);
+
+      if (client.connected) {
+        subscribeRegistration(client, registration);
+      }
 
       return () => {
-        unsubscribers.forEach((unsubscribe) => unsubscribe());
+        clearRegistration(registration);
+        registrations.delete(registration);
       };
     },
   };
 }
 
-function subscribeIfPresent(client: Client, destination: string, callback: StompMessageHandler): StompUnsubscribe | null {
-  if (!client.connected) {
-    return null;
-  }
+function subscribeRegistration(client: Client, registration: RobotTopicRegistration) {
+  clearRegistration(registration);
 
-  const subscription = client.subscribe(destination, callback);
+  const { robotId, handlers } = registration;
+  const subscriptions = [
+    handlers.telemetry ? client.subscribe(stompTopics.telemetry(robotId), handlers.telemetry) : null,
+    handlers.status ? client.subscribe(stompTopics.status(robotId), handlers.status) : null,
+    handlers.events ? client.subscribe(stompTopics.events(robotId), handlers.events) : null,
+    handlers.controlLock ? client.subscribe(stompTopics.controlLock(robotId), handlers.controlLock) : null,
+    handlers.controlEvents ? client.subscribe(stompTopics.controlEvents(robotId), handlers.controlEvents) : null,
+  ].filter((subscription): subscription is StompSubscription => subscription !== null);
 
-  return () => subscription.unsubscribe();
+  registration.subscriptions = subscriptions;
+}
+
+function clearRegistration(registration: RobotTopicRegistration) {
+  registration.subscriptions.forEach((subscription) => subscription.unsubscribe());
+  registration.subscriptions = [];
 }

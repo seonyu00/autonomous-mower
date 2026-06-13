@@ -14,3 +14,13 @@ export type Telemetry = {
   lastReceivedAt: string;
   errorState?: string;
 };
+
+export type RobotStatus = {
+  robotId: string;
+  connectionState: 'online' | 'degraded' | 'offline';
+  mqttState: 'connected' | 'degraded' | 'disconnected';
+  wssState: 'connected' | 'degraded' | 'disconnected';
+  edgeState: string;
+  lastSeenAt: string;
+  stale: boolean;
+};

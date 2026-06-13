@@ -12,12 +12,14 @@ import com.autonomousmower.control.dto.ReleaseControlRequest;
 import com.autonomousmower.control.dto.ResetAfterEmergencyRequest;
 import com.autonomousmower.control.dto.StopCommandRequest;
 import com.autonomousmower.control.dto.TakeoverControlRequest;
+import com.autonomousmower.control.model.ControlLockSnapshot;
 import com.autonomousmower.control.service.ControlCommandService;
 import com.autonomousmower.control.service.ControlLockService;
 import com.autonomousmower.control.service.EmergencyStopService;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -40,6 +42,12 @@ public class ControlController {
         this.controlLockService = controlLockService;
         this.emergencyStopService = emergencyStopService;
         this.controlCommandService = controlCommandService;
+    }
+
+    @GetMapping
+    @PreAuthorize("hasAuthority('telemetry:read')")
+    public ApiResponse<ControlLockSnapshot> currentState(@PathVariable String robotId) {
+        return ApiResponse.success(controlLockService.snapshot(robotId));
     }
 
     @PostMapping("/claim")

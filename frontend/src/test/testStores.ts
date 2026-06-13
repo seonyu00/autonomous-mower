@@ -29,6 +29,7 @@ export function resetStores(role: Role = 'admin') {
 
   useTelemetryStore.setState({
     telemetryByRobotId: mockTelemetry,
+    statusByRobotId: {},
     connectionState: 'mock',
     protocolState: {
       https: 'connected',

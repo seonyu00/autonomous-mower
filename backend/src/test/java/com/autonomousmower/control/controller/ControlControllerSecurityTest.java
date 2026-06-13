@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -14,6 +15,7 @@ import com.autonomousmower.auth.security.RestAccessDeniedHandler;
 import com.autonomousmower.auth.security.RestAuthenticationEntryPoint;
 import com.autonomousmower.config.SecurityConfig;
 import com.autonomousmower.control.dto.ControlCommandResponse;
+import com.autonomousmower.control.model.ControlLockSnapshot;
 import com.autonomousmower.control.service.ControlCommandService;
 import com.autonomousmower.control.service.ControlLockService;
 import com.autonomousmower.control.service.EmergencyStopService;
@@ -59,6 +61,39 @@ class ControlControllerSecurityTest {
                         .content("""
                                 {"idempotencyKey":"claim-key","requestedMode":"manual"}
                                 """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code", is("PERMISSION_DENIED")));
+    }
+
+    @Test
+    @WithMockUser(authorities = "telemetry:read")
+    void currentControlStateUsesTelemetryReadPermission() throws Exception {
+        Instant now = Instant.parse("2026-05-30T01:00:00Z");
+        when(controlLockService.snapshot("MOWER-01")).thenReturn(new ControlLockSnapshot(
+                "MOWER-01",
+                "held",
+                "operator",
+                "Operator",
+                "manual",
+                false,
+                7,
+                now.plusSeconds(300),
+                "claim-control",
+                now
+        ));
+
+        mockMvc.perform(get("/api/control/MOWER-01"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.robotId", is("MOWER-01")))
+                .andExpect(jsonPath("$.data.lockState", is("held")))
+                .andExpect(jsonPath("$.data.controlOwner", is("operator")))
+                .andExpect(jsonPath("$.data.lockVersion", is(7)));
+    }
+
+    @Test
+    @WithMockUser(authorities = "robots:read")
+    void currentControlStateRejectsMissingTelemetryReadPermission() throws Exception {
+        mockMvc.perform(get("/api/control/MOWER-01"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error.code", is("PERMISSION_DENIED")));
     }

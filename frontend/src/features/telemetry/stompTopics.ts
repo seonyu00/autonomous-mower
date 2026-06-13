@@ -3,4 +3,5 @@ export const stompTopics = {
   status: (robotId: string) => `/topic/robots/${robotId}/status`,
   events: (robotId: string) => `/topic/robots/${robotId}/events`,
   controlLock: (robotId: string) => `/topic/robots/${robotId}/control-lock`,
+  controlEvents: (robotId: string) => `/topic/robots/${robotId}/control-events`,
 };

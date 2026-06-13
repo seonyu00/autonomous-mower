@@ -60,6 +60,30 @@ export type PendingCommand = {
   requestedAt: string;
 };
 
+export type ControlLockSnapshot = {
+  robotId: string;
+  lockState: ControlLockState;
+  controlOwner: string | null;
+  controlOwnerName: string | null;
+  mode: ControlMode;
+  emergency: boolean;
+  lockVersion: number;
+  expiresAt: string | null;
+  reason: string | null;
+  updatedAt: string;
+};
+
+export type ControlCommandEvent = {
+  robotId: string;
+  commandId: string;
+  commandType: string;
+  status: 'accepted' | 'rejected' | 'sent-to-edge' | 'edge-ack' | 'edge-timeout' | 'failed';
+  reason: string | null;
+  requestedBy: string;
+  serverTimestamp: string;
+  edgeAckAt: string | null;
+};
+
 export type ControlState = {
   robotId: string;
   lockState: ControlLockState;
@@ -70,6 +94,9 @@ export type ControlState = {
   pendingCommand: PendingCommand | null;
   commandError: string | null;
   controlOwner: string | null;
+  lockVersion: number;
+  expiresAt: string | null;
+  lastCommandEvent: ControlCommandEvent | null;
   lastCommandPayload: ControlCommandPayload | null;
 };
 

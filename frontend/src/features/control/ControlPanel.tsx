@@ -7,6 +7,7 @@ import { Button } from '../../shared/ui/Button';
 import { claimControl, ControlPrecheckError, releaseControl, resetAfterEmergency, takeoverControl } from './controlApi';
 import { canControlRobot, canResetAfterEmergency } from './controlSelectors';
 import { createDefaultControlState, useControlStore } from './controlStore';
+import { CommandEventStatus } from './CommandEventStatus';
 import { GeneralControlCommands } from './GeneralControlCommands';
 import { ManualJoystick } from './ManualJoystick';
 import type { ControlLockState } from './types';
@@ -175,6 +176,7 @@ export function ControlPanel() {
       {controlState?.pendingCommand ? (
         <p className="save-note">대기 중인 명령: {controlState.pendingCommand.type}</p>
       ) : null}
+      {selectedRobotId ? <CommandEventStatus robotId={selectedRobotId} /> : null}
       {controlState?.commandError ? <p className="warning-line">{controlState.commandError}</p> : null}
       {actionError ? <p className="warning-line">{actionError}</p> : null}
 

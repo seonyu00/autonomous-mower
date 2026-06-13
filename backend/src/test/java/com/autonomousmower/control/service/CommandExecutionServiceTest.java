@@ -69,7 +69,7 @@ class CommandExecutionServiceTest {
 
         ArgumentCaptor<ControlEventMessage> eventCaptor = ArgumentCaptor.forClass(ControlEventMessage.class);
         verify(realtimePublisher).publishControlEvent(eventCaptor.capture());
-        assertThat(eventCaptor.getValue().status()).isEqualTo("SENT");
+        assertThat(eventCaptor.getValue().status()).isEqualTo("sent-to-edge");
         assertThat(eventCaptor.getValue().commandId()).isEqualTo("cmd-001");
     }
 
@@ -101,7 +101,10 @@ class CommandExecutionServiceTest {
         assertThat(updated.get().getStatus()).isEqualTo(CommandExecutionStatus.ACKED);
         assertThat(updated.get().getEdgeNodeId()).isEqualTo("edge-mock");
         assertThat(updated.get().getAckedAt()).isEqualTo(Instant.parse("2026-05-31T01:00:02Z"));
-        verify(realtimePublisher).publishControlEvent(any(ControlEventMessage.class));
+
+        ArgumentCaptor<ControlEventMessage> eventCaptor = ArgumentCaptor.forClass(ControlEventMessage.class);
+        verify(realtimePublisher).publishControlEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().status()).isEqualTo("edge-ack");
     }
 
     @Test
@@ -124,7 +127,10 @@ class CommandExecutionServiceTest {
 
         assertThat(execution.getStatus()).isEqualTo(CommandExecutionStatus.TIMED_OUT);
         assertThat(execution.getReason()).isEqualTo("ack-timeout");
-        verify(realtimePublisher).publishControlEvent(any(ControlEventMessage.class));
+
+        ArgumentCaptor<ControlEventMessage> eventCaptor = ArgumentCaptor.forClass(ControlEventMessage.class);
+        verify(realtimePublisher).publishControlEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().status()).isEqualTo("edge-timeout");
     }
 
     private MqttCommandPayload commandPayload() {

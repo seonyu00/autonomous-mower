@@ -2,6 +2,29 @@
 
 > 이 문서는 작업 시점의 상태를 시간순으로 보존한다. 과거 항목의 `미구현`, `skeleton`, phase 설명은 당시 상태이며, 현재 구현 여부는 `docs/project-inventory.md`와 실제 코드를 기준으로 확인한다.
 
+## 2026-06-13
+
+### 프론트 실시간 STOMP 상태 연동
+
+- 새로고침 직후 `GET /api/control/{robotId}`로 현재 제어권, 모드와 긴급 정지(E-Stop) 상태를 먼저 복원하도록 구현했다.
+- STOMP CONNECT frame에 JWT `Authorization` header를 전달하고, 재연결 시 telemetry, status, control-lock과 control-events topic을 다시 구독하도록 수정했다.
+- 실시간 payload를 검증한 뒤 Zustand store에 반영하고, telemetry의 emergency 모드가 확인되면 프론트 제어 상태도 즉시 긴급 정지 상태로 전환하도록 했다.
+- 명령의 접수, 거부, Jetson 전송, ACK, timeout과 실패 상태를 제어 화면에 표시하도록 추가했다.
+- 백엔드 내부 `CommandExecutionStatus`가 WebSocket 계약과 다른 대문자 enum으로 노출되던 문제를 수정했다. 외부 이벤트에는 `sent-to-edge`, `edge-ack`, `edge-timeout`, `failed`를 사용한다.
+
+### 실제 Jetson 통합 검증
+
+- Mock realtime을 끈 프론트와 별도 백엔드를 실행하고 실제 JWT로 STOMP 연결을 검증했다.
+- Jetson에서 전송된 telemetry의 `mode=emergency`, `workState=error`, `batteryLevel=100`, `errorState=emergency-stop-active`를 수신했다.
+- status의 `connectionState=degraded`, `mqttState=connected`, `wssState=connected`, `edgeState=emergency`, `stale=false`를 수신했다.
+- 현재 환경에서 브라우저 자동화 도구를 사용할 수 없어 화면 클릭 검증 대신 실제 STOMP protocol과 store 단위 테스트로 검증했다.
+
+### 남은 안전 이슈
+
+- 백엔드 제어권과 긴급 정지 상태는 메모리에만 보관되어 백엔드를 재시작하면 초기화된다.
+- Jetson은 emergency 상태를 유지하고 일반 명령을 거부하지만, 백엔드가 재시작 직후 정상 명령을 발행할 수 있는 여지는 남아 있다.
+- 다음 안전 작업에서는 백엔드 시작 시 Jetson 상태를 기준으로 제어 상태를 복구하거나, 상태가 확인될 때까지 일반 명령을 차단해야 한다.
+
 ## 2026-06-12
 
 ### 로컬 통합 실행과 방향 명령 검증
