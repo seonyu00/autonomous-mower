@@ -145,6 +145,14 @@ export function VideoPanel() {
             <small>{selectedRobotId ?? '로봇 선택'}</small>
           </div>
         )}
+        <div className="video-status-overlay" aria-label="영상 수신 정보">
+          <span>{session?.qualityPolicy.width ?? 640}×{session?.qualityPolicy.height ?? 480} 요청</span>
+          <span>최소 {session?.qualityPolicy.minFps ?? 15} FPS</span>
+          <span>지연 미수집</span>
+          <span className={session?.connectionState === 'connected' ? 'recording-state live' : 'recording-state'}>
+            {session?.connectionState === 'connected' ? 'LIVE' : 'STANDBY'}
+          </span>
+        </div>
       </div>
 
       <div className="video-actions">
@@ -168,11 +176,10 @@ export function VideoPanel() {
       {!canUseVideo ? <p className="warning-line">온디맨드 영상을 보려면 텔레메트리(Telemetry) 권한이 필요합니다.</p> : null}
 
       <div className="video-policy" aria-label="WebRTC 스트림 정책">
-        <span>{session?.qualityPolicy.minFps ?? 15}fps 최소</span>
-        <span>
-          {session?.qualityPolicy.width ?? 640}x{session?.qualityPolicy.height ?? 480}
-        </span>
-        <span>{session?.qualityPolicy.maxBitrateKbps ?? 500}kbps 최대</span>
+        <span>녹화 OFF</span>
+        <span>마지막 프레임 미수집</span>
+        <span>세션 시작 {session?.lastStartedAt ? new Date(session.lastStartedAt).toLocaleTimeString() : '미시작'}</span>
+        <span>{session?.qualityPolicy.maxBitrateKbps ?? 500}kbps 제한</span>
       </div>
 
       <div className="snapshot-placeholder compact" aria-label="스냅샷 상태">

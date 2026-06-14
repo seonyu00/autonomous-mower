@@ -3,6 +3,7 @@ import maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection, LineString, Point, Polygon } from 'geojson';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useRobotStore } from '../../robots/robotStore';
+import { hasUsablePosition } from '../../telemetry/position';
 import { useTelemetryStore } from '../../telemetry/telemetryStore';
 import { mockRouteByRobotId, mockWorkZoneByRobotId } from '../mockMapData';
 
@@ -21,6 +22,7 @@ export function MapViewMap() {
   const telemetry = useTelemetryStore((state) =>
     selectedRobotId ? state.telemetryByRobotId[selectedRobotId] : undefined,
   );
+  const positionAvailable = hasUsablePosition(telemetry?.latitude, telemetry?.longitude);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) {
@@ -107,7 +109,9 @@ export function MapViewMap() {
   useEffect(() => {
     const map = mapRef.current;
 
-    if (!map || !selectedRobotId || !telemetry) {
+    if (!map || !selectedRobotId || !telemetry || !positionAvailable) {
+      markerRef.current?.remove();
+      markerRef.current = null;
       return;
     }
 
@@ -127,7 +131,7 @@ export function MapViewMap() {
       duration: 500,
       essential: true,
     });
-  }, [selectedRobotId, telemetry]);
+  }, [positionAvailable, selectedRobotId, telemetry]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -154,13 +158,74 @@ export function MapViewMap() {
   return (
     <div className="maplibre-shell">
       <div ref={mapContainerRef} className="maplibre-container" />
-      {mapError ? <div className="map-error-panel">{mapError}</div> : null}
-      <div className="map-readout">
-        <strong>{selectedRobotId ?? '로봇 없음'}</strong>
-        <span>
-          {telemetry ? `${telemetry.latitude.toFixed(5)}, ${telemetry.longitude.toFixed(5)}` : '텔레메트리(Telemetry) 없음'}
-        </span>
-        <small>샘플 마커, 경로 폴리라인, 읽기 전용 작업 구역(Work Zone) Polygon을 표시합니다.</small>
+      {mapError ? (
+        <>
+          <FallbackMapLayer robotId={selectedRobotId} />
+          <div className="map-fallback-warning" role="alert">
+            <span>Fallback 지도 표시 중</span>
+            <strong>{mapError}</strong>
+          </div>
+        </>
+      ) : null}
+      <div className="map-operation-strip" aria-label="지도 운용 정보">
+        <div className="map-operation-primary">
+          <span className="map-operation-label">선택 장비</span>
+          <strong>{selectedRobotId ?? '로봇 없음'}</strong>
+        </div>
+        <div className="map-operation-item">
+          <span>현재 좌표</span>
+          <strong>
+            {telemetry && positionAvailable
+              ? `${telemetry.latitude.toFixed(5)}, ${telemetry.longitude.toFixed(5)}`
+              : '위치 수신 대기'}
+          </strong>
+        </div>
+        <div className="map-operation-item">
+          <span>GPS / RTK</span>
+          <strong>{positionAvailable ? 'GPS 수신' : 'GPS 미수신'}</strong>
+        </div>
+        <div className="map-operation-item">
+          <span>진행 방향</span>
+          <strong>연동 예정</strong>
+        </div>
+      </div>
+      <div className="map-legend" aria-label="지도 범례">
+        <span><i className="legend-line planned" />샘플 경로</span>
+        <span><i className="legend-area" />작업 구역</span>
+      </div>
+    </div>
+  );
+}
+
+function FallbackMapLayer({ robotId }: { robotId: string | null }) {
+  return (
+    <div className="map-fallback-layer" aria-label="지도 대체 운용 화면">
+      <svg viewBox="0 0 1000 620" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <pattern id="fallback-grid" width="50" height="50" patternUnits="userSpaceOnUse">
+            <path d="M 50 0 L 0 0 0 50" className="fallback-grid-line" />
+          </pattern>
+        </defs>
+        <rect width="1000" height="620" className="fallback-map-ground" />
+        <rect width="1000" height="620" fill="url(#fallback-grid)" />
+        <path
+          className="fallback-work-zone"
+          d="M180 135 L720 105 L855 265 L760 500 L260 520 L130 350 Z"
+        />
+        <path
+          className="fallback-route-planned"
+          d="M225 445 C310 395 330 220 430 170 C535 120 690 165 770 250 C825 310 760 390 650 420 C515 460 380 430 280 360"
+        />
+        <path
+          className="fallback-route-complete"
+          d="M225 445 C310 395 330 220 430 170 C500 136 570 140 625 158"
+        />
+      </svg>
+      <span className="fallback-zone-label" aria-label="대체 작업 구역">작업 구역 · 4,280 m²</span>
+      <span className="fallback-route-label" aria-label="대체 샘플 경로">샘플 경로 · 38% 완료</span>
+      <div className="fallback-robot-marker" aria-label="대체 로봇 위치">
+        <i aria-hidden="true" />
+        <strong>{robotId ?? '로봇 없음'}</strong>
       </div>
     </div>
   );

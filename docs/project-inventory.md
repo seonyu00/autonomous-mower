@@ -1322,6 +1322,8 @@ README와 현재 구현 기준으로 확인 가능한 local integration flow:
 
 시연 이후로 미뤄도 되는 항목은 다중 백엔드 인스턴스, secret manager, 외부 인터넷용 TURN, 완전한 자동 화질 조정과 STM32 serial protocol 고도화다. 다만 긴급 정지와 데드맨 스위치처럼 실기체 안전에 직접 관련된 기능은 시연 범위에서도 생략하지 않는다.
 
+상세한 다음 작업 순서, 실행 명령, 완료 기준과 차단 조건은 로컬 인계용 문서 `docs/learning/12-development-roadmap.md`에서 관리한다. 이 파일은 private note로 Git 추적에서 제외되므로, 인벤토리에는 현재 구현 상태와 시연 우선순위 요약만 유지한다.
+
 ## 9. GitHub 공유 전 주의사항
 
 ### 커밋 금지

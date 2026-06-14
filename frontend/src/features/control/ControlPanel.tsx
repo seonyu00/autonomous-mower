@@ -10,26 +10,25 @@ import { createDefaultControlState, useControlStore } from './controlStore';
 import { CommandEventStatus } from './CommandEventStatus';
 import { GeneralControlCommands } from './GeneralControlCommands';
 import { ManualJoystick } from './ManualJoystick';
+import { formatControlReason } from './controlReasonLabels';
 import type { ControlLockState } from './types';
 
 const lockStates: ControlLockState[] = ['none', 'requesting', 'held', 'held-by-other', 'expired', 'revoked'];
 
-const reasonLabels: Record<string, string> = {
-  'not-authenticated': '작업자 세션이 없습니다.',
-  'missing-control-permission': '현재 역할로는 제어할 수 없습니다.',
-  'robot-not-selected': '제어할 로봇을 먼저 선택합니다.',
-  'control-lock-not-held': '수동 제어권(Control Lock)이 없습니다.',
-  'control-owned-by-other-user': '다른 사용자가 제어권(Control Lock)을 잡고 있습니다.',
-  'realtime-connecting': '실시간 연결을 설정하는 중입니다.',
-  'realtime-reconnecting': '실시간 연결을 다시 연결하는 중입니다.',
-  'realtime-degraded': '실시간 연결 상태가 저하되었습니다.',
-  'realtime-disconnected': '실시간 연결이 끊겼습니다.',
-  'robot-in-emergency': '로봇이 긴급 정지(E-Stop) 상태입니다.',
-  'robot-not-in-emergency': '로봇이 긴급 정지(E-Stop) 상태가 아닙니다.',
-  'transport-not-ready': '보안 연결이 아직 준비되지 않았습니다.',
+const lockStateLabels: Record<ControlLockState, string> = {
+  none: '제어권 없음',
+  requesting: '요청 중',
+  held: '제어권 보유',
+  'held-by-other': '다른 사용자 제어 중',
+  expired: '제어권 만료',
+  revoked: '제어권 회수됨',
 };
 
-export function ControlPanel() {
+type ControlPanelProps = {
+  compact?: boolean;
+};
+
+export function ControlPanel({ compact = false }: ControlPanelProps) {
   const selectedRobotId = useRobotStore((state) => state.selectedRobotId);
   const user = useAuthStore((state) => state.user);
   const connectionState = useTelemetryStore((state) => state.connectionState);
@@ -72,7 +71,7 @@ export function ControlPanel() {
       }
     } catch (error) {
       if (error instanceof ControlPrecheckError) {
-        setActionError(error.reasons.map(formatReason).join(' '));
+        setActionError(error.reasons.map(formatControlReason).join(' '));
         return;
       }
 
@@ -85,6 +84,94 @@ export function ControlPanel() {
     controlState?.lockState === 'held-by-other' ||
     (controlState?.lockState === 'held' && Boolean(controlState.controlOwner) && !ownedByCurrentUser);
   const emergencyActive = Boolean(controlState?.emergency || controlState?.mode === 'emergency');
+  const compactReasons = eligibility.reasons.slice(0, 3);
+
+  if (compact) {
+    return (
+      <div className="control-panel compact-control-panel">
+        <section className="control-dock-group control-lock-group" aria-label="제어권 상태와 요청">
+          <div className="compact-group-heading">
+            <span>제어권</span>
+            <strong>{lockStateLabels[controlState?.lockState ?? 'none']}</strong>
+          </div>
+          <div className="control-actions">
+            <Button
+              type="button"
+              variant="primary"
+              disabled={
+                emergencyActive || !selectedRobotId || controlState?.lockState === 'requesting' || controlState?.lockState === 'held'
+              }
+              onClick={() => void handleAction('claim')}
+            >
+              제어권 요청
+            </Button>
+            <Button
+              type="button"
+              disabled={emergencyActive || !selectedRobotId || !ownedByCurrentUser}
+              onClick={() => void handleAction('release')}
+            >
+              반납
+            </Button>
+          </div>
+          {compactReasons.length > 0 ? (
+            <div className="control-warning-chips" aria-label="제어 제한 사유">
+              {compactReasons.map((reason) => (
+                <span key={reason}>{formatControlReason(reason)}</span>
+              ))}
+            </div>
+          ) : (
+            <span className="status-pill connected">제어 가능</span>
+          )}
+        </section>
+
+        <GeneralControlCommands compact />
+        <ManualJoystick compact />
+
+        {emergencyActive ? (
+          <section className="estop-recovery-panel compact-recovery" aria-label="긴급 정지 복구 상태">
+            <strong>긴급 정지 활성</strong>
+            <Button type="button" disabled={!resetEligibility.allowed} onClick={() => void handleAction('reset-after-emergency')}>
+              안전 초기화
+            </Button>
+          </section>
+        ) : null}
+
+        {actionError ? <p className="warning-line compact-control-error">{actionError}</p> : null}
+
+        <details className="control-debug-details">
+          <summary>개발/디버그 상세</summary>
+          <div className="control-debug-content">
+            <div className="lock-state-list" aria-label="제어권 상태 목록">
+              {lockStates.map((lockState) => (
+                <span key={lockState} className={controlState?.lockState === lockState ? 'lock-state active' : 'lock-state'}>
+                  {lockState}
+                </span>
+              ))}
+            </div>
+            <div className="control-summary">
+              <Metric label="로봇" value={selectedRobotId ?? '없음'} />
+              <Metric label="소유자" value={controlState?.controlOwner ?? '미할당'} />
+              <Metric label="모드" value={controlState?.mode ?? 'idle'} />
+              <Metric label="실시간" value={connectionState} />
+              <Metric label="WSS" value={protocolState.wss} />
+            </div>
+            {eligibility.reasons.length > 0 ? (
+              <div className="raw-reason-list">
+                {eligibility.reasons.map((reason) => (
+                  <code key={reason}>{reason}</code>
+                ))}
+              </div>
+            ) : null}
+            {selectedRobotId ? <CommandEventStatus robotId={selectedRobotId} /> : null}
+            {controlState?.commandError ? <p className="warning-line">{controlState.commandError}</p> : null}
+            {controlState?.lastCommandPayload ? (
+              <pre className="payload-preview">{JSON.stringify(controlState.lastCommandPayload, null, 2)}</pre>
+            ) : null}
+          </div>
+        </details>
+      </div>
+    );
+  }
 
   return (
     <div className="control-panel">
@@ -118,7 +205,7 @@ export function ControlPanel() {
           {resetEligibility.reasons.length > 0 ? (
             <ul>
               {resetEligibility.reasons.map((reason) => (
-                <li key={reason}>{formatReason(reason)}</li>
+                <li key={reason}>{formatControlReason(reason)}</li>
               ))}
             </ul>
           ) : null}
@@ -167,7 +254,7 @@ export function ControlPanel() {
         {eligibility.reasons.length > 0 ? (
           <ul>
             {eligibility.reasons.map((reason) => (
-              <li key={reason}>{formatReason(reason)}</li>
+              <li key={reason}>{formatControlReason(reason)}</li>
             ))}
           </ul>
         ) : null}
@@ -193,8 +280,4 @@ function Metric({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
-}
-
-function formatReason(reason: string) {
-  return reasonLabels[reason] ?? reason;
 }

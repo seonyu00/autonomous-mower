@@ -24,6 +24,11 @@ export function EmergencyStopButton() {
     ? canSendEmergencyStop(selectedRobotId)
     : { allowed: false, reasons: ['robot-not-selected'] };
   const disabled = !selectedRobotId || emergencyActive || !eligibility.allowed;
+  const disabledReason = emergencyActive
+    ? '이미 긴급 정지 상태입니다.'
+    : eligibility.reasons[0]
+      ? formatReason(eligibility.reasons[0])
+      : null;
 
   const handleConfirm = async () => {
     if (!selectedRobotId) {
@@ -60,6 +65,21 @@ export function EmergencyStopButton() {
       <span className={emergencyActive ? 'estop-state active' : 'estop-state'}>
         {emergencyActive ? '긴급 정지 활성' : '준비'}
       </span>
+      <ul className="estop-safety-meta" aria-label="긴급 정지 안전 정보">
+        <li>
+          <span>작동 이력</span>
+          <strong>{emergencyActive ? '현재 활성' : '없음'}</strong>
+        </li>
+        <li>
+          <span>실행 조건</span>
+          <strong>확인 후 실행</strong>
+        </li>
+        <li>
+          <span>제어권</span>
+          <strong>제어권 불필요</strong>
+        </li>
+      </ul>
+      {disabled && disabledReason ? <small className="estop-disabled-reason">{disabledReason}</small> : null}
 
       <Dialog title="긴급 정지 확인" open={confirmOpen} onClose={() => setConfirmOpen(false)}>
         <div className="estop-dialog-content">
@@ -97,4 +117,18 @@ export function EmergencyStopButton() {
 
 function formatReason(reason: string) {
   return reasonLabels[reason] ?? reason;
+}
+
+export function EmergencyStopStatus() {
+  const selectedRobotId = useRobotStore((state) => state.selectedRobotId);
+  const controlByRobotId = useControlStore((state) => state.controlByRobotId);
+  const controlState = selectedRobotId ? controlByRobotId[selectedRobotId] : null;
+  const emergencyActive = Boolean(controlState?.emergency || controlState?.mode === 'emergency');
+
+  return (
+    <span className={emergencyActive ? 'header-estop-indicator active' : 'header-estop-indicator'}>
+      <span className="dot" aria-hidden="true" />
+      {emergencyActive ? 'E-STOP 활성' : 'E-STOP 준비'}
+    </span>
+  );
 }

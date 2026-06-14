@@ -41,3 +41,14 @@
 11. [Jetson 카메라와 웹 영상 연동](11-jetson-camera-video-flow.md)
 
 상세한 프로젝트 입문 설명은 [`docs/ONBOARDING.md`](../ONBOARDING.md), 현재 코드 기준 인벤토리는 [`docs/project-inventory.md`](../project-inventory.md)를 함께 참고한다.
+
+## 문서 역할
+
+내용을 추가하기 전에 기존 문서의 목적과 중복 여부를 먼저 확인한다.
+
+- `docs/project-inventory.md`: 현재 구현·미구현 상태와 파일 위치
+- `docs/development-log.md`: 작업 시점의 변경과 검증 결과
+- `docs/learning/*-flow.md`: 특정 기능의 구조, 실행 방법과 장애 분석
+- `docs/learning/12-development-roadmap.md`: 다음 작업 순서, 인계 절차, 완료 기준과 차단 조건
+
+`12-development-roadmap.md`는 로컬 인계용 private note로 Git 추적에서 제외된다. 현황 문서에 상세 실행 계획을 중복 작성하지 않고, 다음 세션을 위한 계획은 로컬 로드맵에서 관리한다.
