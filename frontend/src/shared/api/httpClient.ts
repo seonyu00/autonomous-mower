@@ -5,6 +5,7 @@ import { getAccessToken, useAuthStore } from '../../features/auth/authStore';
 type RequestOptions = RequestInit & {
   token?: string;
   skipAuth?: boolean;
+  responseType?: 'json' | 'blob';
 };
 
 type ApiEnvelope<T> = {
@@ -14,10 +15,11 @@ type ApiEnvelope<T> = {
 };
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { responseType = 'json', ...fetchOptions } = options;
   const headers = new Headers(options.headers);
-  headers.set('Accept', 'application/json');
+  headers.set('Accept', responseType === 'blob' ? 'image/jpeg' : 'application/json');
 
-  if (options.body && !headers.has('Content-Type')) {
+  if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
 
@@ -31,7 +33,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   try {
     response = await fetch(`${env.apiBaseUrl}${path}`, {
-      ...options,
+      ...fetchOptions,
       headers,
     });
   } catch (error) {
@@ -50,6 +52,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     return undefined as T;
   }
 
+  if (responseType === 'blob') {
+    return (await response.blob()) as T;
+  }
+
   const json = (await response.json()) as T | ApiEnvelope<T>;
 
   if (json && typeof json === 'object' && 'success' in json && 'data' in json) {
@@ -63,6 +69,10 @@ export const httpClient = {
   get: <T>(path: string, options?: RequestOptions) => request<T>(path, { ...options, method: 'GET' }),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'POST', body: body ? JSON.stringify(body) : undefined }),
+  postForm: <T>(path: string, body: FormData, options?: RequestOptions) =>
+    request<T>(path, { ...options, method: 'POST', body }),
+  getBlob: (path: string, options?: RequestOptions) =>
+    request<Blob>(path, { ...options, method: 'GET', responseType: 'blob' }),
   put: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
 };

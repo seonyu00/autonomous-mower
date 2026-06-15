@@ -4,7 +4,7 @@
 
 기준:
 
-- 확인일: 2026-06-14
+- 확인일: 2026-06-15
 - 확인 범위: `frontend/`, `backend/`, `edge/jetson-client/`, `edge/jetson-camera/`, `edge/jetson-video/`, `tools/edge-mock-client/`, `docker-compose.yml`, `docs/`, `.env.example`, `README.md`
 - 실제 파일 기준으로 정리했다.
 - 구현 여부가 불명확하거나 실제 장비 연동이 없는 부분은 `미구현/확인 필요` 또는 `Mock/Skeleton`으로 표시했다.
@@ -70,7 +70,7 @@ React VideoPanel
 - 위치: `docker-compose.yml`, `backend/src/main/resources/db/migration/`
 - 이미지: `postgis/postgis:16-3.4`
 - 역할:
-  - `robot`, `admin_account`, `work_zone`, `telemetry_log`, `robot_event`, `command_execution` 저장
+  - `robot`, `admin_account`, `work_zone`, `telemetry_log`, `robot_event`, `robot_snapshot`, `command_execution` 저장
   - `work_zone.zone_polygon geometry(Polygon, 4326)`
   - `telemetry_log.location_point geometry(Point, 4326)`
   - PostGIS spatial index 사용
@@ -144,7 +144,7 @@ React VideoPanel
   - 백엔드에서 로봇별 WHEP URL 발급
   - MediaMTX WHEP SDP 교환
   - WHEP resource 종료 시 `DELETE`
-  - start/stop/reconnect/snapshot placeholder UI
+  - start/stop/reconnect와 현재 영상 프레임의 수동 JPEG 스냅샷 저장 UI
 - Backend:
   - `/api/video/{robotId}/offer|stop|reconnect`
   - `telemetry:read` 권한 검증
@@ -163,7 +163,8 @@ React VideoPanel
   - 백엔드 stop은 세션 상태와 브라우저 WHEP 연결을 종료하지만 Jetson 인코더와 RTSP publisher 프로세스까지 중단하지는 않는다.
   - Jetson 카메라, MediaMTX와 영상 송출기는 `run-video-demo.sh` 한 명령으로 실행할 수 있지만 재부팅 후 자동 복구되지는 않는다.
   - HTTPS/WSS, MediaMTX TLS, TURN과 외부 인터넷 공개는 아직 적용하지 않았다.
-  - Snapshot 버튼은 실제 이미지 저장이 아닌 프론트 상태 placeholder다.
+  - 수동 스냅샷은 WebRTC 영상이 연결된 상태에서만 캡처할 수 있다.
+  - 2026년 6월 15일 검증에서는 원격 MediaMTX `100.92.7.56:8889`가 응답하지 않아 실제 프레임 캡처 통합 확인은 차단됐다.
 
 ## 2. 프론트엔드 기능 목록
 
@@ -395,7 +396,7 @@ Mock/Skeleton:
 - route distance 계산 미구현
 - history event aggregation 미구현
 
-### Logs/Snapshot placeholder
+### Logs/Snapshot
 
 Frontend 주요 파일:
 
@@ -412,25 +413,34 @@ Backend 주요 파일:
 - `backend/src/main/java/com/autonomousmower/logs/service/LogService.java`
 - `backend/src/main/java/com/autonomousmower/logs/entity/RobotEvent.java`
 - `backend/src/main/java/com/autonomousmower/logs/repository/RobotEventRepository.java`
+- `backend/src/main/java/com/autonomousmower/logs/controller/SnapshotController.java`
+- `backend/src/main/java/com/autonomousmower/logs/service/SnapshotService.java`
+- `backend/src/main/java/com/autonomousmower/logs/service/SnapshotFileStorage.java`
+- `backend/src/main/java/com/autonomousmower/logs/entity/RobotSnapshot.java`
+- `backend/src/main/resources/db/migration/V7__create_robot_snapshot.sql`
 - `backend/src/main/resources/db/migration/V5__create_robot_event.sql`
 
 구현 내용:
 
 - Frontend:
-  - 개발 모드에서는 mock log 목록 사용
+  - `VITE_ENABLE_MOCK_LOGS=true`일 때만 mock log 목록 사용
   - LogTimeline 표시
-  - SnapshotViewer placeholder 존재
+  - 현재 WebRTC 영상 프레임을 Canvas에서 JPEG로 캡처하고 multipart로 업로드
+  - SnapshotViewer가 인증된 JPEG 응답을 Blob으로 받아 미리보기 표시
 - Backend:
   - `/api/logs`
   - `logs:read` 권한 필요
   - robotId, severity, date range 필터 지원
   - MQTT status/event를 `robot_event`로 저장 후 조회 가능
+  - `POST /api/robots/{robotId}/snapshots`로 5MB 이하 JPEG 수동 스냅샷 저장
+  - `GET /api/logs/snapshots/{snapshotId}`로 인증된 JPEG 조회
+  - JPEG 파일은 `./data/snapshots` 아래에 저장하고 DB에는 메타데이터와 상대 경로 저장
+  - 수동 저장 시 `manual-snapshot`, `dashboard`, `info` 이벤트를 생성하고 스냅샷과 연결
 
-Mock/Skeleton:
+제한:
 
-- 실제 snapshot binary 저장/조회 endpoint는 미구현이다.
-- `SnapshotResponse` DTO는 있으나 controller endpoint는 확인되지 않는다.
 - log text search 파라미터는 API contract 문서에는 있지만 현재 controller에는 없다.
+- 오류 발생 시 Jetson이 자동 업로드하는 흐름과 보관 기간 정리는 아직 구현하지 않았다.
 
 ### Control ownership
 
@@ -572,14 +582,14 @@ Backend:
   - 재연결 시 새 영상 세션과 WHEP 연결 생성
 - mock signalling:
   - `VITE_ENABLE_MOCK_VIDEO=true`이면 mock 영상 세션 사용
-- snapshot은 placeholder state만 생성
+- snapshot은 연결된 `<video>` 현재 프레임을 JPEG로 캡처해 백엔드에 저장
 
 제한:
 
 - Jetson 송출 프로세스는 영상 시청 여부와 무관하게 계속 실행된다.
 - 영상 품질 정책 값은 세션 상태에 표시되지만 네트워크 상태에 따른 자동 품질 조정은 구현되지 않았다.
 - ICE는 MediaMTX의 WHEP 구현을 사용하며 별도 trickle ICE API는 제공하지 않는다.
-- 실제 snapshot binary 저장/조회는 미구현이다.
+- 원격 MediaMTX가 연결되지 않으면 영상 프레임이 없어 스냅샷 버튼이 비활성화된다.
 
 ### API client/proxy/mock 처리
 
@@ -1288,7 +1298,7 @@ README와 현재 구현 기준으로 확인 가능한 local integration flow:
   - 실제 fps, bitrate, 해상도와 오류 상태 수집
   - 네트워크 상태별 해상도, fps와 bitrate 자동 조정
   - HTTPS/WSS, MediaMTX TLS와 필요 시 TURN 적용
-  - Snapshot binary 저장/조회
+  - Jetson 오류 이벤트의 자동 Snapshot 업로드와 보관 정책
 
 ### 실제 센서/GPS/IMU
 
@@ -1333,7 +1343,7 @@ README와 현재 구현 기준으로 확인 가능한 local integration flow:
 
 - Frontend route-level auth guard
 - Work zone map drawing/editing UX
-- Snapshot binary upload/storage/serving
+- Snapshot 자동 업로드와 장기 보관 정책
 - History distance/coverage/event aggregation
 - MQTT contract의 `reverse` vs `backward` direction 정합성
 
@@ -1356,7 +1366,7 @@ README와 현재 구현 기준으로 확인 가능한 local integration flow:
    - 현재 `0`으로 표시되는 거리와 커버리지 값은 실제 계산하거나 시연 화면에서 오해되지 않도록 구분한다.
 5. 이벤트와 스냅샷
    - 장애물 또는 긴급 정지 이벤트가 Log Viewer에 즉시 나타나도록 한다.
-   - 시간이 부족하면 Snapshot 저장보다 이벤트 발생과 로그 표시를 우선한다.
+   - 수동 스냅샷 저장·조회는 구현됐으며, Jetson 오류 이벤트 자동 업로드를 후속 연결한다.
 
 시연 이후로 미뤄도 되는 항목은 다중 백엔드 인스턴스, secret manager, 외부 인터넷용 TURN, 완전한 자동 화질 조정과 STM32 serial protocol 고도화다. 다만 긴급 정지와 데드맨 스위치처럼 실기체 안전에 직접 관련된 기능은 시연 범위에서도 생략하지 않는다.
 

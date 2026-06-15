@@ -7,7 +7,9 @@ import com.autonomousmower.auth.repository.AdminRepository;
 import com.autonomousmower.control.entity.CommandExecution;
 import com.autonomousmower.control.repository.CommandExecutionRepository;
 import com.autonomousmower.logs.entity.RobotEvent;
+import com.autonomousmower.logs.entity.RobotSnapshot;
 import com.autonomousmower.logs.repository.RobotEventRepository;
+import com.autonomousmower.logs.repository.RobotSnapshotRepository;
 import com.autonomousmower.robot.entity.Robot;
 import com.autonomousmower.robot.repository.RobotRepository;
 import com.autonomousmower.telemetry.entity.TelemetryLog;
@@ -26,6 +28,7 @@ class RepositoryContractTest {
         assertThat(JpaRepository.class).isAssignableFrom(WorkZoneRepository.class);
         assertThat(JpaRepository.class).isAssignableFrom(TelemetryLogRepository.class);
         assertThat(JpaRepository.class).isAssignableFrom(RobotEventRepository.class);
+        assertThat(JpaRepository.class).isAssignableFrom(RobotSnapshotRepository.class);
         assertThat(JpaRepository.class).isAssignableFrom(CommandExecutionRepository.class);
 
         assertThat(Admin.class).isNotNull();
@@ -33,6 +36,7 @@ class RepositoryContractTest {
         assertThat(WorkZone.class).isNotNull();
         assertThat(TelemetryLog.class).isNotNull();
         assertThat(RobotEvent.class).isNotNull();
+        assertThat(RobotSnapshot.class).isNotNull();
         assertThat(CommandExecution.class).isNotNull();
     }
 }

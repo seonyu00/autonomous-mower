@@ -1,9 +1,10 @@
 import { httpClient } from '../../shared/api/httpClient';
+import { env } from '../../shared/config/env';
 import { mockLogEntries } from './mockLogs';
 import type { LogEntry, LogQuery } from './types';
 
 export async function getLogs(query: LogQuery): Promise<LogEntry[]> {
-  if (import.meta.env.DEV) {
+  if (env.enableMockLogs) {
     const from = new Date(`${query.from}T00:00:00.000Z`).getTime();
     const to = new Date(`${query.to}T23:59:59.999Z`).getTime();
     const text = query.text.trim().toLowerCase();
@@ -22,12 +23,21 @@ export async function getLogs(query: LogQuery): Promise<LogEntry[]> {
   }
 
   const searchParams = new URLSearchParams({
-    robotId: query.robotId,
-    severity: query.severity,
-    text: query.text,
-    from: query.from,
-    to: query.to,
+    from: `${query.from}T00:00:00.000Z`,
+    to: `${query.to}T23:59:59.999Z`,
   });
 
+  if (query.robotId !== 'all') {
+    searchParams.set('robotId', query.robotId);
+  }
+
+  if (query.severity !== 'all') {
+    searchParams.set('severity', query.severity);
+  }
+
   return httpClient.get<LogEntry[]>(`/api/logs?${searchParams.toString()}`);
+}
+
+export function getSnapshotBlob(url: string): Promise<Blob> {
+  return httpClient.getBlob(url);
 }

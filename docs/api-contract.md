@@ -315,7 +315,33 @@ Response `200`:
 ]
 ```
 
-`eventType`: `obstacle-detected | communication-lost | estop | sensor-fault | controller-error | job-event`
+`eventType`: `obstacle-detected | communication-lost | estop | sensor-fault | controller-error | job-event | manual-snapshot`
+
+#### `POST /api/robots/{robotId}/snapshots`
+
+Permission: `telemetry:read`
+
+Content-Type: `multipart/form-data`
+
+- `file`: 5MB 이하 JPEG
+- `captureType`: 현재 `manual`만 허용
+- `capturedAt`: ISO 8601 UTC 시각
+
+Response `200`:
+
+```json
+{
+  "snapshotId": "snapshot-001",
+  "robotId": "<ROBOT_ID>",
+  "captureType": "manual",
+  "capturedAt": "2026-06-15T12:29:58.000Z",
+  "contentType": "image/jpeg",
+  "fileSize": 184320,
+  "url": "/api/logs/snapshots/snapshot-001"
+}
+```
+
+수동 저장 성공 시 `manual-snapshot`, `dashboard`, `info` 이벤트를 생성하고 저장한 스냅샷을 연결한다.
 
 #### `GET /api/logs/snapshots/{snapshotId}`
 
@@ -325,6 +351,7 @@ Response:
 
 - `200 image/jpeg`
 - `404` if missing
+- 응답은 `Cache-Control: no-store`를 사용한다.
 
 ### 3.6 제어(Control)
 

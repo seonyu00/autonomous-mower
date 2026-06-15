@@ -8,5 +8,6 @@ export const env = {
   enableMockControl: import.meta.env.VITE_ENABLE_MOCK_CONTROL !== 'false',
   enableMockRobots: import.meta.env.VITE_ENABLE_MOCK_ROBOTS !== 'false',
   enableMockVideo: import.meta.env.VITE_ENABLE_MOCK_VIDEO !== 'false',
+  enableMockLogs: import.meta.env.VITE_ENABLE_MOCK_LOGS === 'true',
   enableMockWorkZone: import.meta.env.VITE_ENABLE_MOCK_WORK_ZONE !== 'false',
 };

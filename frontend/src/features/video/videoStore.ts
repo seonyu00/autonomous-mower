@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { VideoQualityPolicy, VideoSession, VideoSnapshotPlaceholder } from './types';
+import type { VideoQualityPolicy, VideoSession, VideoSnapshot } from './types';
 
 export const defaultVideoQualityPolicy: VideoQualityPolicy = {
   minFps: 15,
@@ -12,7 +12,7 @@ type VideoStore = {
   sessionsByRobotId: Record<string, VideoSession>;
   getSession: (robotId: string) => VideoSession;
   patchSession: (robotId: string, patch: Partial<VideoSession>) => void;
-  requestSnapshot: (robotId: string, at?: string) => VideoSnapshotPlaceholder;
+  setSnapshot: (robotId: string, snapshot: VideoSnapshot) => void;
   resetSession: (robotId: string) => void;
 };
 
@@ -26,6 +26,8 @@ export function createDefaultVideoSession(robotId: string): VideoSession {
     loading: false,
     qualityPolicy: { ...defaultVideoQualityPolicy },
     snapshot: null,
+    snapshotLoading: false,
+    snapshotError: null,
     lastStartedAt: null,
     lastStoppedAt: null,
     mock: true,
@@ -49,18 +51,8 @@ export const useVideoStore = create<VideoStore>((set, get) => ({
         },
       };
     }),
-  requestSnapshot: (robotId, at = new Date().toISOString()) => {
-    const snapshot: VideoSnapshotPlaceholder = {
-      id: `snapshot-placeholder-${robotId}-${Date.parse(at)}`,
-      robotId,
-      capturedAt: at,
-      contentType: 'image/jpeg',
-      status: 'requested',
-    };
-
+  setSnapshot: (robotId, snapshot) => {
     get().patchSession(robotId, { snapshot });
-
-    return snapshot;
   },
   resetSession: (robotId) =>
     set((state) => ({

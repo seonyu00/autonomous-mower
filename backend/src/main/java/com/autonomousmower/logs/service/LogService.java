@@ -1,10 +1,12 @@
 package com.autonomousmower.logs.service;
 
 import com.autonomousmower.logs.dto.LogEntryResponse;
+import com.autonomousmower.logs.dto.SnapshotResponse;
 import com.autonomousmower.logs.entity.RobotEvent;
 import com.autonomousmower.logs.repository.RobotEventRepository;
 import com.autonomousmower.robot.service.RobotService;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
@@ -66,7 +68,14 @@ public class LogService {
                 event.getMessage(),
                 event.getOccurredAt(),
                 event.getSource(),
-                null,
+                event.getSnapshot() == null
+                        ? null
+                        : new SnapshotResponse(
+                                event.getSnapshot().getSnapshotId(),
+                                event.getSnapshot().getCapturedAt().toInstant(ZoneOffset.UTC),
+                                event.getSnapshot().getContentType(),
+                                "/api/logs/snapshots/" + event.getSnapshot().getSnapshotId()
+                        ),
                 Map.of()
         );
     }

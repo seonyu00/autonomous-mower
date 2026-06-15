@@ -5,13 +5,16 @@ import { useAuthStore } from '../../auth/authStore';
 import { useRobotStore } from '../../robots/robotStore';
 import { createDefaultVideoSession, useVideoStore } from '../videoStore';
 import { WebRTCClient } from '../WebRtcClient';
+import { captureVideoFrame } from '../captureVideoFrame';
+import { uploadManualSnapshot } from '../snapshotApi';
 
 export function VideoPanel() {
   const selectedRobotId = useRobotStore((state) => state.selectedRobotId);
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const sessionsByRobotId = useVideoStore((state) => state.sessionsByRobotId);
-  const requestSnapshot = useVideoStore((state) => state.requestSnapshot);
+  const patchSession = useVideoStore((state) => state.patchSession);
+  const setSnapshot = useVideoStore((state) => state.setSnapshot);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const clientRef = useRef<WebRTCClient | null>(null);
   const previousRobotIdRef = useRef<string | null>(null);
@@ -92,7 +95,11 @@ export function VideoPanel() {
   const stopDisabled = !selectedRobotId || session?.loading || !['connected', 'failed', 'reconnecting'].includes(session?.connectionState ?? '');
   const reconnectDisabled =
     !selectedRobotId || !canUseVideo || session?.loading || !['connected', 'failed', 'disconnected'].includes(session?.connectionState ?? '');
-  const snapshotDisabled = !selectedRobotId || !canUseVideo;
+  const snapshotDisabled =
+    !selectedRobotId ||
+    !canUseVideo ||
+    session?.connectionState !== 'connected' ||
+    session?.snapshotLoading;
 
   const handleStart = async () => {
     if (!selectedRobotId) {
@@ -118,12 +125,25 @@ export function VideoPanel() {
     await clientRef.current?.reconnect(selectedRobotId);
   };
 
-  const handleSnapshot = () => {
-    if (!selectedRobotId || !canUseVideo) {
+  const handleSnapshot = async () => {
+    if (!selectedRobotId || !canUseVideo || !videoRef.current) {
       return;
     }
 
-    requestSnapshot(selectedRobotId);
+    patchSession(selectedRobotId, { snapshotLoading: true, snapshotError: null });
+
+    try {
+      const capturedAt = new Date().toISOString();
+      const jpeg = await captureVideoFrame(videoRef.current);
+      const snapshot = await uploadManualSnapshot(selectedRobotId, capturedAt, jpeg);
+      setSnapshot(selectedRobotId, snapshot);
+      patchSession(selectedRobotId, { snapshotLoading: false });
+    } catch (error) {
+      patchSession(selectedRobotId, {
+        snapshotLoading: false,
+        snapshotError: error instanceof Error ? error.message : '스냅샷을 저장하지 못했습니다.',
+      });
+    }
   };
 
   return (
@@ -165,13 +185,14 @@ export function VideoPanel() {
         <Button type="button" disabled={reconnectDisabled} onClick={() => void handleReconnect()}>
           재연결
         </Button>
-        <Button type="button" disabled={snapshotDisabled} onClick={handleSnapshot}>
-          스냅샷
+        <Button type="button" disabled={snapshotDisabled} onClick={() => void handleSnapshot()}>
+          {session?.snapshotLoading ? '저장 중' : '스냅샷'}
         </Button>
       </div>
 
       {session?.loading ? <p className="muted">WebRTC 세션을 준비하는 중입니다.</p> : null}
       {session?.error ? <p className="warning-line">{session.error}</p> : null}
+      {session?.snapshotError ? <p className="warning-line">{session.snapshotError}</p> : null}
       {session?.connectionState === 'disconnected' ? <p className="muted">영상 스트림 연결이 끊겼습니다.</p> : null}
       {!canUseVideo ? <p className="warning-line">온디맨드 영상을 보려면 텔레메트리(Telemetry) 권한이 필요합니다.</p> : null}
 
@@ -185,7 +206,7 @@ export function VideoPanel() {
       <div className="snapshot-placeholder compact" aria-label="스냅샷 상태">
         <span>스냅샷</span>
         <small>
-          {session?.snapshot ? `${new Date(session.snapshot.capturedAt).toLocaleTimeString()} 요청됨` : '캡처된 스냅샷 없음'}
+          {session?.snapshot ? `${new Date(session.snapshot.capturedAt).toLocaleTimeString()} 저장됨` : '캡처된 스냅샷 없음'}
         </small>
       </div>
     </section>

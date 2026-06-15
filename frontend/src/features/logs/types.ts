@@ -5,7 +5,8 @@ export type LogEventType =
   | 'estop'
   | 'sensor-fault'
   | 'controller-error'
-  | 'job-event';
+  | 'job-event'
+  | 'manual-snapshot';
 
 export type SnapshotRef = {
   id: string;

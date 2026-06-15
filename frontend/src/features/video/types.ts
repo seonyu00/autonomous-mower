@@ -9,9 +9,9 @@ export type VideoQualityPolicy = {
   maxBitrateKbps: number;
 };
 
-export type VideoSnapshotPlaceholder = SnapshotRef & {
+export type VideoSnapshot = SnapshotRef & {
   robotId: string;
-  status: 'placeholder' | 'requested';
+  status: 'saved';
 };
 
 export type VideoSession = {
@@ -22,7 +22,9 @@ export type VideoSession = {
   error: string | null;
   loading: boolean;
   qualityPolicy: VideoQualityPolicy;
-  snapshot: VideoSnapshotPlaceholder | null;
+  snapshot: VideoSnapshot | null;
+  snapshotLoading: boolean;
+  snapshotError: string | null;
   lastStartedAt: string | null;
   lastStoppedAt: string | null;
   mock: boolean;

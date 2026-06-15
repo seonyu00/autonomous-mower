@@ -5,15 +5,18 @@ import { SnapshotViewer } from '../features/logs/components/SnapshotViewer';
 import { mockLogEntries } from '../features/logs/mockLogs';
 import type { LogEntry, LogSeverity } from '../features/logs/types';
 import { mockRobots } from '../features/robots/mockRobots';
+import { env } from '../shared/config/env';
 
 export function LogViewerPage() {
+  const today = new Date().toISOString().slice(0, 10);
   const [robotId, setRobotId] = useState('all');
   const [severity, setSeverity] = useState<LogSeverity | 'all'>('all');
   const [text, setText] = useState('');
-  const [from, setFrom] = useState('2026-05-28');
-  const [to, setTo] = useState('2026-05-29');
-  const [logs, setLogs] = useState<LogEntry[]>(mockLogEntries);
-  const [selectedLogId, setSelectedLogId] = useState(mockLogEntries[0]?.id ?? null);
+  const [from, setFrom] = useState(today);
+  const [to, setTo] = useState(today);
+  const initialLogs = env.enableMockLogs ? mockLogEntries : [];
+  const [logs, setLogs] = useState<LogEntry[]>(initialLogs);
+  const [selectedLogId, setSelectedLogId] = useState(initialLogs[0]?.id ?? null);
 
   const selectedLog = useMemo(
     () => logs.find((log) => log.id === selectedLogId) ?? logs[0] ?? null,
@@ -34,7 +37,7 @@ export function LogViewerPage() {
             <p className="eyebrow">2단계</p>
             <h2>로그 뷰어</h2>
           </div>
-          <span className="status-pill connected">샘플 로그</span>
+          <span className="status-pill connected">{env.enableMockLogs ? '샘플 로그' : '실제 로그'}</span>
         </div>
 
         <div className="log-filters">

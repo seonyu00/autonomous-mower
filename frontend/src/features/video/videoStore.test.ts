@@ -38,16 +38,25 @@ describe('videoStore', () => {
     });
   });
 
-  it('records snapshot placeholders compatible with log snapshot references', () => {
+  it('records saved snapshots compatible with log snapshot references', () => {
     const capturedAt = '2026-05-30T01:00:00.000Z';
-    const snapshot = useVideoStore.getState().requestSnapshot(TEST_ROBOT_ID, capturedAt);
+    const snapshot = {
+      id: 'snapshot-001',
+      robotId: TEST_ROBOT_ID,
+      capturedAt,
+      contentType: 'image/jpeg' as const,
+      status: 'saved' as const,
+      url: '/api/logs/snapshots/snapshot-001',
+    };
+    useVideoStore.getState().setSnapshot(TEST_ROBOT_ID, snapshot);
 
     expect(snapshot).toEqual({
-      id: `snapshot-placeholder-${TEST_ROBOT_ID}-${Date.parse(capturedAt)}`,
+      id: 'snapshot-001',
       robotId: TEST_ROBOT_ID,
       capturedAt,
       contentType: 'image/jpeg',
-      status: 'requested',
+      status: 'saved',
+      url: '/api/logs/snapshots/snapshot-001',
     });
     expect(useVideoStore.getState().getSession(TEST_ROBOT_ID).snapshot).toEqual(snapshot);
   });

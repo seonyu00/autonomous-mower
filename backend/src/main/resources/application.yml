@@ -20,6 +20,10 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
 
 management:
   endpoints:
@@ -46,6 +50,9 @@ app:
     username: ${MQTT_USERNAME:}
     password: ${MQTT_PASSWORD:}
     client-id: ${MQTT_CLIENT_ID:autonomous-mower-backend}
+  snapshot:
+    storage-path: ${SNAPSHOT_STORAGE_PATH:./data/snapshots}
+    max-bytes: ${SNAPSHOT_MAX_BYTES:5242880}
 
 video:
   whep-base-url: ${VIDEO_WHEP_BASE_URL:http://100.92.7.56:8889}

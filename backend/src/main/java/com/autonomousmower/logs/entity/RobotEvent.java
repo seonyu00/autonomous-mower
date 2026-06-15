@@ -38,6 +38,10 @@ public class RobotEvent {
     @Column(name = "source", length = 80, nullable = false)
     private String source;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "snapshot_id")
+    private RobotSnapshot snapshot;
+
     protected RobotEvent() {
     }
 
@@ -85,5 +89,13 @@ public class RobotEvent {
 
     public String getSource() {
         return source;
+    }
+
+    public RobotSnapshot getSnapshot() {
+        return snapshot;
+    }
+
+    public void attachSnapshot(RobotSnapshot snapshot) {
+        this.snapshot = Objects.requireNonNull(snapshot, "snapshot must not be null");
     }
 }
