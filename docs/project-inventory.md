@@ -292,7 +292,7 @@ Mock/Skeleton:
 - 작업 구역과 예정 경로는 아직 mock data 기반이다.
 - GPS 미수신 또는 Mock 연결에서 표시하는 완료 경로와 방향 marker도 샘플 운용 데이터다.
 - 실제 거리, 작업 면적과 커버리지 계산은 구현하지 않았다.
-- 실제 backend work-zone fetch와 지도 편집 UI 연결은 제한적이다.
+- `VITE_ENABLE_MOCK_WORK_ZONE=false`이면 backend work-zone 조회 결과를 지도에 반영한다.
 
 ### 작업 구역 Polygon
 
@@ -326,7 +326,12 @@ Backend 대응:
 - MapLibre 정상 지도와 fallback 지도에서 동일한 편집 상태 공유
 - 편집 중인 꼭짓점을 별도 point layer로 표시
 - 저장 성공 시 편집 결과를 `zoneStore`에 반영
-- 개발 모드에서는 `saveWorkZone()`이 실제 API 호출 대신 mock response 반환
+- `VITE_ENABLE_MOCK_WORK_ZONE=true`인 개발 환경에서는 실제 API 호출 대신 mock response 반환
+- 실제 모드에서는 GET 응답의 Polygon과 version을 저장소에 반영
+- 실제 저장 요청에는 현재 version을 `expectedVersion`으로 전달
+- 404 조회 결과는 등록된 작업 구역 없음으로 처리
+- 조회·저장 실패 시 사용자용 한국어 메시지를 표시하고 편집 내용을 유지
+- 실제 모드에서는 샘플 구역 불러오기 액션을 숨겨 샘플 데이터 저장을 방지
 - production 모드에서는 `/api/robots/{robotId}/work-zone` GET/PUT 사용
 - backend는 PostGIS `geometry(Polygon, 4326)` 저장 및 version update 지원
 
@@ -334,7 +339,7 @@ Mock/Skeleton:
 
 - 개발 모드 저장 결과는 실제 DB에 반영되지 않으며 화면에서 이를 명시한다.
 - 꼭짓점 드래그 이동과 기존 Polygon 꼭짓점 직접 수정은 아직 지원하지 않는다.
-- production 환경의 실제 backend 저장 연동은 통합 검증이 필요하다.
+- 실제 로그인 세션과 PostGIS를 사용하는 브라우저 저장·새로고침 통합 검증이 필요하다.
 
 ### History
 

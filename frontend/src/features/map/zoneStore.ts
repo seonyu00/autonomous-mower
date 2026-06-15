@@ -3,9 +3,10 @@ import type { LngLat, PolygonGeometry } from './geojson';
 
 type ZoneStore = {
   zonesByRobotId: Record<string, PolygonGeometry | null>;
+  versionsByRobotId: Record<string, number | null>;
   draftVerticesByRobotId: Record<string, LngLat[]>;
   editingByRobotId: Record<string, boolean>;
-  setZone: (robotId: string, zone: PolygonGeometry | null) => void;
+  setZone: (robotId: string, zone: PolygonGeometry | null, version?: number | null) => void;
   startEditing: (robotId: string, vertices?: LngLat[]) => void;
   stopEditing: (robotId: string) => void;
   addDraftVertex: (robotId: string, position: LngLat) => void;
@@ -16,13 +17,18 @@ type ZoneStore = {
 
 export const useZoneStore = create<ZoneStore>((set) => ({
   zonesByRobotId: {},
+  versionsByRobotId: {},
   draftVerticesByRobotId: {},
   editingByRobotId: {},
-  setZone: (robotId, zone) =>
+  setZone: (robotId, zone, version = null) =>
     set((state) => ({
       zonesByRobotId: {
         ...state.zonesByRobotId,
         [robotId]: zone,
+      },
+      versionsByRobotId: {
+        ...state.versionsByRobotId,
+        [robotId]: version,
       },
     })),
   startEditing: (robotId, vertices = []) =>

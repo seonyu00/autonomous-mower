@@ -68,14 +68,24 @@ WorkZoneEditor
 
 ## 6. 프론트엔드의 현재 상태
 
-`WorkZoneEditor`는 실제 지도에서 그린 좌표가 아니라 `mockWorkZoneByRobotId`의 샘플 Polygon을 사용한다. `MapViewMap`도 샘플 경로와 읽기 전용 구역을 표시한다.
+`WorkZoneEditor`에서 지도 클릭으로 꼭짓점을 추가하고 Polygon을 저장할 수 있다. `zoneApi`는 백엔드의 조회·저장 계약에 맞춰 metadata와 geometry를 분리해 처리한다.
 
-추가로 계약 불일치가 있다.
+- GET 응답의 `zone.geometry`를 지도 표시용 Polygon으로 변환한다.
+- GET 응답의 `version`을 로봇별 store에 보관한다.
+- PUT 요청에 현재 version을 `expectedVersion`으로 전달한다.
+- PUT 성공 응답의 새 version을 store에 반영한다.
+- 작업 구역이 없는 404 응답은 빈 작업 구역으로 처리한다.
+- 조회 실패 시 연결 상태 안내를 표시한다.
+- 저장 실패 시 편집 중인 꼭짓점을 유지한다.
 
-- GET 프론트 타입은 `PolygonGeometry`를 직접 기대하지만 백엔드는 metadata와 `zone`을 가진 `WorkZoneResponse`를 반환한다.
-- PUT 프론트 응답 타입은 `zone`을 기대하지만 백엔드 `SaveWorkZoneResponse`에는 저장 metadata만 있다.
-- 프론트 요청은 `expectedVersion`을 보내지 않는다.
-- 개발 모드에서는 `zoneApi`가 실제 API 대신 항상 Mock 경로를 사용한다.
+Mock 여부는 `VITE_ENABLE_MOCK_WORK_ZONE`으로 결정한다.
+
+```text
+VITE_ENABLE_MOCK_WORK_ZONE=true   # 샘플 조회·가상 저장
+VITE_ENABLE_MOCK_WORK_ZONE=false  # 백엔드 GET/PUT와 PostGIS 사용
+```
+
+이 설정은 운용자 화면에서 변경하지 않는다. 실제 모드에서는 샘플 Polygon을 실수로 저장하지 않도록 `샘플 구역 불러오기` 액션도 표시하지 않는다.
 
 ## 7. 안전상 한계
 

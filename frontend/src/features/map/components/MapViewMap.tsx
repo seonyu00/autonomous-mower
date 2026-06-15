@@ -7,7 +7,7 @@ import { useRobotStore } from '../../robots/robotStore';
 import { hasUsablePosition } from '../../telemetry/position';
 import { useTelemetryStore } from '../../telemetry/telemetryStore';
 import type { LngLat, PolygonGeometry } from '../geojson';
-import { mockRouteByRobotId, mockWorkZoneByRobotId } from '../mockMapData';
+import { mockRouteByRobotId } from '../mockMapData';
 import {
   appendRoutePosition,
   calculateHeadingDegrees,
@@ -67,9 +67,7 @@ export function MapViewMap() {
   const draftVertices = selectedRobotId
     ? draftVerticesByRobotId[selectedRobotId] ?? emptyDraftVertices
     : emptyDraftVertices;
-  const storedWorkZone = selectedRobotId
-    ? zonesByRobotId[selectedRobotId] ?? mockWorkZoneByRobotId[selectedRobotId]?.geometry
-    : undefined;
+  const storedWorkZone = selectedRobotId ? zonesByRobotId[selectedRobotId] : undefined;
   const displayedWorkZone = editingWorkZone
     ? closePolygonVertices(draftVertices)
     : storedWorkZone;
