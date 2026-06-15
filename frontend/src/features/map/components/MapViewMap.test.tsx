@@ -1,8 +1,9 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetStores, TEST_ROBOT_ID } from '../../../test/testStores';
 import { useRobotStore } from '../../robots/robotStore';
 import { useTelemetryStore } from '../../telemetry/telemetryStore';
+import { useZoneStore } from '../zoneStore';
 import { MapViewMap } from './MapViewMap';
 
 vi.mock('maplibre-gl', () => ({
@@ -61,6 +62,63 @@ describe('MapViewMap', () => {
 
     expect(await screen.findByText('위치 수신 대기')).toBeInTheDocument();
     expect(screen.getByText('GPS 미수신')).toBeInTheDocument();
+    expect(screen.getByText('샘플 운용 데이터')).toBeInTheDocument();
+    expect(screen.getByText('샘플 완료 경로')).toBeInTheDocument();
+    expect(screen.getByText('샘플 예정 경로')).toBeInTheDocument();
+    expect(screen.getByText(/샘플 방향/)).toBeInTheDocument();
     expect(screen.queryByText('0.00000, 0.00000')).not.toBeInTheDocument();
+  });
+
+  it('실제 좌표가 연속 수신되면 세션 경로 기준 방향을 표시한다', async () => {
+    useTelemetryStore.getState().setConnectionState('connected');
+    render(<MapViewMap />);
+
+    const telemetry = useTelemetryStore.getState().telemetryByRobotId[TEST_ROBOT_ID];
+    act(() => {
+      useTelemetryStore.getState().upsertTelemetry({
+        ...telemetry,
+        latitude: telemetry.latitude + 0.0001,
+        lastReceivedAt: new Date().toISOString(),
+      });
+    });
+
+    expect(await screen.findByText('GPS 위치 · 샘플 예정 경로')).toBeInTheDocument();
+    expect(screen.getByText(/GPS 방향/)).toBeInTheDocument();
+    expect(screen.getByText('세션 완료 경로')).toBeInTheDocument();
+  });
+
+  it('Mock 연결의 유효 좌표는 실제 GPS가 아니라 샘플 데이터로 표시한다', async () => {
+    render(<MapViewMap />);
+
+    expect(await screen.findByText('샘플 운용 데이터')).toBeInTheDocument();
+    expect(screen.getByText('샘플 위치')).toBeInTheDocument();
+    expect(screen.queryByText('GPS 위치 · 샘플 예정 경로')).not.toBeInTheDocument();
+  });
+
+  it('fallback 지도 편집 중 클릭한 위치를 작업 구역 꼭짓점으로 추가한다', async () => {
+    useZoneStore.getState().startEditing('MOWER-01');
+    render(<MapViewMap />);
+
+    const editingMap = await screen.findByLabelText('작업 구역 편집 지도');
+    vi.spyOn(editingMap, 'getBoundingClientRect').mockReturnValue({
+      left: 100,
+      top: 50,
+      width: 1000,
+      height: 620,
+      right: 1100,
+      bottom: 670,
+      x: 100,
+      y: 50,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.click(editingMap, {
+      clientX: 600,
+      clientY: 360,
+    });
+
+    expect(useZoneStore.getState().draftVerticesByRobotId['MOWER-01']).toEqual([
+      [127.45625, 36.6284],
+    ]);
   });
 });

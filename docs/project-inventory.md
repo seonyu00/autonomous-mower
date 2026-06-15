@@ -271,20 +271,27 @@ React VideoPanel
 - `frontend/src/pages/MapViewPage.tsx`
 - `frontend/src/features/map/components/MapViewMap.tsx`
 - `frontend/src/features/map/mockMapData.ts`
+- `frontend/src/features/map/routeGeometry.ts`
 
 구현 내용:
 
 - MapLibre GL 사용
 - demotiles style 사용: `https://demotiles.maplibre.org/style.json`
 - mock work zone polygon source/layer
-- mock route line source/layer
-- selected robot telemetry 위치에 marker 표시
+- 샘플 경로를 완료 구간과 예정 구간으로 분리해 서로 다른 line layer로 표시
+- Mock 연결에서는 샘플 위치, 샘플 방향과 샘플 경로임을 명시
+- 실제 STOMP 연결에서 유효한 GPS 좌표가 수신되면 실제 marker 표시
+- 실제 GPS 좌표를 최대 500개까지 세션 완료 경로로 누적
+- 연속된 두 좌표에서 북쪽 기준 진행 방향 계산
 - telemetry 위치 변경 시 `easeTo`로 지도 center 이동
+- 지도 초기화 또는 tile style 실패 시 작업 구역, 경로와 샘플 marker를 포함한 fallback layer 표시
 
 Mock/Skeleton:
 
 - 지도 배경은 외부 demo tile style에 의존한다.
-- 현재 지도 표시 polygon/route는 mock data 기반이다.
+- 작업 구역과 예정 경로는 아직 mock data 기반이다.
+- GPS 미수신 또는 Mock 연결에서 표시하는 완료 경로와 방향 marker도 샘플 운용 데이터다.
+- 실제 거리, 작업 면적과 커버리지 계산은 구현하지 않았다.
 - 실제 backend work-zone fetch와 지도 편집 UI 연결은 제한적이다.
 
 ### 작업 구역 Polygon
@@ -293,6 +300,7 @@ Frontend 주요 파일:
 
 - `frontend/src/features/map/components/WorkZoneEditor.tsx`
 - `frontend/src/features/map/geojson.ts`
+- `frontend/src/features/map/workZoneEditing.ts`
 - `frontend/src/features/map/zoneApi.ts`
 - `frontend/src/features/map/zoneStore.ts`
 - `frontend/src/features/map/types.ts`
@@ -312,14 +320,21 @@ Backend 대응:
   - SRID 4326 payload 변환
   - 좌표 preview
   - validation error 표시
+- 지도 클릭으로 로봇별 작업 구역 꼭짓점 추가
+- 꼭짓점 3개 이상 선택 시 닫힌 Polygon 미리보기 표시
+- 마지막 점 취소, 전체 초기화, 샘플 구역 불러오기 지원
+- MapLibre 정상 지도와 fallback 지도에서 동일한 편집 상태 공유
+- 편집 중인 꼭짓점을 별도 point layer로 표시
+- 저장 성공 시 편집 결과를 `zoneStore`에 반영
 - 개발 모드에서는 `saveWorkZone()`이 실제 API 호출 대신 mock response 반환
 - production 모드에서는 `/api/robots/{robotId}/work-zone` GET/PUT 사용
 - backend는 PostGIS `geometry(Polygon, 4326)` 저장 및 version update 지원
 
 Mock/Skeleton:
 
-- 프론트 지도 위 직접 polygon 그리기/편집 UX는 미구현이다.
-- 현재 WorkZoneEditor는 mock polygon을 request payload로 만드는 수준이다.
+- 개발 모드 저장 결과는 실제 DB에 반영되지 않으며 화면에서 이를 명시한다.
+- 꼭짓점 드래그 이동과 기존 Polygon 꼭짓점 직접 수정은 아직 지원하지 않는다.
+- production 환경의 실제 backend 저장 연동은 통합 검증이 필요하다.
 
 ### History
 
