@@ -1,10 +1,11 @@
 import type { Telemetry } from './types';
+import { DEFAULT_MAP_CENTER } from '../map/mapDefaults';
 
 export const mockTelemetry: Record<string, Telemetry> = {
   'MOWER-01': {
     robotId: 'MOWER-01',
-    latitude: 36.6285,
-    longitude: 127.4564,
+    latitude: DEFAULT_MAP_CENTER[1],
+    longitude: DEFAULT_MAP_CENTER[0],
     batteryLevel: 82,
     mode: 'autonomous',
     workState: 'mowing',

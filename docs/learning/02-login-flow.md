@@ -30,6 +30,8 @@
 3. `frontend/src/features/auth/api.ts`의 `login()`이 HTTP 요청을 보낸다.
 4. 성공하면 `useAuthStore.setSession(user, accessToken)`으로 사용자와 JWT를 저장한다.
 5. 인증 상태가 참이 되면 `<Navigate to="/map">`가 실행된다.
+6. `RequireAuth`가 `/map`, `/history`, `/logs`, `/settings` 접근 전에 인증 상태를 확인한다.
+7. 보호 API가 401을 반환하면 `httpClient`가 저장된 세션을 해제하고 route guard가 `/login`으로 이동시킨다.
 
 개발 설정에서 `VITE_ENABLE_MOCK_AUTH=true`이면 실제 API 대신 Mock 로그인을 사용할 수 있다. 실제 인증을 확인할 때는 반드시 이 값을 `false`로 둔다.
 
@@ -89,9 +91,9 @@ Authorization: Bearer <JWT_TOKEN>
 
 ## 7. 현재 문제
 
-- 인증되지 않은 사용자가 `/map` 같은 프론트엔드 route를 직접 렌더링하지 못하도록 막는 명확한 route guard가 없다. 백엔드 API는 보호되지만 화면 골격은 보일 수 있다.
 - HTTP client가 백엔드 오류 envelope의 상세 메시지를 충분히 전달하지 않아 UI에는 상태 코드 중심의 오류만 보일 수 있다.
 - refresh token과 자동 토큰 갱신 정책은 구현되지 않았다.
+- 프론트는 앱 시작 시 JWT 만료 시각을 선제 검사하지 않는다. 보호 API의 401 응답을 받은 시점에 세션을 해제한다.
 
 ## 8. 디버깅 방법
 
@@ -100,13 +102,16 @@ Authorization: Bearer <JWT_TOKEN>
 3. 백엔드에서 계정 조회와 비밀번호 검증 실패 로그를 확인한다.
 4. 성공 응답의 JWT는 원문을 공유하지 말고 payload claim만 로컬에서 확인한다.
 5. 보호 API가 401이면 Authorization 헤더, 403이면 역할·권한을 확인한다.
+6. 헤더에 사용자가 표시되지만 API가 401이면 `sessionStorage`에 만료된 세션이 남아 있었는지 확인한다.
 
 ## 9. 권장 파일 읽기 순서
 
 1. `frontend/src/pages/LoginPage.tsx`
 2. `frontend/src/features/auth/api.ts`
 3. `frontend/src/features/auth/authStore.ts`
-4. `backend/src/main/java/com/autonomousmower/auth/controller/AuthController.java`
-5. `backend/src/main/java/com/autonomousmower/auth/service/AuthService.java`
+4. `frontend/src/app/RequireAuth.tsx`
+5. `frontend/src/shared/api/httpClient.ts`
+6. `backend/src/main/java/com/autonomousmower/auth/controller/AuthController.java`
+7. `backend/src/main/java/com/autonomousmower/auth/service/AuthService.java`
 6. `backend/src/main/java/com/autonomousmower/auth/security/JwtTokenProvider.java`
 7. `backend/src/main/java/com/autonomousmower/auth/security/JwtAuthenticationFilter.java`

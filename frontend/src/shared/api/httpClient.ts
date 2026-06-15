@@ -1,6 +1,6 @@
 import { env } from '../config/env';
 import { ApiError, classifyStatus } from './errors';
-import { getAccessToken } from '../../features/auth/authStore';
+import { getAccessToken, useAuthStore } from '../../features/auth/authStore';
 
 type RequestOptions = RequestInit & {
   token?: string;
@@ -39,6 +39,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (!response.ok) {
+    if (response.status === 401 && !options.skipAuth) {
+      useAuthStore.getState().clearSession();
+    }
+
     throw new ApiError(response.statusText || '요청을 처리하지 못했습니다.', classifyStatus(response.status), response.status);
   }
 

@@ -403,6 +403,37 @@ button {
   box-shadow: 0 0 0 8px rgba(255, 86, 100, 0.22);
 }
 
+.naver-work-zone-vertex,
+.history-event-marker {
+  display: block;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 2px solid #0e1113;
+  border-radius: 50%;
+  background: #f5a524;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 45%);
+  cursor: grab;
+}
+
+.history-event-marker {
+  width: 14px;
+  height: 14px;
+  cursor: default;
+}
+
+.history-event-marker.info {
+  background: var(--info);
+}
+
+.history-event-marker.warning {
+  background: var(--warning);
+}
+
+.history-event-marker.critical {
+  background: var(--danger);
+}
+
 .map-readout {
   background: rgba(13, 21, 27, 0.92);
   border: 1px solid #2b3a44;
@@ -2248,9 +2279,14 @@ button {
 }
 
 .fallback-work-zone-vertex {
+  cursor: grab;
   fill: var(--warning);
   stroke: var(--surface-map);
   stroke-width: 3;
+}
+
+.fallback-work-zone-vertex:active {
+  cursor: grabbing;
 }
 
 .fallback-map-ground {

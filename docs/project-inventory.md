@@ -45,7 +45,7 @@ React VideoPanel
 ### Frontend
 
 - 위치: `frontend/`
-- 기술: React 19, TypeScript, Vite, Zustand, React Router, TanStack Query, MapLibre GL, STOMP client, Vitest
+- 기술: React 19, TypeScript, Vite, Zustand, React Router, TanStack Query, 네이버 Maps JavaScript API, STOMP client, Vitest
 - 역할:
   - 관리자 로그인 화면과 관제 대시보드 UI 제공
   - 로봇 선택, 지도, 텔레메트리, 작업 구역, 제어 패널, 히스토리, 로그, 영상 패널 표시
@@ -197,20 +197,25 @@ React VideoPanel
 - `frontend/src/features/auth/api.ts`
 - `frontend/src/features/auth/authStore.ts`
 - `frontend/src/app/providers/AuthProvider.tsx`
+- `frontend/src/app/RequireAuth.tsx`
 - `frontend/src/features/auth/types.ts`
+- `frontend/src/shared/api/httpClient.ts`
 
 구현 내용:
 
 - `/login` 라우트에서 로그인 폼 제공
 - `login()`은 `/api/auth/login`으로 `adminId`, `password` 전송
 - 응답의 `user`, `accessToken`을 Zustand auth store에 저장
+- 실제 인증 세션은 `sessionStorage`에 저장되어 같은 탭의 새로고침 후 복원
+- 보호된 화면은 `RequireAuth`가 인증 상태를 확인하고 미인증 사용자를 `/login`으로 이동
+- 보호 API가 401을 반환하면 저장된 세션을 해제
 - mock auth가 켜져 있으면 `Mock Admin Login` 버튼으로 mock admin 세션 생성
 - 현재 로그인 폼 기본 admin/password 값은 비워져 있다.
 
 주의:
 
 - 실제 admin 계정 seed는 제거되어 있다. 로컬 admin credential은 별도 provision 필요.
-- token persistence는 현재 메모리 store 기반이다. 브라우저 reload 후 세션 유지 기능은 확인 필요.
+- refresh token과 자동 갱신은 구현되지 않았다. 만료된 JWT는 보호 API의 401 응답 시 정리된다.
 
 ### RBAC
 
@@ -260,35 +265,42 @@ React VideoPanel
   - `TelemetryPanel`
   - `VideoPanel`
 
-확인 필요:
+인증:
 
-- 인증되지 않은 사용자의 `/map` 접근 차단 route guard는 명시적으로 보이지 않는다. API 호출은 token 없으면 실패하지만 UI route 보호는 추가 검토 필요.
+- `/map`, `/history`, `/logs`, `/settings`는 `RequireAuth` 아래에 구성되어 미인증 접근을 차단한다.
 
-### MapLibre 지도
+### 네이버 위성 지도
 
 주요 파일:
 
 - `frontend/src/pages/MapViewPage.tsx`
 - `frontend/src/features/map/components/MapViewMap.tsx`
+- `frontend/src/features/map/components/NaverOperationalMap.tsx`
+- `frontend/src/features/map/naverMapsLoader.ts`
 - `frontend/src/features/map/mockMapData.ts`
 - `frontend/src/features/map/routeGeometry.ts`
 
 구현 내용:
 
-- MapLibre GL 사용
-- demotiles style 사용: `https://demotiles.maplibre.org/style.json`
-- mock work zone polygon source/layer
-- 샘플 경로를 완료 구간과 예정 구간으로 분리해 서로 다른 line layer로 표시
+- 네이버 Dynamic Map의 Maps JavaScript API 사용
+- `VITE_NAVER_MAP_CLIENT_ID`로 SDK를 비동기 로드하고 `SATELLITE` 지도 유형 사용
+- 기본 지도 중심과 `MOWER-01` 샘플 위치: 경도 `127.45455324663685`, 위도 `36.6259428230794`
+- 초기 줌 18, 최대 운용 줌 19로 제한
+- 작업 구역은 네이버 Polygon 오버레이로 표시
+- 샘플 경로를 완료 구간과 예정 구간으로 분리해 서로 다른 Polyline 오버레이로 표시
 - Mock 연결에서는 샘플 위치, 샘플 방향과 샘플 경로임을 명시
-- 실제 STOMP 연결에서 유효한 GPS 좌표가 수신되면 실제 marker 표시
+- 실제 STOMP 연결에서 유효한 GPS 좌표가 수신되면 실제 Marker 표시
 - 실제 GPS 좌표를 최대 500개까지 세션 완료 경로로 누적
 - 연속된 두 좌표에서 북쪽 기준 진행 방향 계산
-- telemetry 위치 변경 시 `easeTo`로 지도 center 이동
-- 지도 초기화 또는 tile style 실패 시 작업 구역, 경로와 샘플 marker를 포함한 fallback layer 표시
+- telemetry 위치 변경 시 `panTo`로 지도 중심 이동
+- Client ID 누락 또는 SDK 초기화 실패 시 작업 구역, 경로와 샘플 Marker를 포함한 fallback layer 표시
+- History 화면도 네이버 위성 지도에 과거 경로와 이벤트 위치를 표시
 
 Mock/Skeleton:
 
-- 지도 배경은 외부 demo tile style에 의존한다.
+- 지도 배경은 네이버 Dynamic Map과 브라우저에 전달되는 Client ID에 의존한다.
+- 네이버 콘솔의 Web 서비스 URL에 실제 프론트 Origin을 등록해야 한다.
+- Client Secret은 프론트에서 사용하지 않으며 Git 추적 파일에 기록하지 않는다.
 - 작업 구역과 예정 경로는 아직 mock data 기반이다.
 - GPS 미수신 또는 Mock 연결에서 표시하는 완료 경로와 방향 marker도 샘플 운용 데이터다.
 - 실제 거리, 작업 면적과 커버리지 계산은 구현하지 않았다.
@@ -321,10 +333,14 @@ Backend 대응:
   - 좌표 preview
   - validation error 표시
 - 지도 클릭으로 로봇별 작업 구역 꼭짓점 추가
+- 저장된 Polygon의 꼭짓점을 편집 초안으로 불러와 수정 시작
+- 네이버 지도와 fallback 지도에서 꼭짓점 드래그 이동 지원
+- 편집 취소 시 저장된 Polygon으로 복귀
+- 저장된 구역이 있으면 `기존 구역 수정`과 `새 구역 다시 그리기` 액션 분리
 - 꼭짓점 3개 이상 선택 시 닫힌 Polygon 미리보기 표시
 - 마지막 점 취소, 전체 초기화, 샘플 구역 불러오기 지원
-- MapLibre 정상 지도와 fallback 지도에서 동일한 편집 상태 공유
-- 편집 중인 꼭짓점을 별도 point layer로 표시
+- 네이버 정상 지도와 fallback 지도에서 동일한 편집 상태 공유
+- 편집 중인 꼭짓점을 드래그 가능한 Marker로 표시
 - 저장 성공 시 편집 결과를 `zoneStore`에 반영
 - `VITE_ENABLE_MOCK_WORK_ZONE=true`인 개발 환경에서는 실제 API 호출 대신 mock response 반환
 - 실제 모드에서는 GET 응답의 Polygon과 version을 저장소에 반영
@@ -334,12 +350,14 @@ Backend 대응:
 - 실제 모드에서는 샘플 구역 불러오기 액션을 숨겨 샘플 데이터 저장을 방지
 - production 모드에서는 `/api/robots/{robotId}/work-zone` GET/PUT 사용
 - backend는 PostGIS `geometry(Polygon, 4326)` 저장 및 version update 지원
+- 실제 로그인 세션의 네이버 지도에서 기존 Polygon 꼭짓점을 이동하고 저장한 뒤 새로고침해 같은 좌표가 재조회되는 것을 확인
+- 브라우저 저장 결과가 PostGIS version 증가, SRID 4326과 `ST_IsValid=true`에 반영되는 것을 확인
 
 Mock/Skeleton:
 
 - 개발 모드 저장 결과는 실제 DB에 반영되지 않으며 화면에서 이를 명시한다.
-- 꼭짓점 드래그 이동과 기존 Polygon 꼭짓점 직접 수정은 아직 지원하지 않는다.
-- 실제 로그인 세션과 PostGIS를 사용하는 브라우저 저장·새로고침 통합 검증이 필요하다.
+- 실제 API와 PostGIS 기준 최초 저장 version 1, 수정 version 2, 오래된 version 저장 HTTP 400 거부를 확인했다.
+- 두 브라우저 세션의 동시 수정 version 충돌 메시지는 사용자 화면에서 추가 검증이 필요하다.
 
 ### History
 

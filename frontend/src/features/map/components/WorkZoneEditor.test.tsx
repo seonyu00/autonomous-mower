@@ -79,6 +79,42 @@ describe('WorkZoneEditor', () => {
     expect(screen.getByText('실제 저장 모드')).toBeInTheDocument();
   });
 
+  it('저장된 작업 구역을 기존 꼭짓점으로 편집 시작하고 취소할 수 있다', async () => {
+    const geometry = {
+      type: 'Polygon' as const,
+      coordinates: [
+        [
+          [127.45, 36.62] as [number, number],
+          [127.46, 36.62] as [number, number],
+          [127.46, 36.63] as [number, number],
+          [127.45, 36.62] as [number, number],
+        ],
+      ],
+    };
+    getWorkZone.mockResolvedValue({
+      geometry,
+      version: 4,
+      zoneId: 12,
+      updatedAt: '2026-06-15T10:00:00',
+      mock: false,
+    });
+
+    render(<WorkZoneEditor />);
+    await screen.findByRole('button', { name: '기존 구역 수정' });
+    fireEvent.click(screen.getByRole('button', { name: '기존 구역 수정' }));
+
+    expect(useZoneStore.getState().draftVerticesByRobotId['MOWER-01']).toEqual([
+      [127.45, 36.62],
+      [127.46, 36.62],
+      [127.46, 36.63],
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: '편집 취소' }));
+
+    expect(useZoneStore.getState().editingByRobotId['MOWER-01']).toBe(false);
+    expect(screen.getByRole('button', { name: '기존 구역 수정' })).toBeInTheDocument();
+  });
+
   it('유효한 꼭짓점을 현재 version과 함께 저장하고 새 version을 반영한다', async () => {
     useZoneStore.setState({
       versionsByRobotId: { 'MOWER-01': 4 },

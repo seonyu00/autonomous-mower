@@ -1,4 +1,5 @@
 import type { LngLat, PolygonGeometry } from './geojson';
+import { DEFAULT_MAP_CENTER } from './mapDefaults';
 
 type ReadonlyLngLat = readonly [longitude: number, latitude: number];
 
@@ -17,10 +18,10 @@ export type ScreenRect = {
 };
 
 export const fallbackMapBounds: MapBounds = {
-  west: 127.4545,
-  south: 36.6272,
-  east: 127.458,
-  north: 36.6296,
+  west: DEFAULT_MAP_CENTER[0] - 0.00175,
+  south: DEFAULT_MAP_CENTER[1] - 0.0012,
+  east: DEFAULT_MAP_CENTER[0] + 0.00175,
+  north: DEFAULT_MAP_CENTER[1] + 0.0012,
 };
 
 export function closePolygonVertices(vertices: readonly ReadonlyLngLat[]): PolygonGeometry | null {

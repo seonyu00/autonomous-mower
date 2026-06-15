@@ -51,9 +51,12 @@ $env:VITE_ENABLE_MOCK_CONTROL="false"
 $env:VITE_ENABLE_MOCK_ROBOTS="false"
 $env:VITE_ENABLE_MOCK_REALTIME="false"
 $env:VITE_WSS_URL="ws://localhost:8080/ws"
+$env:VITE_NAVER_MAP_CLIENT_ID="<NAVER_MAP_CLIENT_ID>"
 
 npm run dev
 ```
+
+네이버 지도 Client ID가 없거나 SDK 초기화가 실패하면 지도 화면은 관제용 fallback 지도를 표시한다. 실제 Client ID는 `.env.local` 또는 실행 환경에서 관리한다. 네이버 콘솔의 Web 서비스 URL에는 `http://localhost`처럼 실제 프론트 Origin을 등록하며, Client Secret은 프론트에서 사용하거나 Git 추적 파일에 기록하지 않는다.
 
 ### 방향 버튼 활성화 조건
 

@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import maplibregl from 'maplibre-gl';
-import type { Feature, FeatureCollection, LineString, Point, Polygon } from 'geojson';
-import 'maplibre-gl/dist/maplibre-gl.css';
+import { env } from '../../../shared/config/env';
 import { useRobotStore } from '../../robots/robotStore';
 import { hasUsablePosition } from '../../telemetry/position';
 import { useTelemetryStore } from '../../telemetry/telemetryStore';
@@ -12,7 +10,6 @@ import {
   appendRoutePosition,
   calculateHeadingDegrees,
   splitRouteByProgress,
-  toLineFeature,
 } from '../routeGeometry';
 import { useZoneStore } from '../zoneStore';
 import {
@@ -21,17 +18,11 @@ import {
   projectFallbackPoint,
   toFallbackSvgPoint,
 } from '../workZoneEditing';
+import { NaverOperationalMap } from './NaverOperationalMap';
 
-const emptyFeatureCollection: FeatureCollection = {
-  type: 'FeatureCollection',
-  features: [],
-};
 const emptyDraftVertices: LngLat[] = [];
 
 export function MapViewMap() {
-  const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const markerRef = useRef<maplibregl.Marker | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [sessionRoutes, setSessionRoutes] = useState<Record<string, LngLat[]>>({});
 
@@ -44,6 +35,7 @@ export function MapViewMap() {
   const draftVerticesByRobotId = useZoneStore((state) => state.draftVerticesByRobotId);
   const editingByRobotId = useZoneStore((state) => state.editingByRobotId);
   const addDraftVertex = useZoneStore((state) => state.addDraftVertex);
+  const moveDraftVertex = useZoneStore((state) => state.moveDraftVertex);
   const positionAvailable = hasUsablePosition(telemetry?.latitude, telemetry?.longitude);
   const sampleMode = realtimeConnectionState === 'mock' || !positionAvailable;
   const livePositionAvailable = positionAvailable && !sampleMode;
@@ -94,210 +86,32 @@ export function MapViewMap() {
     }));
   }, [livePositionAvailable, selectedRobotId, telemetry]);
 
-  useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) {
-      return;
-    }
-
-    try {
-      mapRef.current = new maplibregl.Map({
-        container: mapContainerRef.current,
-        style: 'https://demotiles.maplibre.org/style.json',
-        center: [127.4564, 36.6285],
-        zoom: 16,
-        attributionControl: false,
-      });
-    } catch {
-      setMapError('지도를 초기화하지 못했습니다.');
-      return;
-    }
-
-    mapRef.current.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
-    mapRef.current.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
-
-    mapRef.current.on('error', () => {
-      setMapError('지도 스타일을 불러오지 못했습니다.');
-    });
-
-    mapRef.current.on('load', () => {
-      const map = mapRef.current;
-
-      if (!map) {
-        return;
-      }
-
-      map.addSource('work-zone', {
-        type: 'geojson',
-        data: emptyFeatureCollection,
-      });
-      map.addLayer({
-        id: 'work-zone-fill',
-        type: 'fill',
-        source: 'work-zone',
-        paint: {
-          'fill-color': '#49d37b',
-          'fill-opacity': 0.18,
-        },
-      });
-      map.addLayer({
-        id: 'work-zone-outline',
-        type: 'line',
-        source: 'work-zone',
-        paint: {
-          'line-color': '#49d37b',
-          'line-width': 3,
-        },
-      });
-      map.addSource('work-zone-vertices', {
-        type: 'geojson',
-        data: emptyFeatureCollection,
-      });
-      map.addLayer({
-        id: 'work-zone-vertices-circle',
-        type: 'circle',
-        source: 'work-zone-vertices',
-        paint: {
-          'circle-color': '#f5a524',
-          'circle-radius': 6,
-          'circle-stroke-color': '#0e1113',
-          'circle-stroke-width': 2,
-        },
-      });
-
-      map.addSource('route-planned', {
-        type: 'geojson',
-        data: emptyFeatureCollection,
-      });
-      map.addLayer({
-        id: 'route-planned-line',
-        type: 'line',
-        source: 'route-planned',
-        layout: {
-          'line-cap': 'round',
-          'line-join': 'round',
-        },
-        paint: {
-          'line-color': '#61b6ff',
-          'line-width': 4,
-          'line-dasharray': [2, 2],
-        },
-      });
-
-      map.addSource('route-completed', {
-        type: 'geojson',
-        data: emptyFeatureCollection,
-      });
-      map.addLayer({
-        id: 'route-completed-line',
-        type: 'line',
-        source: 'route-completed',
-        layout: {
-          'line-cap': 'round',
-          'line-join': 'round',
-        },
-        paint: {
-          'line-color': '#49d37b',
-          'line-width': 5,
-        },
-      });
-    });
-
-    return () => {
-      markerRef.current?.remove();
-      mapRef.current?.remove();
-      markerRef.current = null;
-      mapRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    const map = mapRef.current;
-
-    if (!map || !selectedRobotId || !editingWorkZone) {
-      return;
-    }
-
-    const handleMapClick = (event: maplibregl.MapMouseEvent) => {
-      addDraftVertex(selectedRobotId, [event.lngLat.lng, event.lngLat.lat]);
-    };
-
-    map.on('click', handleMapClick);
-
-    return () => {
-      map.off('click', handleMapClick);
-    };
-  }, [addDraftVertex, editingWorkZone, selectedRobotId]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-
-    if (!map || !selectedRobotId || !markerPosition) {
-      markerRef.current?.remove();
-      markerRef.current = null;
-      return;
-    }
-
-    if (!markerRef.current) {
-      const markerElement = document.createElement('div');
-      markerElement.className = 'maplibre-robot-marker';
-      markerElement.append(document.createElement('i'));
-      markerRef.current = new maplibregl.Marker({ element: markerElement }).setLngLat(markerPosition).addTo(map);
-    } else {
-      markerRef.current.setLngLat(markerPosition);
-    }
-
-    const markerElement = markerRef.current.getElement();
-    markerElement.className = `maplibre-robot-marker ${livePositionAvailable ? telemetry?.mode ?? 'idle' : 'sample'}`;
-    markerElement.setAttribute(
-      'aria-label',
-      livePositionAvailable ? `${selectedRobotId} 실제 위치` : `${selectedRobotId} 샘플 위치`,
-    );
-    markerElement.style.setProperty('--marker-heading', `${headingDegrees ?? 0}deg`);
-
-    if (livePositionAvailable) {
-      map.easeTo({
-        center: markerPosition,
-        duration: 500,
-        essential: true,
-      });
-    }
-  }, [headingDegrees, livePositionAvailable, markerPosition, selectedRobotId, telemetry?.mode]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-
-    if (!map || !selectedRobotId) {
-      return;
-    }
-
-    const updateSources = () => {
-      const zoneSource = map.getSource('work-zone') as maplibregl.GeoJSONSource | undefined;
-      const vertexSource = map.getSource('work-zone-vertices') as maplibregl.GeoJSONSource | undefined;
-      const plannedRouteSource = map.getSource('route-planned') as maplibregl.GeoJSONSource | undefined;
-      const completedRouteSource = map.getSource('route-completed') as maplibregl.GeoJSONSource | undefined;
-
-      zoneSource?.setData(
-        toFeatureCollection(toPolygonFeature(selectedRobotId, displayedWorkZone)),
-      );
-      vertexSource?.setData(toPointFeatureCollection(selectedRobotId, draftVertices));
-      plannedRouteSource?.setData(
-        toFeatureCollection(toLineFeature(selectedRobotId, plannedRoute, 'planned')),
-      );
-      completedRouteSource?.setData(
-        toFeatureCollection(toLineFeature(selectedRobotId, completedRoute, 'completed')),
-      );
-    };
-
-    if (map.isStyleLoaded()) {
-      updateSources();
-    } else {
-      map.once('load', updateSources);
-    }
-  }, [completedRoute, displayedWorkZone, draftVertices, plannedRoute, selectedRobotId]);
-
   return (
     <div className={`maplibre-shell ${editingWorkZone ? 'zone-editing' : ''}`}>
-      <div ref={mapContainerRef} className="maplibre-container" />
+      <NaverOperationalMap
+        clientId={env.naverMapClientId}
+        robotId={selectedRobotId}
+        robotMode={telemetry?.mode}
+        livePositionAvailable={livePositionAvailable}
+        markerPosition={markerPosition}
+        headingDegrees={headingDegrees}
+        workZone={displayedWorkZone}
+        draftVertices={draftVertices}
+        plannedRoute={plannedRoute}
+        completedRoute={completedRoute}
+        editing={editingWorkZone}
+        onAddVertex={(position) => {
+          if (selectedRobotId) {
+            addDraftVertex(selectedRobotId, position);
+          }
+        }}
+        onMoveVertex={(index, position) => {
+          if (selectedRobotId) {
+            moveDraftVertex(selectedRobotId, index, position);
+          }
+        }}
+        onError={setMapError}
+      />
       {mapError ? (
         <>
           <FallbackMapLayer
@@ -310,6 +124,11 @@ export function MapViewMap() {
             onAddVertex={(position) => {
               if (selectedRobotId) {
                 addDraftVertex(selectedRobotId, position);
+              }
+            }}
+            onMoveVertex={(index, position) => {
+              if (selectedRobotId) {
+                moveDraftVertex(selectedRobotId, index, position);
               }
             }}
           />
@@ -361,6 +180,7 @@ function FallbackMapLayer({
   draftVertices,
   editing,
   onAddVertex,
+  onMoveVertex,
 }: {
   robotId: string | null;
   positionAvailable: boolean;
@@ -369,8 +189,11 @@ function FallbackMapLayer({
   draftVertices: LngLat[];
   editing: boolean;
   onAddVertex: (position: LngLat) => void;
+  onMoveVertex: (index: number, position: LngLat) => void;
 }) {
   const workZonePath = toFallbackPath(workZone);
+  const draggingVertexIndexRef = useRef<number | null>(null);
+  const suppressNextClickRef = useRef(false);
 
   return (
     <div className="map-fallback-layer" aria-label="지도 대체 운용 화면">
@@ -385,7 +208,28 @@ function FallbackMapLayer({
             return;
           }
 
+          if (suppressNextClickRef.current) {
+            suppressNextClickRef.current = false;
+            return;
+          }
+
           onAddVertex(projectFallbackPoint(event, event.currentTarget.getBoundingClientRect()));
+        }}
+        onPointerMove={(event) => {
+          const index = draggingVertexIndexRef.current;
+
+          if (index === null) {
+            return;
+          }
+
+          event.preventDefault();
+          onMoveVertex(index, projectFallbackPoint(event, event.currentTarget.getBoundingClientRect()));
+        }}
+        onPointerUp={() => {
+          draggingVertexIndexRef.current = null;
+        }}
+        onPointerCancel={() => {
+          draggingVertexIndexRef.current = null;
         }}
       >
         <defs>
@@ -403,9 +247,16 @@ function FallbackMapLayer({
             <circle
               key={`${position[0]}-${position[1]}-${index}`}
               className="fallback-work-zone-vertex"
+              aria-label={`작업 구역 꼭짓점 ${index + 1}`}
               cx={x}
               cy={y}
               r="7"
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                draggingVertexIndexRef.current = index;
+                suppressNextClickRef.current = true;
+                event.currentTarget.setPointerCapture?.(event.pointerId);
+              }}
             />
           );
         })}
@@ -433,49 +284,6 @@ function FallbackMapLayer({
       </div>
     </div>
   );
-}
-
-function toFeatureCollection(
-  feature?: Feature<Polygon> | Feature<LineString> | Feature<Point>,
-): FeatureCollection {
-  return {
-    type: 'FeatureCollection',
-    features: feature ? [feature] : [],
-  };
-}
-
-function toPolygonFeature(
-  robotId: string,
-  geometry: PolygonGeometry | null | undefined,
-): Feature<Polygon> | undefined {
-  if (!geometry) {
-    return undefined;
-  }
-
-  return {
-    type: 'Feature',
-    properties: {
-      robotId,
-    },
-    geometry,
-  };
-}
-
-function toPointFeatureCollection(robotId: string, positions: LngLat[]): FeatureCollection<Point> {
-  return {
-    type: 'FeatureCollection',
-    features: positions.map((coordinates, index) => ({
-      type: 'Feature',
-      properties: {
-        robotId,
-        index,
-      },
-      geometry: {
-        type: 'Point',
-        coordinates,
-      },
-    })),
-  };
 }
 
 function toFallbackPath(polygon: PolygonGeometry | null | undefined) {

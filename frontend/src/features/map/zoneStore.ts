@@ -10,6 +10,7 @@ type ZoneStore = {
   startEditing: (robotId: string, vertices?: LngLat[]) => void;
   stopEditing: (robotId: string) => void;
   addDraftVertex: (robotId: string, position: LngLat) => void;
+  moveDraftVertex: (robotId: string, index: number, position: LngLat) => void;
   setDraftVertices: (robotId: string, vertices: LngLat[]) => void;
   undoDraftVertex: (robotId: string) => void;
   resetDraft: (robotId: string) => void;
@@ -54,6 +55,15 @@ export const useZoneStore = create<ZoneStore>((set) => ({
       draftVerticesByRobotId: {
         ...state.draftVerticesByRobotId,
         [robotId]: [...(state.draftVerticesByRobotId[robotId] ?? []), position],
+      },
+    })),
+  moveDraftVertex: (robotId, index, position) =>
+    set((state) => ({
+      draftVerticesByRobotId: {
+        ...state.draftVerticesByRobotId,
+        [robotId]: (state.draftVerticesByRobotId[robotId] ?? []).map((vertex, vertexIndex) =>
+          vertexIndex === index ? position : vertex,
+        ),
       },
     })),
   setDraftVertices: (robotId, vertices) =>

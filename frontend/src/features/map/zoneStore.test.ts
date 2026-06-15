@@ -5,6 +5,7 @@ describe('zoneStore', () => {
   beforeEach(() => {
     useZoneStore.setState({
       zonesByRobotId: {},
+      versionsByRobotId: {},
       draftVerticesByRobotId: {},
       editingByRobotId: {},
     });
@@ -23,5 +24,25 @@ describe('zoneStore', () => {
 
     useZoneStore.getState().resetDraft('MOWER-01');
     expect(useZoneStore.getState().draftVerticesByRobotId['MOWER-01']).toEqual([]);
+  });
+
+  it('지정한 꼭짓점만 새 좌표로 이동한다', () => {
+    useZoneStore.setState({
+      draftVerticesByRobotId: {
+        'MOWER-01': [
+          [127.45, 36.62],
+          [127.46, 36.62],
+          [127.46, 36.63],
+        ],
+      },
+    });
+
+    useZoneStore.getState().moveDraftVertex('MOWER-01', 1, [127.465, 36.625]);
+
+    expect(useZoneStore.getState().draftVerticesByRobotId['MOWER-01']).toEqual([
+      [127.45, 36.62],
+      [127.465, 36.625],
+      [127.46, 36.63],
+    ]);
   });
 });

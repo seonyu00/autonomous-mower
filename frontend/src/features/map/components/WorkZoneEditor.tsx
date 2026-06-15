@@ -128,16 +128,37 @@ export function WorkZoneEditor() {
 
       <div className="work-zone-actions">
         {!editing ? (
-          <Button
-            type="button"
-            variant="primary"
-            disabled={!selectedRobotId}
-            onClick={() => selectedRobotId && startEditing(selectedRobotId)}
-          >
-            새 구역 그리기
-          </Button>
+          <>
+            {storedPolygon ? (
+              <Button
+                type="button"
+                variant="primary"
+                disabled={!selectedRobotId}
+                onClick={() =>
+                  selectedRobotId && startEditing(selectedRobotId, openPolygonVertices(storedPolygon))
+                }
+              >
+                기존 구역 수정
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant={storedPolygon ? 'secondary' : 'primary'}
+              disabled={!selectedRobotId}
+              onClick={() => selectedRobotId && startEditing(selectedRobotId)}
+            >
+              {storedPolygon ? '새 구역 다시 그리기' : '새 구역 그리기'}
+            </Button>
+          </>
         ) : (
           <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => selectedRobotId && stopEditing(selectedRobotId)}
+            >
+              편집 취소
+            </Button>
             <Button
               type="button"
               variant="secondary"

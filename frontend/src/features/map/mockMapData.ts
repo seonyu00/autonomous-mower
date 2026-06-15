@@ -1,5 +1,6 @@
 import type { Feature, LineString } from 'geojson';
 import type { PolygonGeometry } from './geojson';
+import { DEFAULT_MAP_CENTER, offsetFromDefaultCenter } from './mapDefaults';
 
 export const mockRouteByRobotId: Record<string, Feature<LineString>> = {
   'MOWER-01': {
@@ -10,10 +11,10 @@ export const mockRouteByRobotId: Record<string, Feature<LineString>> = {
     geometry: {
       type: 'LineString',
       coordinates: [
-        [127.45565, 36.62795],
-        [127.45595, 36.62812],
-        [127.4562, 36.62828],
-        [127.4564, 36.6285],
+        offsetFromDefaultCenter(-0.00075, -0.00055),
+        offsetFromDefaultCenter(-0.00045, -0.00038),
+        offsetFromDefaultCenter(-0.0002, -0.00022),
+        DEFAULT_MAP_CENTER,
       ],
     },
   },
@@ -58,11 +59,11 @@ export const mockWorkZoneByRobotId: Record<string, Feature<PolygonGeometry>> = {
       type: 'Polygon',
       coordinates: [
         [
-          [127.45535, 36.62775],
-          [127.45685, 36.62795],
-          [127.4567, 36.62895],
-          [127.4552, 36.62872],
-          [127.45535, 36.62775],
+          offsetFromDefaultCenter(-0.00105, -0.00075),
+          offsetFromDefaultCenter(0.00045, -0.00055),
+          offsetFromDefaultCenter(0.0003, 0.00045),
+          offsetFromDefaultCenter(-0.0012, 0.00022),
+          offsetFromDefaultCenter(-0.00105, -0.00075),
         ],
       ],
     },

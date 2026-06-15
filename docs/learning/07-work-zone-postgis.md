@@ -77,6 +77,9 @@ WorkZoneEditor
 - 작업 구역이 없는 404 응답은 빈 작업 구역으로 처리한다.
 - 조회 실패 시 연결 상태 안내를 표시한다.
 - 저장 실패 시 편집 중인 꼭짓점을 유지한다.
+- 저장된 Polygon은 `기존 구역 수정`으로 꼭짓점을 그대로 불러올 수 있다.
+- 편집 중 꼭짓점을 드래그하면 해당 좌표만 변경된다.
+- `편집 취소`를 누르면 저장된 Polygon 표시로 돌아간다.
 
 Mock 여부는 `VITE_ENABLE_MOCK_WORK_ZONE`으로 결정한다.
 
@@ -87,11 +90,21 @@ VITE_ENABLE_MOCK_WORK_ZONE=false  # 백엔드 GET/PUT와 PostGIS 사용
 
 이 설정은 운용자 화면에서 변경하지 않는다. 실제 모드에서는 샘플 Polygon을 실수로 저장하지 않도록 `샘플 구역 불러오기` 액션도 표시하지 않는다.
 
-## 7. 안전상 한계
+## 7. 실제 저장 통합 검증
+
+2026년 6월 15일 로컬 Spring Boot와 PostGIS 환경에서 `MOWER-01` 작업 구역을 검증했다.
+
+- 작업 구역이 없는 상태에서 최초 PUT 저장이 성공했고 version 1이 반환됐다.
+- GET으로 같은 Polygon, SRID 4326과 꼭짓점 5개를 다시 조회했다.
+- 좌표를 수정해 version 1을 `expectedVersion`으로 전달하자 version 2로 저장됐다.
+- version 2 저장 이후 오래된 version 1로 다시 PUT하자 HTTP 400으로 거부됐다.
+- PostGIS에서 `ST_IsValid(zone_polygon)` 결과가 true임을 확인했다.
+
+## 8. 안전상 한계
 
 `WorkZone.isPointInside()`는 존재하지만 현재 주행 명령이나 telemetry 처리와 연결되지 않았다. 로봇이 Polygon 밖으로 나가도 자동 정지하지 않는다. 따라서 작업 구역 저장 기능과 경계 안전 기능은 별개다.
 
-## 8. 권장 파일 읽기 순서
+## 9. 권장 파일 읽기 순서
 
 1. `frontend/src/features/map/components/WorkZoneEditor.tsx`
 2. `frontend/src/features/map/zoneApi.ts`

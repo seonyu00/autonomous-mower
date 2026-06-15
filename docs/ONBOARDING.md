@@ -45,14 +45,15 @@ React 대시보드는 사용자가 보는 화면이다. 로그인, 로봇 선택
 - Vite
 - Zustand 상태 관리
 - React Router
-- MapLibre GL
+- 네이버 Maps JavaScript API
 - STOMP/WebSocket
 
 주의할 점:
 
 - 개발 환경의 로봇, 지도 경로, 이력, 로그, 영상 중 일부는 Mock 데이터에 의존한다.
 - STOMP 연결 코드는 있지만 실제 수신 메시지를 Zustand store에 반영하는 연결은 아직 제한적이다.
-- 로그인하지 않은 사용자의 화면 경로 접근을 차단하는 route guard가 현재 라우팅 구조에는 없다.
+- 로그인하지 않은 사용자는 route guard에 의해 `/login`으로 이동한다.
+- 저장된 JWT가 만료되어 보호 API가 401을 반환하면 프론트 세션을 해제하고 다시 로그인을 요구한다.
 
 ### 백엔드
 
