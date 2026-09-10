@@ -834,7 +834,8 @@ Topic:
 인증/권한:
 
 - STOMP CONNECT에서 `Authorization: Bearer <token>` 필요
-- robot topic subscribe는 `telemetry:read` 권한 필요
+- 위 로봇 토픽 6개만 인증된 사용자의 `telemetry:read` 권한으로 SUBSCRIBE 가능하며, 와일드카드와 나머지 목적지는 거부
+- `/topic/**`와 `/app/**`를 포함한 클라이언트 SEND는 모두 거부하며 서버 발행은 유지
 
 주의:
 

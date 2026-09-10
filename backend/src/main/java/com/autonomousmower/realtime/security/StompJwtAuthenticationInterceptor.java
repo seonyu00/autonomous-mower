@@ -3,6 +3,7 @@ package com.autonomousmower.realtime.security;
 import com.autonomousmower.auth.security.JwtTokenProvider;
 import com.autonomousmower.auth.security.SecurityUser;
 import java.util.List;
+import java.util.regex.Pattern;
 import org.springframework.http.HttpHeaders;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -20,6 +21,10 @@ import org.springframework.util.StringUtils;
 public class StompJwtAuthenticationInterceptor implements ChannelInterceptor {
 
     private static final String BEARER_PREFIX = "Bearer ";
+    // 로봇 한 대의 명시된 토픽만 구독하며 와일드카드 구독은 허용하지 않는다.
+    private static final Pattern ROBOT_SUBSCRIPTION = Pattern.compile(
+            "/topic/robots/[^/\\\\*?{}\\s]+/(telemetry|status|events|control-lock|control-events|video-status)"
+    );
 
     private final JwtTokenProvider jwtTokenProvider;
 
@@ -31,6 +36,10 @@ public class StompJwtAuthenticationInterceptor implements ChannelInterceptor {
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         if (accessor == null || accessor.getCommand() != StompCommand.CONNECT) {
+            // 클라이언트 발행 계약이 없으므로 서버 토픽과 /app을 포함한 모든 SEND를 거부한다.
+            if (accessor != null && accessor.getCommand() == StompCommand.SEND) {
+                throw new AccessDeniedException("Client STOMP SEND is not allowed.");
+            }
             if (accessor != null && accessor.getCommand() == StompCommand.SUBSCRIBE) {
                 authorizeSubscription(accessor);
             }
@@ -54,11 +63,11 @@ public class StompJwtAuthenticationInterceptor implements ChannelInterceptor {
 
     private void authorizeSubscription(StompHeaderAccessor accessor) {
         String destination = accessor.getDestination();
-        if (destination == null || !destination.startsWith("/topic/robots/")) {
-            return;
+        if (destination == null || !ROBOT_SUBSCRIPTION.matcher(destination).matches()) {
+            throw new AccessDeniedException("STOMP subscription destination is not allowed.");
         }
 
-        if (!(accessor.getUser() instanceof Authentication authentication)) {
+        if (!(accessor.getUser() instanceof Authentication authentication) || !authentication.isAuthenticated()) {
             throw new AccessDeniedException("Missing STOMP authentication.");
         }
 

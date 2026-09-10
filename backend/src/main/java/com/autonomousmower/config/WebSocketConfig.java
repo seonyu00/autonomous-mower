@@ -34,6 +34,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
+        // CONNECT 인증과 SUBSCRIBE 허용 목록, 클라이언트 SEND 거부를 브로커 진입 전에 적용한다.
         registration.interceptors(stompJwtAuthenticationInterceptor);
     }
 }

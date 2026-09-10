@@ -4,6 +4,14 @@
 
 ## 2026-09-10
 
+### STOMP 입력 메시지 권한 제한
+
+- 이전 텔레메트리·최근 이벤트 변경은 사용자 승인으로 `6731bf3`에 커밋했다. 그 뒤 작업 트리가 깨끗함을 확인하고 이번 변경을 분리했다.
+- 기존 인터셉터는 SEND를 검사하지 않고 로봇 prefix 밖의 SUBSCRIBE도 통과시켰다. 로봇 prefix 안에서도 목적지와 인증 완료 여부를 제한하지 않았다. 로컬 회귀 테스트 35개 중 24개 실패로 이러한 거부 누락을 재현했다.
+- 모든 클라이언트 SEND를 거부하고 기존 서버 발행 토픽 6개만 인증된 사용자의 `telemetry:read` 권한으로 구독하도록 제한했다. 와일드카드·빈 ID·추가 경로·알 수 없는 목적지를 거부한다. WebSocketConfig의 기존 inbound interceptor 등록은 유지하고 역할을 주석으로 명시했다.
+- 수정 후 STOMP 권한 테스트 36개와 기존 서버 발행 테스트 2개가 통과했다. JWT CONNECT의 정상·누락·파싱 실패, 비인증·권한 부족, 정상 구독 6개, 목적지 거부, 관리자 SEND 거부 및 구독 해제·연결 종료·heartbeat 유지를 확인했다. `gradlew --offline test --tests '*StompJwtAuthenticationInterceptorTest' --tests '*RealtimePublisherTest' bootJar --console=plain`을 실행해 Java 컴파일·bootJar도 통과했다.
+- 백엔드에 별도 린트 작업이 없어 컴파일과 diff 검사로 정적 검증했다. 프론트 변경이 없어 프론트 테스트·빌드·린트와 전체 백엔드 테스트는 반복하지 않았다. 실제 서버·DB·MQTT·장비에는 연결하지 않았다. HTTP 로그인·MQTT 인증·텔레메트리·로그 설계는 변경하지 않았으며, 이번 STOMP 변경은 미커밋 상태다.
+
 ### 최근 경고 및 이벤트를 실제 로그·STOMP에 연결
 
 - RecentEventsPanel이 항상 Mock 배열만 표시하던 문제를 제거했다. 실제 모드는 기존 로그 API로 선택 로봇의 초기 목록을 조회하고, 명시적 개발 Mock에서는 샘플 표시를 유지한다.

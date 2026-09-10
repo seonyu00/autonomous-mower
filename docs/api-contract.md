@@ -642,6 +642,10 @@ Authentication: `CONNECT` header `Authorization: Bearer <accessToken>` unless ba
 
 Frontend currently subscribes per selected robot. Backend should allow unsubscribe/re-subscribe without duplicate stream side effects.
 
+클라이언트 입력 권한은 `StompJwtAuthenticationInterceptor`에서 브로커 진입 전에 검사한다. `CONNECT`의 기존 JWT 인증을 유지하며, 인증된 사용자에게 `telemetry:read` 권한이 있을 때만 아래 4.1~4.6의 로봇별 토픽 6개를 `SUBSCRIBE`하도록 허용한다. 로봇 ID는 비어 있지 않은 단일 경로 구간이어야 하며 와일드카드·경로 패턴 구독과 그 밖의 목적지는 거부한다. 제어 상태 토픽을 조회하는 데 `control:write`는 요구하지 않는다.
+
+현재 클라이언트 발행 계약은 없으므로 `/topic/**`, `/app/**`를 포함한 모든 클라이언트 `SEND`를 거부한다. 서버의 토픽 발행, 구독 해제, 연결 종료와 heartbeat는 유지한다. 이 정책은 HTTP 로그인 방식이나 MQTT 브로커 인증을 변경하지 않는다.
+
 ### 4.1 `/topic/robots/{robotId}/telemetry`
 
 SRS 기준 약 1Hz로 전송한다. 서버 마지막 수신 후 3초 이상이면 `delayed`로 판정한다. 서버는 250ms 주기로 상태 전이를 검사하고, 브라우저도 추가 메시지 없이 경과 시간을 갱신한다.
