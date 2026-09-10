@@ -40,7 +40,7 @@ public class HistoryService {
                 .toList();
         GeoJsonFeatureDto route = new GeoJsonFeatureDto(
                 "Feature",
-                GeometryDto.lineString(coordinates),
+                coordinates.size() == 1 ? new GeometryDto("Point", coordinates.getFirst()) : GeometryDto.lineString(coordinates),
                 Map.of("srid", 4326)
         );
         TelemetryLog first = logs.getFirst();
@@ -52,8 +52,8 @@ public class HistoryService {
                 last.getRecordedAt(),
                 route,
                 List.of(),
-                0,
-                0
+                null,
+                null
         ));
     }
 

@@ -51,11 +51,30 @@ class HistoryServiceTest {
         );
 
         assertThat(history).hasSize(1);
+        assertThat((Object) history.getFirst().distanceMeters()).isNull();
+        assertThat((Object) history.getFirst().coveragePercent()).isNull();
         assertThat(history.getFirst().route().geometry().type()).isEqualTo("LineString");
         @SuppressWarnings("unchecked")
         List<List<Double>> coordinates = (List<List<Double>>) history.getFirst().route().geometry().coordinates();
         assertThat(coordinates)
                 .containsExactly(List.of(127.0001, 37.5001), List.of(127.0002, 37.5002));
+    }
+
+    @Test
+    void singleCoordinateIsAPointRatherThanInvalidLineString() {
+        Robot robot = new Robot("MOWER-01", "Orin NX Model-A", LocalDateTime.parse("2026-05-30T00:00:00"));
+        when(telemetryLogRepository.findByRobotRobotIdOrderByRecordedAtAsc("MOWER-01"))
+                .thenReturn(List.of(telemetryLog(robot, 127.0, 37.5, "2026-05-31T01:00:00")));
+        RobotHistoryResponse result = new HistoryService(telemetryLogRepository, robotService)
+                .findHistory("MOWER-01", null, null).getFirst();
+        assertThat(result.route().geometry().type()).isEqualTo("Point");
+        assertThat(result.route().geometry().coordinates()).isEqualTo(List.of(127.0, 37.5));
+    }
+
+    @Test
+    void noTelemetryReturnsEmptyHistory() {
+        when(telemetryLogRepository.findByRobotRobotIdOrderByRecordedAtAsc("MOWER-01")).thenReturn(List.of());
+        assertThat(new HistoryService(telemetryLogRepository, robotService).findHistory("MOWER-01", null, null)).isEmpty();
     }
 
     private TelemetryLog telemetryLog(Robot robot, double longitude, double latitude, String recordedAt) {

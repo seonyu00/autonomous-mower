@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -115,9 +116,11 @@ class BackendPhase4ControllerTest {
         mockMvc.perform(get("/api/history")
                         .param("robotId", "MOWER-01")
                         .param("from", "2026-05-30T00:00:00Z")
-                        .param("to", "2026-05-30T01:00:00Z"))
+                        .param("to", "2026-05-30T23:59:59.999999999Z"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(0)));
+        verify(historyService).findHistory("MOWER-01", LocalDateTime.parse("2026-05-30T00:00:00"),
+                LocalDateTime.parse("2026-05-30T23:59:59.999999999"));
     }
 
     @Test

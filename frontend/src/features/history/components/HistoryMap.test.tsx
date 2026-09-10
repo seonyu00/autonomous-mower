@@ -84,4 +84,12 @@ describe('HistoryMap', () => {
     expect(naverMock.maps.Polyline).toHaveBeenCalledTimes(1);
     expect(naverMock.maps.Marker).toHaveBeenCalledTimes(1);
   });
+
+  it('단일 위치는 선 대신 마커로 표시한다', async () => {
+    render(<HistoryMap selectedEntry={{ ...selectedEntry, events: [], distanceMeters: null,
+      route: { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [127.454, 36.626] } },
+    }} />);
+    await waitFor(() => expect(naverMock.maps.Marker).toHaveBeenCalledTimes(1));
+    expect(naverMock.maps.Polyline).not.toHaveBeenCalled();
+  });
 });

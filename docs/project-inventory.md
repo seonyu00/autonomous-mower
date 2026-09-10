@@ -383,12 +383,12 @@ Backend 주요 파일:
 
 - Frontend:
   - 개발 환경에서 `VITE_ENABLE_MOCK_HISTORY=true`일 때만 샘플 이력을 사용하고, 그 외에는 빈 결과로 시작한다.
-  - 실제 모드에서는 기존 `/api/history?robotId=&from=&to=` 호출을 유지한다. 로봇 선택지는 robot store를 사용하며 내부 이력 흐름의 개선은 별도 작업이다.
+  - 실제 로봇 store를 사용하고 `/api/history?robotId=&from=&to=`에 UTC 날짜 전체를 ISO Instant 범위로 전달한다. 실제·샘플 표시와 로딩·오류·빈 결과를 구분하며 이전 검색·필터·세션의 늦은 응답을 무시한다.
   - timeline과 map 표시 component 존재
 - Backend:
   - `history:read` 권한 필요
-  - `telemetry_log`를 조회해 GeoJSON LineString route 생성
-  - 현재 distance/coverage는 `0`으로 반환
+  - `telemetry_log`를 조회해 좌표 두 개 이상은 GeoJSON LineString, 한 개는 Point로 반환하며 화면은 단일 위치 마커로 표시
+  - 현재 distance/coverage는 `null`로 반환하고 화면은 미집계로 표시
   - events는 현재 빈 배열 반환
 
 Mock/Skeleton:

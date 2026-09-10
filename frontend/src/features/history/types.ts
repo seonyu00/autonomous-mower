@@ -17,10 +17,10 @@ export type HistoryEntry = {
   robotId: string;
   startedAt: string;
   endedAt?: string;
-  route: Feature<LineString>;
+  route: Feature<LineString | Point>;
   events: HistoryEvent[];
-  distanceMeters: number;
-  coveragePercent?: number;
+  distanceMeters: number | null;
+  coveragePercent?: number | null;
 };
 
 export type HistoryQuery = {

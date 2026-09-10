@@ -10,7 +10,7 @@ public record RobotHistoryResponse(
         LocalDateTime endedAt,
         GeoJsonFeatureDto route,
         List<HistoryEventResponse> events,
-        double distanceMeters,
-        int coveragePercent
+        Double distanceMeters,
+        Integer coveragePercent
 ) {
 }
