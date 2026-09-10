@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { mockTelemetry } from './mockTelemetry';
 import type { RealtimeConnectionState, RobotStatus, Telemetry } from './types';
 
 type ProtocolState = {
@@ -9,6 +8,7 @@ type ProtocolState = {
 };
 
 type TelemetryStore = {
+  dataSource: 'real' | 'mock';
   telemetryByRobotId: Record<string, Telemetry>;
   statusByRobotId: Record<string, RobotStatus>;
   connectionState: RealtimeConnectionState;
@@ -20,16 +20,18 @@ type TelemetryStore = {
 };
 
 export const useTelemetryStore = create<TelemetryStore>((set) => ({
-  telemetryByRobotId: mockTelemetry,
+  dataSource: 'real',
+  telemetryByRobotId: {},
   statusByRobotId: {},
-  connectionState: 'mock',
+  connectionState: 'disconnected',
   protocolState: {
     https: window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'connected' : 'disconnected',
-    wss: 'mock',
-    mqtt: 'connected',
+    wss: 'disconnected',
+    mqtt: 'disconnected',
   },
   upsertTelemetry: (telemetry) =>
     set((state) => ({
+      dataSource: 'real',
       telemetryByRobotId: {
         ...state.telemetryByRobotId,
         [telemetry.robotId]: telemetry,

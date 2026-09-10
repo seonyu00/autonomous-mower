@@ -15,6 +15,7 @@ type ApiEnvelope<T> = {
 };
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const sessionVersion = useAuthStore.getState().sessionVersion;
   const { responseType = 'json', ...fetchOptions } = options;
   const headers = new Headers(options.headers);
   headers.set('Accept', responseType === 'blob' ? 'image/jpeg' : 'application/json');
@@ -40,6 +41,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     throw new ApiError(error instanceof Error ? error.message : '네트워크 요청을 보내지 못했습니다.', 'network');
   }
 
+  if (!options.skipAuth && useAuthStore.getState().sessionVersion !== sessionVersion) {
+    throw new ApiError('종료된 세션의 응답입니다.', 'auth', 401);
+  }
+
   if (!response.ok) {
     if (response.status === 401 && !options.skipAuth) {
       useAuthStore.getState().clearSession();
@@ -52,11 +57,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     return undefined as T;
   }
 
-  if (responseType === 'blob') {
-    return (await response.blob()) as T;
+  const json = (responseType === 'blob' ? await response.blob() : await response.json()) as T | ApiEnvelope<T>;
+  if (!options.skipAuth && useAuthStore.getState().sessionVersion !== sessionVersion) {
+    throw new ApiError('종료된 세션의 응답입니다.', 'auth', 401);
   }
-
-  const json = (await response.json()) as T | ApiEnvelope<T>;
 
   if (json && typeof json === 'object' && 'success' in json && 'data' in json) {
     return (json as ApiEnvelope<T>).data as T;

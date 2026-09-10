@@ -8,6 +8,7 @@ import { useAuthStore } from '../../features/auth/authStore';
 import { fetchCurrentControlState } from '../../features/control/controlStateApi';
 import { useControlStore } from '../../features/control/controlStore';
 import { useTelemetryStore } from '../../features/telemetry/telemetryStore';
+import { mockTelemetry } from '../../features/telemetry/mockTelemetry';
 import { stompTopics } from '../../features/telemetry/stompTopics';
 import { useRobotStore } from '../../features/robots/robotStore';
 
@@ -16,21 +17,31 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
   const selectedRobotId = useRobotStore((state) => state.selectedRobotId);
   const accessToken = useAuthStore((state) => state.accessToken);
 
+  const sessionVersion = useAuthStore((state) => state.sessionVersion);
+
   useEffect(() => {
     if (!selectedRobotId || !accessToken) {
       setConnectionState('disconnected');
       return;
     }
 
+    let active = true;
+    const isCurrentSession = () => active && useAuthStore.getState().sessionVersion === sessionVersion
+      && useAuthStore.getState().accessToken === accessToken;
+
+    if (env.enableMockRealtime) {
+      useTelemetryStore.setState({ dataSource: 'mock', telemetryByRobotId: mockTelemetry });
+    }
+
     const client = createStompClient({
       brokerURL: env.wssUrl,
       enabled: env.enableMockRealtime === false,
       accessToken,
-      onStateChange: setConnectionState,
+      onStateChange: (state) => { if (isCurrentSession()) setConnectionState(state); },
     });
 
     const applyMessage = (topic: string, body: string) => {
-      applyRealtimeMessage(parseTopicMessage(topic, body));
+      if (isCurrentSession()) applyRealtimeMessage(parseTopicMessage(topic, body));
     };
     const unsubscribeRobotTopics = client.subscribeToRobotTopics(selectedRobotId, {
       telemetry: (message) => applyMessage(stompTopics.telemetry(selectedRobotId), message.body),
@@ -40,24 +51,22 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       controlEvents: (message) => applyMessage(stompTopics.controlEvents(selectedRobotId), message.body),
     });
 
-    let active = true;
-
     if (env.enableMockRealtime === false) {
       void fetchCurrentControlState(selectedRobotId)
         .then((snapshot) => {
-          if (active) {
+          if (isCurrentSession()) {
             useControlStore.getState().applyLockSnapshot(snapshot);
           }
         })
         .catch((error) => {
-          if (active) {
+          if (isCurrentSession()) {
             useControlStore
               .getState()
               .setCommandError(selectedRobotId, error instanceof Error ? error.message : '제어 상태를 조회하지 못했습니다.');
           }
         })
         .finally(() => {
-          if (active) {
+          if (isCurrentSession()) {
             client.activate();
           }
         });
@@ -70,7 +79,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       unsubscribeRobotTopics();
       client.deactivate();
     };
-  }, [accessToken, selectedRobotId, setConnectionState]);
+  }, [accessToken, sessionVersion, selectedRobotId, setConnectionState]);
 
   return children;
 }

@@ -210,7 +210,8 @@ React VideoPanel
 - 실제 인증 세션은 `sessionStorage`에 저장되어 같은 탭의 새로고침 후 복원
 - 보호된 화면은 `RequireAuth`가 인증 상태를 확인하고 미인증 사용자를 `/login`으로 이동
 - 보호 API가 401을 반환하면 저장된 세션을 해제
-- mock auth가 켜져 있으면 `Mock Admin Login` 버튼으로 mock admin 세션 생성
+- 개발 환경에서 `VITE_ENABLE_MOCK_AUTH=true`를 명시한 경우에만 Mock 관리자 초기 세션과 `Mock Admin Login`을 허용한다. 운영 빌드에서는 Mock 세션을 자동 생성하거나 저장소에서 복원하지 않는다.
+- 로그아웃 시 로봇·텔레메트리·제어·작업 구역·영상 store와 React Query 캐시를 비우고 이전 세션의 늦은 응답을 무시한다.
 - 현재 로그인 폼 기본 admin/password 값은 비워져 있다.
 
 주의:
@@ -289,12 +290,12 @@ React VideoPanel
 - 초기 줌 18, 최대 운용 줌 19로 제한
 - 작업 구역은 네이버 Polygon 오버레이로 표시
 - 샘플 경로를 완료 구간과 예정 구간으로 분리해 서로 다른 Polyline 오버레이로 표시
-- Mock 연결에서는 샘플 위치, 샘플 방향과 샘플 경로임을 명시
+- 텔레메트리의 명시적인 `dataSource`가 `mock`일 때만 샘플 위치·방향·경로를 표시하며 연결 상태 문자열로 추정하지 않는다.
 - 실제 STOMP 연결에서 유효한 GPS 좌표가 수신되면 실제 Marker 표시
 - 실제 GPS 좌표를 최대 500개까지 세션 완료 경로로 누적
 - 연속된 두 좌표에서 북쪽 기준 진행 방향 계산
 - telemetry 위치 변경 시 `panTo`로 지도 중심 이동
-- Client ID 누락 또는 SDK 초기화 실패 시 작업 구역, 경로와 샘플 Marker를 포함한 fallback layer 표시
+- Client ID 누락 또는 SDK 초기화 실패 시 fallback layer를 표시한다. 고정 경로와 샘플 Marker는 Mock 데이터에서만 표시한다.
 - History 화면도 네이버 위성 지도에 과거 경로와 이벤트 위치를 표시
 
 Mock/Skeleton:
@@ -302,8 +303,8 @@ Mock/Skeleton:
 - 지도 배경은 네이버 Dynamic Map과 브라우저에 전달되는 Client ID에 의존한다.
 - 네이버 콘솔의 Web 서비스 URL에 실제 프론트 Origin을 등록해야 한다.
 - Client Secret은 프론트에서 사용하지 않으며 Git 추적 파일에 기록하지 않는다.
-- 작업 구역과 예정 경로는 아직 mock data 기반이다.
-- GPS 미수신 또는 Mock 연결에서 표시하는 완료 경로와 방향 marker도 샘플 운용 데이터다.
+- 작업 구역은 실제 조회 또는 명시적 개발 Mock을 사용하며, 예정 경로는 Mock 모드에서만 제공한다.
+- 실제 모드의 GPS 미수신 상태에서는 샘플 위치·완료 경로·방향 Marker로 대체하지 않는다.
 - 실제 거리, 작업 면적과 커버리지 계산은 구현하지 않았다.
 - `VITE_ENABLE_MOCK_WORK_ZONE=false`이면 backend work-zone 조회 결과를 지도에 반영한다.
 
@@ -381,8 +382,8 @@ Backend 주요 파일:
 구현 내용:
 
 - Frontend:
-  - 개발 모드에서는 mock history 사용
-  - production 모드에서는 `/api/history?robotId=&from=&to=` 호출
+  - 개발 환경에서 `VITE_ENABLE_MOCK_HISTORY=true`일 때만 샘플 이력을 사용하고, 그 외에는 빈 결과로 시작한다.
+  - 실제 모드에서는 기존 `/api/history?robotId=&from=&to=` 호출을 유지한다. 로봇 선택지는 robot store를 사용하며 내부 이력 흐름의 개선은 별도 작업이다.
   - timeline과 map 표시 component 존재
 - Backend:
   - `history:read` 권한 필요
@@ -612,7 +613,9 @@ Backend:
   - `VITE_ENABLE_MOCK_ROBOTS`
   - `VITE_ENABLE_MOCK_REALTIME`
   - `VITE_ENABLE_MOCK_VIDEO`
-- 기능별 API module이 개발 모드/mock flag에 따라 mock data 또는 REST API 사용
+- 모든 프론트 Mock은 `import.meta.env.DEV`와 해당 `VITE_ENABLE_MOCK_*=true`가 모두 충족돼야 사용한다. 미설정·false 및 운영 빌드는 실제 모드다. 이력은 `VITE_ENABLE_MOCK_HISTORY`로 구분한다.
+- robot/telemetry store는 빈 상태로 시작한다. `RobotDataProvider` 조회 실패는 목록 오류로 표시하고 샘플로 대체하지 않는다. 목록에서 선택 로봇이 사라지면 첫 유효 로봇 또는 선택 없음으로 전환한다.
+- `RealtimeProvider`가 명시적 개발 Mock에서만 샘플 텔레메트리를 채운다. 실제 모드에서는 수신 전까지 텔레메트리 대기 상태를 표시한다.
 
 Mock 처리 예:
 

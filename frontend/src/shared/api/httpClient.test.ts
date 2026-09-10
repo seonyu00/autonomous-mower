@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const clearSession = vi.fn();
+const authSession = vi.hoisted(() => ({ version: 0 }));
 
 vi.mock('../config/env', () => ({
   env: {
@@ -12,6 +13,7 @@ vi.mock('../../features/auth/authStore', () => ({
   getAccessToken: () => 'expired-token',
   useAuthStore: {
     getState: () => ({
+      sessionVersion: authSession.version,
       clearSession,
     }),
   },
@@ -21,6 +23,7 @@ import { httpClient } from './httpClient';
 
 describe('httpClient', () => {
   beforeEach(() => {
+    authSession.version = 0;
     clearSession.mockReset();
     vi.stubGlobal(
       'fetch',
@@ -31,6 +34,16 @@ describe('httpClient', () => {
         }),
       ),
     );
+  });
+
+  it.each([200, 401])('이전 세션의 늦은 HTTP %s 응답이 새 세션에 영향을 주지 않는다', async (status) => {
+    let resolve!: (response: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise((done) => { resolve = done; })));
+    const pending = httpClient.get('/api/robots');
+    authSession.version += 1;
+    resolve(new Response('[]', { status }));
+    await expect(pending).rejects.toThrow('종료된 세션의 응답입니다.');
+    expect(clearSession).not.toHaveBeenCalled();
   });
 
   it('인증 요청이 401이면 저장된 로그인 세션을 제거한다', async () => {

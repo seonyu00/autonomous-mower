@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { env } from '../../shared/config/env';
 import type { VideoQualityPolicy, VideoSession, VideoSnapshot } from './types';
 
 export const defaultVideoQualityPolicy: VideoQualityPolicy = {
@@ -30,7 +31,7 @@ export function createDefaultVideoSession(robotId: string): VideoSession {
     snapshotError: null,
     lastStartedAt: null,
     lastStoppedAt: null,
-    mock: true,
+    mock: env.enableMockVideo,
   };
 }
 

@@ -7,6 +7,7 @@ type TelemetryPanelProps = {
 };
 
 export function TelemetryPanel({ compact = false }: TelemetryPanelProps) {
+  const dataSource = useTelemetryStore((state) => state.dataSource);
   const selectedRobotId = useRobotStore((state) => state.selectedRobotId);
   const selectedRobot = useRobotStore((state) =>
     selectedRobotId ? state.robots.find((robot) => robot.id === selectedRobotId) : undefined,
@@ -19,7 +20,7 @@ export function TelemetryPanel({ compact = false }: TelemetryPanelProps) {
     return (
       <section className={compact ? 'telemetry-panel compact-telemetry' : 'telemetry-panel'}>
         <p className="eyebrow">텔레메트리(Telemetry)</p>
-        <h2>선택된 로봇 없음</h2>
+        <h2>{selectedRobotId ? '텔레메트리 수신 대기' : '선택된 로봇 없음'}</h2>
       </section>
     );
   }
@@ -40,7 +41,7 @@ export function TelemetryPanel({ compact = false }: TelemetryPanelProps) {
       <section className="telemetry-panel compact-telemetry" aria-label="선택 로봇 요약 텔레메트리">
         <div className="panel-heading compact">
           <div>
-            <p className="eyebrow">{telemetry.robotId}</p>
+            <p className="eyebrow">{telemetry.robotId}{dataSource === 'mock' ? ' · 샘플 텔레메트리' : ''}</p>
             <h2>선택 로봇 요약</h2>
           </div>
           <span className={stale ? 'status-pill degraded' : 'status-pill connected'}>
@@ -56,7 +57,7 @@ export function TelemetryPanel({ compact = false }: TelemetryPanelProps) {
         </div>
         <div className="compact-telemetry-secondary" aria-label="보조 텔레메트리">
           <Metric label="속도" value={`${telemetry.speedMps.toFixed(1)} m/s`} />
-          <Metric label="GPS / RTK" value={positionAvailable ? 'GPS 수신' : 'GPS 미수신'} />
+          <Metric label="GPS / RTK" value={positionAvailable ? dataSource === 'mock' ? '샘플 위치' : 'GPS 수신' : 'GPS 미수신'} />
           <Metric label="마지막 수신" value={lastReceivedText} wide />
         </div>
       </section>
@@ -68,7 +69,7 @@ export function TelemetryPanel({ compact = false }: TelemetryPanelProps) {
       <div className="panel-heading compact">
         <div>
           <p className="eyebrow">텔레메트리(Telemetry)</p>
-          <h2>{telemetry.robotId}</h2>
+          <h2>{telemetry.robotId}{dataSource === 'mock' ? ' · 샘플 텔레메트리' : ''}</h2>
         </div>
         <span className={stale ? 'status-pill degraded' : 'status-pill connected'}>
           {stale ? '지연' : '실시간'}

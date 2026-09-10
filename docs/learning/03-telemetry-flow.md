@@ -20,7 +20,7 @@ Jetson 또는 Edge Mock
   -> TelemetryPanel
 ```
 
-마지막 두 단계는 의도된 흐름이며 현재 프론트엔드에서는 완전히 연결되지 않았다.
+2026-09-10 코드 확인 기준으로 `RealtimeProvider`는 telemetry/status 메시지를 파싱해 store에 반영한다. 아래 6절의 과거 검증 결과와 현재 구현을 구분한다.
 
 ## 3. Jetson 처리
 
@@ -61,22 +61,17 @@ Jetson 또는 Edge Mock
 
 DB에는 로봇 FK, 위치 Point, 배터리, 상태, 기록 시각이 저장된다.
 
-## 5. 프론트엔드 처리와 현재 단절 지점
+## 5. 프론트엔드 처리
 
-`stompClient.subscribeToRobotTopics()`는 telemetry handler를 전달받으면 `/topic/robots/{id}/telemetry`를 구독할 수 있다. `telemetryStore`에도 `upsertTelemetry()`가 구현돼 있다.
+`RealtimeProvider`는 선택 로봇과 인증 토큰이 있을 때 telemetry, status, events, controlLock, controlEvents 구독을 구성한다. `parseTopicMessage()`와 `applyRealtimeMessage()`가 텔레메트리·상태·제어 메시지를 해당 store에 반영한다. 일반 events는 구독되지만 이 handler에서 별도 store에 누적하지 않는다.
 
-하지만 현재 `RealtimeProvider`가 전달하는 handler는 다음 세 개뿐이다.
+로봇과 텔레메트리는 빈 상태에서 시작한다. 실제 로봇 조회 실패는 목록에 오류를 표시하고 샘플로 대체하지 않는다. 선택 로봇은 있으나 telemetry가 없으면 수신 대기를 표시한다. 개발 환경에서 `VITE_ENABLE_MOCK_REALTIME=true`를 명시했을 때만 샘플 텔레메트리를 공급한다. 운영 빌드는 이 값을 무시한다.
 
-```text
-controlLock: 빈 함수
-status: 빈 함수
-events: 빈 함수
-telemetry: 전달하지 않음
-```
+지도와 상태 패널은 `telemetryStore.dataSource`로 샘플 여부를 구분한다. 연결 상태 변화나 GPS 미수신을 이유로 샘플 경로·위치를 표시하지 않는다. 로그아웃 시 store와 조회 캐시를 비우고 이전 세션의 늦은 구독·조회 응답을 무시한다.
 
-따라서 백엔드가 정상 발행해도 store가 갱신되지 않는다. `telemetryStore`의 초기값도 `mockTelemetry`이므로 운영자가 Mock 값을 실제 상태로 오해할 수 있다.
+## 6. 과거 실제 검증에서 확인한 내용
 
-## 6. 실제 검증에서 확인한 내용
+아래는 기존 기록을 보존한 것이며 2026-09-10 실행 결과가 아니다. 이번 작업에서는 모의 API·구독을 사용하는 프론트 테스트만 실행하고 실제 장비·운영 서비스에는 연결하지 않았다.
 
 - Edge Mock 실행 중 `telemetry_log`가 약 1초 간격으로 증가했다.
 - 3초 동안 3개 레코드가 추가되는 것을 확인했다.

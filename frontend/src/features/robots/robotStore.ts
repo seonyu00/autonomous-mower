@@ -1,9 +1,10 @@
 import { create } from 'zustand';
-import { mockRobots } from './mockRobots';
 import type { Robot, RobotConnectionState } from './types';
 
 type RobotStore = {
   robots: Robot[];
+  error: string | null;
+  setError: (error: string | null) => void;
   selectedRobotId: string | null;
   selectRobot: (robotId: string) => void;
   setRobots: (robots: Robot[]) => void;
@@ -11,13 +12,15 @@ type RobotStore = {
 };
 
 export const useRobotStore = create<RobotStore>((set) => ({
-  robots: mockRobots,
-  selectedRobotId: mockRobots[0]?.id ?? null,
-  selectRobot: (robotId) => set({ selectedRobotId: robotId }),
+  robots: [],
+  error: null,
+  setError: (error) => set({ error }),
+  selectedRobotId: null,
+  selectRobot: (robotId) => set((state) => ({ selectedRobotId: state.robots.some((robot) => robot.id === robotId) ? robotId : null })),
   setRobots: (robots) =>
     set((state) => ({
       robots,
-      selectedRobotId: state.selectedRobotId ?? robots[0]?.id ?? null,
+      selectedRobotId: robots.some((robot) => robot.id === state.selectedRobotId) ? state.selectedRobotId : robots[0]?.id ?? null,
     })),
   setConnectionState: (robotId, connectionState) =>
     set((state) => ({

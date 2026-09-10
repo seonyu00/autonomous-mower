@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useVideoStore } from './videoStore';
+import { useAuthStore } from '../auth/authStore';
 
 const {
   connect,
@@ -75,5 +76,19 @@ describe('WebRTCClient', () => {
 
     expect(close).toHaveBeenCalled();
     expect(stopSignaling).toHaveBeenCalledWith('MOWER-01', 'video-session-001');
+  });
+
+  it('로그아웃 후 도착한 영상 세션은 연결하거나 store에 복원하지 않는다', async () => {
+    let resolve!: (value: unknown) => void;
+    startSignaling.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    const client = new WebRTCClient();
+    const pending = client.startStream('MOWER-01');
+    useAuthStore.getState().clearSession();
+    resolve({ robotId: 'MOWER-01', sessionId: 'old', mock: false, whepUrl: 'https://unused.invalid/whep' });
+    await pending;
+    await client.stopStream();
+    expect(connect).not.toHaveBeenCalled();
+    expect(stopSignaling).not.toHaveBeenCalled();
+    expect(useVideoStore.getState().sessionsByRobotId).toEqual({});
   });
 });

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useAuthStore } from '../../auth/authStore';
 import { useRobotStore } from '../../robots/robotStore';
 import { Button } from '../../../shared/ui/Button';
 import { validatePolygonGeometry } from '../geojson';
@@ -37,6 +38,7 @@ export function WorkZoneEditor() {
       return;
     }
 
+    const sessionVersion = useAuthStore.getState().sessionVersion;
     let cancelled = false;
     setLoading(true);
     setLoadMessage(null);
@@ -44,12 +46,12 @@ export function WorkZoneEditor() {
 
     getWorkZone(selectedRobotId)
       .then((snapshot) => {
-        if (cancelled) return;
+        if (cancelled || useAuthStore.getState().sessionVersion !== sessionVersion) return;
         setZone(selectedRobotId, snapshot.geometry, snapshot.version);
         setLoadMessage(snapshot.geometry ? null : '등록된 작업 구역이 없습니다.');
       })
       .catch(() => {
-        if (cancelled) return;
+        if (cancelled || useAuthStore.getState().sessionVersion !== sessionVersion) return;
         setLoadMessage('작업 구역을 불러오지 못했습니다. 연결 상태를 확인하세요.');
       })
       .finally(() => {
@@ -69,9 +71,11 @@ export function WorkZoneEditor() {
     }
 
     setSaveMessage(null);
+    const sessionVersion = useAuthStore.getState().sessionVersion;
 
     try {
       const response = await saveWorkZone(selectedRobotId, polygon, currentVersion);
+      if (useAuthStore.getState().sessionVersion !== sessionVersion) return;
       setZone(selectedRobotId, polygon, response.version);
       stopEditing(selectedRobotId);
       setSaveMessage(

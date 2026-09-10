@@ -1,4 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { httpClient } from '../../shared/api/httpClient';
+import { env } from '../../shared/config/env';
+import { useAuthStore } from '../auth/authStore';
+import { useControlStore } from './controlStore';
 import {
   changeMode,
   sendManualCommand,
@@ -10,6 +14,22 @@ describe('control command prechecks', () => {
   beforeEach(() => {
     resetStores();
     holdControl();
+  });
+
+  it.each([false, true])('로그아웃 후 명령 응답·오류가 이전 제어 상태를 복원하지 않는다: 실패=%s', async (fails) => {
+    const previousMock = env.enableMockControl;
+    env.enableMockControl = false;
+    let finish!: () => void;
+    const post = vi.spyOn(httpClient, 'post').mockImplementationOnce(() => new Promise((resolve, reject) => {
+      finish = () => fails ? reject(new Error('offline')) : resolve({ accepted: true, mode: 'manual' });
+    }));
+    const result = changeMode(TEST_ROBOT_ID, 'manual').catch(() => undefined);
+    useAuthStore.getState().clearSession();
+    finish();
+    await result;
+    expect(useControlStore.getState().controlByRobotId).toEqual({});
+    post.mockRestore();
+    env.enableMockControl = previousMock;
   });
 
   it('blocks normal commands while E-Stop is active', async () => {

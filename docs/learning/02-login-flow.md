@@ -33,7 +33,9 @@
 6. `RequireAuth`가 `/map`, `/history`, `/logs`, `/settings` 접근 전에 인증 상태를 확인한다.
 7. 보호 API가 401을 반환하면 `httpClient`가 저장된 세션을 해제하고 route guard가 `/login`으로 이동시킨다.
 
-개발 설정에서 `VITE_ENABLE_MOCK_AUTH=true`이면 실제 API 대신 Mock 로그인을 사용할 수 있다. 실제 인증을 확인할 때는 반드시 이 값을 `false`로 둔다.
+개발 환경에서 `VITE_ENABLE_MOCK_AUTH=true`를 명시해야 Mock 초기 관리자 세션과 Mock 로그인을 사용할 수 있다. 미설정·false 및 운영 빌드에서는 Mock이 비활성화된다. Mock 토큰은 저장하거나 복원하지 않는다.
+
+`clearSession()`은 인증 저장소와 로봇·텔레메트리·제어·작업 구역·영상 데이터를 비운다. 세션 번호 변경에 따라 `QueryProvider`가 조회·변경 캐시를 제거하고 하위 화면을 다시 생성한다. HTTP·실시간·제어·영상 응답은 종료된 세션의 데이터를 다시 반영하지 않는다.
 
 ## 4. 백엔드 처리
 

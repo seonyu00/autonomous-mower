@@ -1,9 +1,10 @@
+import { env } from '../../shared/config/env';
 import { httpClient } from '../../shared/api/httpClient';
 import { mockHistoryEntries } from './mockHistory';
 import type { HistoryEntry, HistoryQuery } from './types';
 
 export async function getHistory(query: HistoryQuery): Promise<HistoryEntry[]> {
-  if (import.meta.env.DEV) {
+  if (env.enableMockHistory) {
     const from = new Date(`${query.from}T00:00:00.000Z`).getTime();
     const to = new Date(`${query.to}T23:59:59.999Z`).getTime();
 

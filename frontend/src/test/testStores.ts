@@ -24,11 +24,13 @@ export function resetStores(role: Role = 'admin') {
   });
 
   useRobotStore.setState({
+    error: null,
     robots: mockRobots,
     selectedRobotId: TEST_ROBOT_ID,
   });
 
   useTelemetryStore.setState({
+    dataSource: 'mock',
     telemetryByRobotId: mockTelemetry,
     statusByRobotId: {},
     connectionState: 'mock',

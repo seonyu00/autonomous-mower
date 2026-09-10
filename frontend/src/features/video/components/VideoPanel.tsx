@@ -130,15 +130,20 @@ export function VideoPanel() {
       return;
     }
 
+    const sessionVersion = useAuthStore.getState().sessionVersion;
+    const isCurrentSession = () => useAuthStore.getState().sessionVersion === sessionVersion;
     patchSession(selectedRobotId, { snapshotLoading: true, snapshotError: null });
 
     try {
       const capturedAt = new Date().toISOString();
       const jpeg = await captureVideoFrame(videoRef.current);
+      if (!isCurrentSession()) return;
       const snapshot = await uploadManualSnapshot(selectedRobotId, capturedAt, jpeg);
+      if (!isCurrentSession()) return;
       setSnapshot(selectedRobotId, snapshot);
       patchSession(selectedRobotId, { snapshotLoading: false });
     } catch (error) {
+      if (!isCurrentSession()) return;
       patchSession(selectedRobotId, {
         snapshotLoading: false,
         snapshotError: error instanceof Error ? error.message : '스냅샷을 저장하지 못했습니다.',
@@ -160,7 +165,7 @@ export function VideoPanel() {
         {session?.stream ? (
           <video ref={videoRef} className="video-element" autoPlay muted playsInline aria-label="로봇 실시간 카메라 스트림" />
         ) : (
-          <div className="mock-video-placeholder" aria-label="샘플 영상 영역">
+          <div className="mock-video-placeholder" aria-label={session?.mock ? "샘플 영상 영역" : "영상 수신 대기 영역"}>
             <span>{session?.loading ? '스트림 연결 중' : '카메라 스트림 대기 중'}</span>
             <small>{selectedRobotId ?? '로봇 선택'}</small>
           </div>

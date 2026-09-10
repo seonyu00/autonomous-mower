@@ -184,6 +184,8 @@ async function requestControlCommand(
   path: string,
   body: ControlRequestBody,
 ): Promise<ControlCommandResult> {
+  const sessionVersion = useAuthStore.getState().sessionVersion;
+  const isCurrentSession = () => useAuthStore.getState().sessionVersion === sessionVersion;
   const requestedAt = new Date().toISOString();
   const pendingCommand = {
     id: `${commandType}-${requestedAt}`,
@@ -210,13 +212,13 @@ async function requestControlCommand(
     }
 
     const result = await httpClient.post<ControlCommandResult>(path, requestBody);
-    applyBackendControlResult(robotId, result);
+    if (isCurrentSession()) applyBackendControlResult(robotId, result);
     return result;
   } catch (error) {
-    useControlStore.getState().setCommandError(robotId, error instanceof Error ? error.message : '제어 명령을 처리하지 못했습니다.');
+    if (isCurrentSession()) useControlStore.getState().setCommandError(robotId, error instanceof Error ? error.message : '제어 명령을 처리하지 못했습니다.');
     throw error;
   } finally {
-    useControlStore.getState().setPendingCommand(robotId, null);
+    if (isCurrentSession()) useControlStore.getState().setPendingCommand(robotId, null);
   }
 }
 

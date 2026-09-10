@@ -143,7 +143,7 @@ describe('MapViewMap', () => {
   });
 
   it('실제 좌표가 연속 수신되면 세션 경로 기준 방향을 표시한다', async () => {
-    useTelemetryStore.getState().setConnectionState('connected');
+    useTelemetryStore.setState({ dataSource: 'real', connectionState: 'connected' });
     render(<MapViewMap />);
 
     const telemetry = useTelemetryStore.getState().telemetryByRobotId[TEST_ROBOT_ID];
@@ -155,7 +155,7 @@ describe('MapViewMap', () => {
       });
     });
 
-    expect(await screen.findByText('GPS 위치 · 샘플 예정 경로')).toBeInTheDocument();
+    expect(await screen.findByText('GPS 위치')).toBeInTheDocument();
     expect(screen.getByText(/GPS 방향/)).toBeInTheDocument();
     expect(screen.getByText('세션 완료 경로')).toBeInTheDocument();
   });
@@ -165,7 +165,7 @@ describe('MapViewMap', () => {
 
     expect(await screen.findByText('샘플 운용 데이터')).toBeInTheDocument();
     expect(screen.getByText('샘플 위치')).toBeInTheDocument();
-    expect(screen.queryByText('GPS 위치 · 샘플 예정 경로')).not.toBeInTheDocument();
+    expect(screen.queryByText('GPS 위치')).not.toBeInTheDocument();
   });
 
   it('fallback 지도 편집 중 클릭한 위치를 작업 구역 꼭짓점으로 추가한다', async () => {
@@ -193,6 +193,24 @@ describe('MapViewMap', () => {
     expect(useZoneStore.getState().draftVerticesByRobotId['MOWER-01']).toEqual([
       DEFAULT_MAP_CENTER,
     ]);
+  });
+
+  it('실제 모드의 미수신 상태에서는 샘플 경로와 대체 로봇 위치를 표시하지 않는다', () => {
+    useTelemetryStore.setState({ dataSource: 'real', telemetryByRobotId: {}, connectionState: 'disconnected' });
+    render(<MapViewMap />);
+    expect(screen.queryByText('샘플 운용 데이터')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('대체 샘플 경로')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('대체 로봇 위치')).not.toBeInTheDocument();
+    expect(naverMapMock.props?.plannedRoute).toEqual([]);
+    expect(naverMapMock.props?.completedRoute).toEqual([]);
+    expect(naverMapMock.props?.markerPosition).toBeUndefined();
+  });
+
+  it('연결 상태가 바뀌어도 샘플 데이터 출처는 유지된다', () => {
+    useTelemetryStore.getState().setConnectionState('connected');
+    render(<MapViewMap />);
+    expect(screen.getByText('샘플 운용 데이터')).toBeInTheDocument();
+    expect(screen.queryByText('GPS 위치')).not.toBeInTheDocument();
   });
 
   it('fallback 지도에서 꼭짓점을 드래그하면 해당 좌표만 이동한다', async () => {

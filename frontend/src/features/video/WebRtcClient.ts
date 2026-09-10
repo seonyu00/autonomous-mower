@@ -1,13 +1,15 @@
 import { reconnectStream, startStream as startSignaling, stopStream as stopSignaling } from './signalingApi';
+import { useAuthStore } from '../auth/authStore';
 import { useVideoStore } from './videoStore';
 import { WhepClient } from './WhepClient';
-import type { VideoSessionResponse } from './types';
+import type { VideoSession, VideoSessionResponse } from './types';
 
 type WebRtcClientOptions = {
   onRemoteStream?: (stream: MediaStream | null) => void;
 };
 
 export class WebRTCClient {
+  private readonly authSessionVersion = useAuthStore.getState().sessionVersion;
   private readonly whepClient: WhepClient;
   private robotId: string | null = null;
   private sessionId: string | null = null;
@@ -17,9 +19,10 @@ export class WebRTCClient {
     this.onRemoteStream = options.onRemoteStream;
     this.whepClient = new WhepClient({
       onRemoteStream: (stream) => {
+        if (!this.isCurrentSession()) return;
         this.onRemoteStream?.(stream);
         if (this.robotId) {
-          useVideoStore.getState().patchSession(this.robotId, {
+          this.patchSession(this.robotId, {
             stream,
             connectionState: 'connected',
             loading: false,
@@ -28,7 +31,7 @@ export class WebRTCClient {
       },
       onConnectionStateChange: (state) => {
         if (this.robotId) {
-          useVideoStore.getState().patchSession(this.robotId, {
+          this.patchSession(this.robotId, {
             connectionState: mapPeerConnectionState(state),
             loading: state === 'connecting' || state === 'new',
           });
@@ -38,8 +41,9 @@ export class WebRTCClient {
   }
 
   async startStream(robotId: string) {
+    if (!this.isCurrentSession()) return;
     this.robotId = robotId;
-    useVideoStore.getState().patchSession(robotId, {
+    this.patchSession(robotId, {
       connectionState: 'connecting',
       loading: true,
       error: null,
@@ -72,8 +76,9 @@ export class WebRTCClient {
     this.onRemoteStream?.(null);
 
     try {
+      if (!this.isCurrentSession()) return;
       await stopSignaling(robotId, sessionId);
-      useVideoStore.getState().patchSession(robotId, {
+      this.patchSession(robotId, {
         sessionId: null,
         stream: null,
         connectionState: 'disconnected',
@@ -90,11 +95,12 @@ export class WebRTCClient {
   }
 
   async reconnect(robotId = this.robotId) {
+    if (!this.isCurrentSession()) return;
     if (!robotId) {
       return;
     }
 
-    useVideoStore.getState().patchSession(robotId, {
+    this.patchSession(robotId, {
       connectionState: 'reconnecting',
       loading: true,
       error: null,
@@ -102,6 +108,7 @@ export class WebRTCClient {
 
     try {
       await this.whepClient.close();
+      if (!this.isCurrentSession()) return;
       const session = await reconnectStream(robotId, this.sessionId);
       this.robotId = robotId;
       await this.connectSession(session);
@@ -111,6 +118,7 @@ export class WebRTCClient {
   }
 
   private async connectSession(session: VideoSessionResponse) {
+    if (!this.isCurrentSession()) return;
     this.sessionId = session.sessionId;
 
     if (!session.mock) {
@@ -118,9 +126,13 @@ export class WebRTCClient {
         throw new Error('WHEP 연결 주소가 없습니다.');
       }
       await this.whepClient.connect(session.whepUrl);
+      if (!this.isCurrentSession()) {
+        await this.whepClient.close();
+        return;
+      }
     }
 
-    useVideoStore.getState().patchSession(session.robotId, {
+    this.patchSession(session.robotId, {
       sessionId: session.sessionId,
       connectionState: 'connected',
       loading: false,
@@ -129,8 +141,16 @@ export class WebRTCClient {
     });
   }
 
+  private isCurrentSession() {
+    return useAuthStore.getState().sessionVersion === this.authSessionVersion;
+  }
+
+  private patchSession(robotId: string, patch: Partial<VideoSession>) {
+    if (this.isCurrentSession()) useVideoStore.getState().patchSession(robotId, patch);
+  }
+
   private patchFailure(robotId: string, error: unknown, fallback: string) {
-    useVideoStore.getState().patchSession(robotId, {
+    this.patchSession(robotId, {
       connectionState: 'failed',
       loading: false,
       error: error instanceof Error ? error.message : fallback,

@@ -30,16 +30,16 @@ export function MapViewMap() {
   const telemetry = useTelemetryStore((state) =>
     selectedRobotId ? state.telemetryByRobotId[selectedRobotId] : undefined,
   );
-  const realtimeConnectionState = useTelemetryStore((state) => state.connectionState);
+  const dataSource = useTelemetryStore((state) => state.dataSource);
   const zonesByRobotId = useZoneStore((state) => state.zonesByRobotId);
   const draftVerticesByRobotId = useZoneStore((state) => state.draftVerticesByRobotId);
   const editingByRobotId = useZoneStore((state) => state.editingByRobotId);
   const addDraftVertex = useZoneStore((state) => state.addDraftVertex);
   const moveDraftVertex = useZoneStore((state) => state.moveDraftVertex);
   const positionAvailable = hasUsablePosition(telemetry?.latitude, telemetry?.longitude);
-  const sampleMode = realtimeConnectionState === 'mock' || !positionAvailable;
+  const sampleMode = dataSource === 'mock';
   const livePositionAvailable = positionAvailable && !sampleMode;
-  const sampleRoute = selectedRobotId ? mockRouteByRobotId[selectedRobotId] : undefined;
+  const sampleRoute = sampleMode && selectedRobotId ? mockRouteByRobotId[selectedRobotId] : undefined;
   const sampleRouteSegments = useMemo(
     () => splitRouteByProgress(sampleRoute?.geometry.coordinates ?? [], 0.38),
     [sampleRoute],
@@ -63,7 +63,7 @@ export function MapViewMap() {
   const displayedWorkZone = editingWorkZone
     ? closePolygonVertices(draftVertices)
     : storedWorkZone;
-  const sourceLabel = livePositionAvailable ? 'GPS 위치 · 샘플 예정 경로' : '샘플 운용 데이터';
+  const sourceLabel = sampleMode ? '샘플 운용 데이터' : livePositionAvailable ? 'GPS 위치' : '위치 수신 대기';
   const positionStatus = !positionAvailable
     ? 'GPS 미수신'
     : sampleMode
@@ -116,7 +116,7 @@ export function MapViewMap() {
         <>
           <FallbackMapLayer
             robotId={selectedRobotId}
-            positionAvailable={livePositionAvailable}
+            sampleMode={sampleMode}
             headingDegrees={headingDegrees}
             workZone={displayedWorkZone}
             draftVertices={draftVertices}
@@ -164,8 +164,8 @@ export function MapViewMap() {
         </div>
       </div>
       <div className="map-legend" aria-label="지도 범례">
-        <span><i className="legend-line completed" />{livePositionAvailable ? '세션 완료 경로' : '샘플 완료 경로'}</span>
-        <span><i className="legend-line planned" />샘플 예정 경로</span>
+        <span><i className="legend-line completed" />{sampleMode ? '샘플 완료 경로' : '세션 완료 경로'}</span>
+        {sampleMode ? <span><i className="legend-line planned" />샘플 예정 경로</span> : null}
         <span><i className="legend-area" />작업 구역</span>
       </div>
     </div>
@@ -174,7 +174,7 @@ export function MapViewMap() {
 
 function FallbackMapLayer({
   robotId,
-  positionAvailable,
+  sampleMode,
   headingDegrees,
   workZone,
   draftVertices,
@@ -183,7 +183,7 @@ function FallbackMapLayer({
   onMoveVertex,
 }: {
   robotId: string | null;
-  positionAvailable: boolean;
+  sampleMode: boolean;
   headingDegrees: number | null;
   workZone: PolygonGeometry | null | undefined;
   draftVertices: LngLat[];
@@ -260,28 +260,33 @@ function FallbackMapLayer({
             />
           );
         })}
-        <path
-          className="fallback-route-planned"
-          d="M225 445 C310 395 330 220 430 170 C535 120 690 165 770 250 C825 310 760 390 650 420 C515 460 380 430 280 360"
-        />
-        <path
-          className="fallback-route-complete"
-          d="M225 445 C310 395 330 220 430 170 C500 136 570 140 625 158"
-        />
+        {sampleMode ? (
+          <>
+            <path
+              className="fallback-route-planned"
+              d="M225 445 C310 395 330 220 430 170 C535 120 690 165 770 250 C825 310 760 390 650 420 C515 460 380 430 280 360"
+            />
+            <path
+              className="fallback-route-complete"
+              d="M225 445 C310 395 330 220 430 170 C500 136 570 140 625 158"
+            />
+          </>
+        ) : null}
       </svg>
-      <span className="fallback-zone-label" aria-label="대체 작업 구역">샘플 작업 구역</span>
-      <span className="fallback-route-label" aria-label="대체 샘플 경로">샘플 완료·예정 경로</span>
-      <div
-        className={positionAvailable ? 'fallback-robot-marker live' : 'fallback-robot-marker sample'}
-        aria-label="대체 로봇 위치"
-        style={{ '--marker-heading': `${headingDegrees ?? 0}deg` } as CSSProperties}
-      >
-        <i aria-hidden="true" />
-        <strong>
-          {robotId ?? '로봇 없음'}
-          {positionAvailable ? '' : ' · 샘플'}
-        </strong>
-      </div>
+      {sampleMode ? (
+        <>
+          <span className="fallback-zone-label" aria-label="대체 작업 구역">샘플 작업 구역</span>
+          <span className="fallback-route-label" aria-label="대체 샘플 경로">샘플 완료·예정 경로</span>
+          <div
+            className="fallback-robot-marker sample"
+            aria-label="대체 로봇 위치"
+            style={{ '--marker-heading': `${headingDegrees ?? 0}deg` } as CSSProperties}
+          >
+            <i aria-hidden="true" />
+            <strong>{robotId ?? '로봇 없음'} · 샘플</strong>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { env } from '../../shared/config/env';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resetStores, TEST_ROBOT_ID } from '../../test/testStores';
 import { createDefaultVideoSession, defaultVideoQualityPolicy, useVideoStore } from './videoStore';
@@ -5,16 +6,17 @@ import { createDefaultVideoSession, defaultVideoQualityPolicy, useVideoStore } f
 describe('videoStore', () => {
   beforeEach(() => {
     resetStores();
+    env.enableMockVideo = false;
   });
 
-  it('creates an idle mock session with the SRS stream quality policy', () => {
+  it('실제 모드의 초기 영상 세션은 샘플로 표시하지 않는다', () => {
     expect(createDefaultVideoSession(TEST_ROBOT_ID)).toMatchObject({
       robotId: TEST_ROBOT_ID,
       connectionState: 'idle',
       loading: false,
       qualityPolicy: defaultVideoQualityPolicy,
       snapshot: null,
-      mock: true,
+      mock: false,
     });
   });
 

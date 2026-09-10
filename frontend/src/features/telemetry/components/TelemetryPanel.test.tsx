@@ -19,7 +19,7 @@ describe('TelemetryPanel compact summary', () => {
     expect(screen.getByText('AUTONOMOUS')).toBeInTheDocument();
     expect(screen.getByText('MOWING')).toBeInTheDocument();
     expect(screen.getByText('0.8 m/s')).toBeInTheDocument();
-    expect(screen.getByText('GPS 수신')).toBeInTheDocument();
+    expect(screen.getByText('샘플 위치')).toBeInTheDocument();
     expect(screen.getAllByText('온라인')).toHaveLength(2);
   });
 

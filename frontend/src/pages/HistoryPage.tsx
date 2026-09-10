@@ -4,14 +4,17 @@ import { HistoryMap } from '../features/history/components/HistoryMap';
 import { HistoryTimeline } from '../features/history/components/HistoryTimeline';
 import { mockHistoryEntries } from '../features/history/mockHistory';
 import type { HistoryEntry } from '../features/history/types';
-import { mockRobots } from '../features/robots/mockRobots';
+import { useRobotStore } from '../features/robots/robotStore';
+import { env } from '../shared/config/env';
 
 export function HistoryPage() {
-  const [robotId, setRobotId] = useState(mockRobots[0]?.id ?? '');
+  const robots = useRobotStore((state) => state.robots);
+  const [requestedRobotId, setRobotId] = useState('');
+  const robotId = robots.some((robot) => robot.id === requestedRobotId) ? requestedRobotId : robots[0]?.id ?? '';
   const [from, setFrom] = useState('2026-05-28');
   const [to, setTo] = useState('2026-05-29');
   const [entries, setEntries] = useState<HistoryEntry[]>(() =>
-    mockHistoryEntries.filter((entry) => entry.robotId === (mockRobots[0]?.id ?? '')),
+    env.enableMockHistory ? mockHistoryEntries.filter((entry) => entry.robotId === (robots[0]?.id ?? '')) : [],
   );
   const [selectedEntryId, setSelectedEntryId] = useState(entries[0]?.id ?? null);
 
@@ -34,14 +37,14 @@ export function HistoryPage() {
             <p className="eyebrow">2단계</p>
             <h2>작업 이력</h2>
           </div>
-          <span className="status-pill connected">샘플 데이터</span>
+          <span className="status-pill connected">{env.enableMockHistory ? '샘플 데이터' : '실제 이력'}</span>
         </div>
 
         <div className="history-filters">
           <label>
             로봇
             <select value={robotId} onChange={(event) => setRobotId(event.target.value)}>
-              {mockRobots.map((robot) => (
+              {robots.map((robot) => (
                 <option key={robot.id} value={robot.id}>
                   {robot.id}
                 </option>
@@ -59,7 +62,7 @@ export function HistoryPage() {
             <input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
           </label>
 
-          <button className="primary-button" type="button" onClick={handleSearch}>
+          <button className="primary-button" type="button" disabled={!robotId} onClick={handleSearch}>
             검색
           </button>
         </div>
