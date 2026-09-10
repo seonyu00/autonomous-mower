@@ -34,7 +34,7 @@ class RealtimePublisherTest {
                 0.4,
                 92,
                 Instant.parse("2026-05-30T01:00:00Z"),
-                null
+                null, null, Instant.parse("2026-05-30T01:00:00Z")
         );
 
         publisher.publishTelemetry(message);
@@ -47,7 +47,7 @@ class RealtimePublisherTest {
         RealtimePublisher publisher = new RealtimePublisher(messagingTemplate);
         Instant now = Instant.parse("2026-05-30T01:00:00Z");
         RobotStatusMessage status = new RobotStatusMessage(
-                "MOWER-01", "online", "connected", "connected", "connected", now, false
+                "MOWER-01", "online", "connected", "connected", "connected", now, false, null
         );
         RobotEventMessage event = new RobotEventMessage(
                 "event-001", "MOWER-01", "warning", "obstacle-detected", "Obstacle detected.", now, "edge", null, null

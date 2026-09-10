@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { RealtimeConnectionState, RobotStatus, Telemetry } from './types';
+import type { RealtimeConnectionState, RobotStatus, Telemetry, TelemetryReception } from './types';
 
 type ProtocolState = {
   https: 'connected' | 'disconnected';
@@ -8,6 +8,8 @@ type ProtocolState = {
 };
 
 type TelemetryStore = {
+  receptionByRobotId: Record<string, TelemetryReception & { observedAt: number }>;
+  upsertReception: (robotId: string, reception: TelemetryReception) => void;
   dataSource: 'real' | 'mock';
   telemetryByRobotId: Record<string, Telemetry>;
   statusByRobotId: Record<string, RobotStatus>;
@@ -19,7 +21,13 @@ type TelemetryStore = {
   setMqttState: (mqtt: ProtocolState['mqtt']) => void;
 };
 
-export const useTelemetryStore = create<TelemetryStore>((set) => ({
+export const useTelemetryStore = create<TelemetryStore>((set, get) => ({
+  receptionByRobotId: {},
+  upsertReception: (robotId, reception) => set((state) => {
+    const previous = state.receptionByRobotId[robotId];
+    if (previous && Date.parse(previous.checkedAt) >= Date.parse(reception.checkedAt)) return state;
+    return { receptionByRobotId: { ...state.receptionByRobotId, [robotId]: { ...reception, observedAt: Date.now() } } };
+  }),
   dataSource: 'real',
   telemetryByRobotId: {},
   statusByRobotId: {},
@@ -29,15 +37,23 @@ export const useTelemetryStore = create<TelemetryStore>((set) => ({
     wss: 'disconnected',
     mqtt: 'disconnected',
   },
-  upsertTelemetry: (telemetry) =>
+  upsertTelemetry: (telemetry) => {
+    get().upsertReception(telemetry.robotId, {
+      state: 'normal',
+      lastReceivedAt: telemetry.lastReceivedAt,
+      edgeSampledAt: telemetry.edgeSampledAt ?? null,
+      checkedAt: telemetry.serverTimestamp ?? telemetry.lastReceivedAt,
+    });
     set((state) => ({
       dataSource: 'real',
       telemetryByRobotId: {
         ...state.telemetryByRobotId,
         [telemetry.robotId]: telemetry,
       },
-    })),
-  upsertStatus: (status) =>
+    }));
+  },
+  upsertStatus: (status) => {
+    if (status.telemetryReception) get().upsertReception(status.robotId, status.telemetryReception);
     set((state) => ({
       statusByRobotId: {
         ...state.statusByRobotId,
@@ -47,7 +63,8 @@ export const useTelemetryStore = create<TelemetryStore>((set) => ({
         ...state.protocolState,
         mqtt: status.mqttState,
       },
-    })),
+    }));
+  },
   setConnectionState: (connectionState) =>
     set((state) => ({
       connectionState,

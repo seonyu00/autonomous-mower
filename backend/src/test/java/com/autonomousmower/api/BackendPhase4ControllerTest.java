@@ -73,7 +73,7 @@ class BackendPhase4ControllerTest {
     @WithMockUser(authorities = "robots:read")
     void robotsListRequiresReadPermissionAndReturnsContractShape() throws Exception {
         when(robotService.findAll()).thenReturn(List.of(new RobotResponse(
-                "MOWER-01", "Orin NX Model-A", "offline", true, null, null
+                "MOWER-01", "Orin NX Model-A", "offline", true, null, null, null
         )));
 
         mockMvc.perform(get("/api/robots"))

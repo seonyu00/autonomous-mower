@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { parseTopicMessage } from './topicRouter';
 
 describe('parseTopicMessage', () => {
+  it('일반 events의 서버 이벤트 이름을 허용하고 잘못된 시각·로봇·심각도는 거부한다', () => {
+    const event = { id: 'event-1', robotId: 'MOWER-01', severity: 'warning', eventType: 'telemetry-delayed',
+      message: '수신 지연', occurredAt: '2026-09-10T00:00:00Z', source: 'telemetry-monitor' };
+    const topic = '/topic/robots/MOWER-01/events';
+    expect(parseTopicMessage(topic, JSON.stringify(event))).toEqual({ type: 'events', payload: event });
+    for (const patch of [{ occurredAt: 'bad date' }, { robotId: 'MOWER-02' }, { severity: 'unknown' }, { id: '' }]) {
+      expect(parseTopicMessage(topic, JSON.stringify({ ...event, ...patch })).type).toBe('unknown');
+    }
+  });
   it('parses telemetry, status, control-lock, and control-events payloads', () => {
     expect(
       parseTopicMessage(

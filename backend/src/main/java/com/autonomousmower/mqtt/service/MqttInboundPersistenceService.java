@@ -14,6 +14,8 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -34,6 +36,7 @@ public class MqttInboundPersistenceService {
     private final TelemetryLogRepository telemetryLogRepository;
     private final RobotEventRepository robotEventRepository;
     private final Clock clock;
+    private final Map<String, StatusSignature> lastStatuses = new HashMap<>();
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), WGS84_SRID);
 
     public MqttInboundPersistenceService(
@@ -49,7 +52,7 @@ public class MqttInboundPersistenceService {
     }
 
     @Transactional
-    public boolean persistTelemetry(MqttTelemetryPayload payload) {
+    public boolean persistTelemetry(MqttTelemetryPayload payload, Instant receivedAt) {
         Optional<Robot> robot = knownRobot(payload.robotId(), "telemetry");
         if (robot.isEmpty()) {
             return false;
@@ -62,17 +65,20 @@ public class MqttInboundPersistenceService {
                 point,
                 payload.batteryLevel(),
                 robotState(payload),
-                serverNow()
+                toUtcLocal(receivedAt)
         ));
         return true;
     }
 
     @Transactional
-    public boolean persistStatus(MqttStatusPayload payload) {
+    public synchronized boolean persistStatus(MqttStatusPayload payload) {
         Optional<Robot> robot = knownRobot(payload.robotId(), "status");
         if (robot.isEmpty()) {
             return false;
         }
+
+        StatusSignature signature = new StatusSignature(payload.connectionState(), payload.mqttState(), payload.edgeState(), payload.stale());
+        if (signature.equals(lastStatuses.get(payload.robotId()))) return true;
 
         robotEventRepository.save(new RobotEvent(
                 "status-" + payload.robotId() + "-" + UUID.randomUUID(),
@@ -87,6 +93,7 @@ public class MqttInboundPersistenceService {
                 serverNow(),
                 "mqtt-status"
         ));
+        lastStatuses.put(payload.robotId(), signature);
         return true;
     }
 
@@ -108,6 +115,8 @@ public class MqttInboundPersistenceService {
         ));
         return true;
     }
+
+    private record StatusSignature(String connection, String mqtt, String edge, boolean stale) {}
 
     private Optional<Robot> knownRobot(String robotId, String payloadType) {
         Optional<Robot> robot = robotRepository.findById(robotId);

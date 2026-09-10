@@ -1,5 +1,5 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetStores, TEST_ROBOT_ID } from '../../../test/testStores';
 import { useTelemetryStore } from '../telemetryStore';
 import { TelemetryPanel } from './TelemetryPanel';
@@ -9,7 +9,19 @@ describe('TelemetryPanel compact summary', () => {
     resetStores();
   });
 
-  afterEach(cleanup);
+  afterEach(() => { cleanup(); vi.useRealTimers(); });
+
+  it('추가 메시지가 없어도 정확히 3초부터 지연 표시로 바뀐다', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-10T00:00:00Z'));
+    const telemetry = useTelemetryStore.getState().telemetryByRobotId[TEST_ROBOT_ID];
+    useTelemetryStore.getState().upsertTelemetry({ ...telemetry, lastReceivedAt: new Date().toISOString() });
+    render(<TelemetryPanel />);
+    act(() => vi.advanceTimersByTime(2999));
+    expect(screen.queryByText('지연')).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByText('지연')).toBeInTheDocument();
+  });
 
   it('좁은 사이드바용 핵심 텔레메트리를 compact하게 표시한다', () => {
     render(<TelemetryPanel compact />);
@@ -20,7 +32,8 @@ describe('TelemetryPanel compact summary', () => {
     expect(screen.getByText('MOWING')).toBeInTheDocument();
     expect(screen.getByText('0.8 m/s')).toBeInTheDocument();
     expect(screen.getByText('샘플 위치')).toBeInTheDocument();
-    expect(screen.getAllByText('온라인')).toHaveLength(2);
+    expect(screen.getByText('온라인')).toBeInTheDocument();
+    expect(screen.getByLabelText('텔레메트리 수신 상태')).toBeInTheDocument();
   });
 
   it('0,0 좌표는 GPS 미수신 상태로 표시한다', () => {

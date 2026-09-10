@@ -644,7 +644,7 @@ Frontend currently subscribes per selected robot. Backend should allow unsubscri
 
 ### 4.1 `/topic/robots/{robotId}/telemetry`
 
-Broadcast rate: around 1Hz per SRS. If no telemetry for more than 3 seconds, frontend marks stale/degraded.
+SRS 기준 약 1Hz로 전송한다. 서버 마지막 수신 후 3초 이상이면 `delayed`로 판정한다. 서버는 250ms 주기로 상태 전이를 검사하고, 브라우저도 추가 메시지 없이 경과 시간을 갱신한다.
 
 Payload:
 
@@ -659,6 +659,8 @@ Payload:
   "speedMps": 0.4,
   "signalStrength": 92,
   "lastReceivedAt": "2026-05-30T01:00:00.000Z",
+  "edgeSampledAt": "2026-05-30T00:59:59.900Z",
+  "serverTimestamp": "2026-05-30T01:00:00.010Z",
   "errorState": null
 }
 ```
@@ -666,6 +668,8 @@ Payload:
 `mode`: `manual | autonomous | emergency | idle`
 
 `workState`: `idle | mowing | paused | error`
+
+`lastReceivedAt`은 서버의 MQTT 텔레메트리 처리 진입 시각이며 DB 기록에도 같은 값을 사용한다. `edgeSampledAt`은 MQTT `receivedAt`을 보존한 Edge 샘플 생성 시각이다. `serverTimestamp`는 서버 응답 생성 시각이며 브라우저는 서버 경과 시간과 브라우저 경과 시간을 합산한다. Edge 시각은 지연 판정에 사용하지 않는다.
 
 ### 4.2 `/topic/robots/{robotId}/status`
 
@@ -679,11 +683,21 @@ Payload:
   "wssState": "connected",
   "edgeState": "connected",
   "lastSeenAt": "2026-05-30T01:00:00.000Z",
-  "stale": false
+  "stale": false,
+  "telemetryReception": {
+    "state": "normal",
+    "lastReceivedAt": "2026-05-30T01:00:00.000Z",
+    "edgeSampledAt": "2026-05-30T00:59:59.900Z",
+    "checkedAt": "2026-05-30T01:00:00.010Z"
+  }
 }
 ```
 
 `connectionState`: `online | degraded | offline`
+
+`telemetryReception`은 로봇 목록·상세 조회 응답에도 포함한다. `state`는 `never-seen | normal | delayed`이며 서버 프로세스 시작 후 수신 이력이 없으면 `never-seen`, 두 수신 시각은 null이다. `checkedAt`은 서버 판정 시각이다. 수신 상태는 현재 서버 메모리에 보관하며 재시작 후 첫 수신으로 다시 초기화한다.
+
+Edge status의 `lastSeenAt`과 텔레메트리 마지막 서버 수신은 별개다. status heartbeat는 텔레메트리 수신 시각을 갱신하지 않는다. 지연·복구 전이만 각각 `telemetry-delayed`·`telemetry-recovered` 이벤트로 한 번 기록하고 발행한다. 같은 Edge 상태는 시각이 달라도 DB `status-update`를 중복 기록하지 않는다.
 
 ### 4.3 `/topic/robots/{robotId}/events`
 
@@ -716,6 +730,10 @@ Payload:
   }
 }
 ```
+
+최근 경고 및 이벤트 패널은 기존 `GET /api/logs`의 선택 로봇 초기 목록에 이 topic의 이벤트를 합친다. 같은 `id`는 한 번만 표시하며 `occurredAt` 내림차순 최신 3건을 유지한다. `eventType`과 `source`는 서버가 제공하는 문자열이므로 `telemetry-delayed`·`telemetry-recovered`와 `telemetry-monitor`도 허용한다.
+
+파서는 필수 필드·심각도·시각과 topic/payload 로봇 ID 일치를 확인한다. 로봇·세션 변경 후 도착한 이전 요청은 성공·실패 모두 현재 패널에 반영하지 않는다. 샘플 로그 모드에는 실제 STOMP 이벤트를 섞지 않는다. 기존 로그 API의 offset 없는 UTC LocalDateTime은 최근 목록에서만 UTC로 해석해 STOMP 시각과 함께 정렬한다. API 경로·조회 조건·응답 구조는 변경하지 않는다.
 
 ### 4.4 `/topic/robots/{robotId}/control-lock`
 

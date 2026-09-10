@@ -2,8 +2,13 @@ import { useControlStore } from '../../features/control/controlStore';
 import { useRobotStore } from '../../features/robots/robotStore';
 import { useTelemetryStore } from '../../features/telemetry/telemetryStore';
 import type { TopicMessage } from './topicRouter';
+import { useRecentEventsStore } from '../../features/logs/recentEventsStore';
+import { env } from '../config/env';
 
 export function applyRealtimeMessage(message: TopicMessage) {
+  if (message.type === 'events' && !env.enableMockLogs) {
+    useRecentEventsStore.getState().mergeEvents(message.payload.robotId, [message.payload]);
+  }
   if (message.type === 'telemetry') {
     useTelemetryStore.getState().upsertTelemetry(message.payload);
     const emergency = message.payload.mode === 'emergency';

@@ -59,13 +59,19 @@ Jetson 또는 Edge Mock
 5. `TelemetryLogRepository`가 `telemetry_log`에 저장한다.
 6. 같은 handler가 `RealtimePublisher`로 STOMP 메시지를 발행한다.
 
-DB에는 로봇 FK, 위치 Point, 배터리, 상태, 기록 시각이 저장된다.
+DB에는 로봇 FK, 위치 Point, 배터리, 상태, 기록 시각이 저장된다. `MqttInboundHandler` 진입 시 주입된 `Clock`으로 서버 수신 시각을 잡아 DB와 STOMP `lastReceivedAt`에 함께 사용한다. Edge의 MQTT `receivedAt`은 `edgeSampledAt`으로 별도 전달하며 지연 판정에는 사용하지 않는다.
+
+`TelemetryReceptionService`는 로봇별 마지막 수신을 메모리에 보관하고 250ms 주기로 검사한다. 마지막 서버 수신 후 3초 이상이면 `delayed`, 새 텔레메트리 수신 시 `normal`로 전환한다. 서버 프로세스 시작 후 미수신 로봇은 `never-seen`이며 시간 경과만으로 지연 이벤트를 만들지 않는다. 조회 응답과 STOMP status에 `telemetryReception`을 포함하므로 새 브라우저도 현재 상태를 확인할 수 있다.
+
+지연과 복구 전이만 DB 이벤트로 한 번씩 저장한다. Edge status가 계속 오더라도 텔레메트리 수신 시각은 갱신하지 않는다. 동일 Edge 상태의 반복 메시지도 시각을 제외한 상태 필드로 비교해 DB 중복 기록을 막는다. 이 감시는 표시·기록용이며 물리 정지나 MQTT 명령을 발행하지 않는다.
 
 ## 5. 프론트엔드 처리
 
-`RealtimeProvider`는 선택 로봇과 인증 토큰이 있을 때 telemetry, status, events, controlLock, controlEvents 구독을 구성한다. `parseTopicMessage()`와 `applyRealtimeMessage()`가 텔레메트리·상태·제어 메시지를 해당 store에 반영한다. 일반 events는 구독되지만 이 handler에서 별도 store에 누적하지 않는다.
+`RealtimeProvider`는 선택 로봇과 인증 토큰이 있을 때 telemetry, status, events, controlLock, controlEvents 구독을 구성한다. `parseTopicMessage()`와 `applyRealtimeMessage()`가 텔레메트리·상태·제어 메시지를 해당 store에 반영한다. 일반 events는 payload와 topic의 로봇 ID를 검증한 뒤 `recentEventsStore`에 합치고 최근 경고 및 이벤트 패널에 반영한다. 초기 목록은 기존 로그 API로 조회하며 이벤트 ID 중복과 이전 로봇·세션의 늦은 조회 응답을 제외한다.
 
 로봇과 텔레메트리는 빈 상태에서 시작한다. 실제 로봇 조회 실패는 목록에 오류를 표시하고 샘플로 대체하지 않는다. 선택 로봇은 있으나 telemetry가 없으면 수신 대기를 표시한다. 개발 환경에서 `VITE_ENABLE_MOCK_REALTIME=true`를 명시했을 때만 샘플 텔레메트리를 공급한다. 운영 빌드는 이 값을 무시한다.
+
+상태 패널은 `useTelemetryReception`으로 서버가 제공한 경과 시간과 브라우저에서 흐른 시간을 합산해 미수신·정상·지연을 표시한다. 메시지가 끊겨도 250ms 타이머와 탭 복귀 시 갱신하며 로봇별 수신 시각을 분리한다.
 
 지도와 상태 패널은 `telemetryStore.dataSource`로 샘플 여부를 구분한다. 연결 상태 변화나 GPS 미수신을 이유로 샘플 경로·위치를 표시하지 않는다. 로그아웃 시 store와 조회 캐시를 비우고 이전 세션의 늦은 구독·조회 응답을 무시한다.
 

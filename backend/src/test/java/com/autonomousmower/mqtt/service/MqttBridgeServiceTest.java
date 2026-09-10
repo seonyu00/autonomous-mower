@@ -15,6 +15,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.Clock;
+import java.time.ZoneOffset;
+import com.autonomousmower.telemetry.service.TelemetryReceptionService;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -30,7 +33,9 @@ class MqttBridgeServiceTest {
         MqttInboundHandler handler = new MqttInboundHandler(
                 realtimePublisher,
                 persistenceService,
-                commandExecutionService
+                commandExecutionService,
+                Mockito.mock(TelemetryReceptionService.class),
+                Clock.fixed(Instant.parse("2026-09-10T00:00:00Z"), ZoneOffset.UTC)
         );
         MqttTelemetryPayload payload = new MqttTelemetryPayload(
                 "MOWER-01",
@@ -44,7 +49,7 @@ class MqttBridgeServiceTest {
                 Instant.parse("2026-05-30T01:00:00Z"),
                 null
         );
-        when(persistenceService.persistTelemetry(payload)).thenReturn(true);
+        when(persistenceService.persistTelemetry(payload, Instant.parse("2026-09-10T00:00:00Z"))).thenReturn(true);
 
         handler.handleTelemetry(payload);
 
@@ -52,7 +57,9 @@ class MqttBridgeServiceTest {
         verify(realtimePublisher).publishTelemetry(captor.capture());
         assertThat(captor.getValue().robotId()).isEqualTo("MOWER-01");
         assertThat(captor.getValue().batteryLevel()).isEqualTo(82);
-        assertThat(captor.getValue().lastReceivedAt()).isEqualTo(payload.receivedAt());
+        assertThat(captor.getValue().lastReceivedAt()).isEqualTo(Instant.parse("2026-09-10T00:00:00Z"));
+        assertThat(captor.getValue().edgeSampledAt()).isEqualTo(payload.receivedAt());
+        assertThat(captor.getValue().serverTimestamp()).isEqualTo(Instant.parse("2026-09-10T00:00:00Z"));
     }
 
     @Test
@@ -99,7 +106,9 @@ class MqttBridgeServiceTest {
         MqttInboundHandler handler = new MqttInboundHandler(
                 realtimePublisher,
                 persistenceService,
-                commandExecutionService
+                commandExecutionService,
+                Mockito.mock(TelemetryReceptionService.class),
+                Clock.fixed(Instant.parse("2026-09-10T00:00:00Z"), ZoneOffset.UTC)
         );
         MqttCommandAckPayload payload = new MqttCommandAckPayload(
                 "cmd-001",

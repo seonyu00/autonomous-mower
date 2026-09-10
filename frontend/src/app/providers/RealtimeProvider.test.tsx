@@ -7,6 +7,7 @@ import { resetStores, TEST_ROBOT_ID } from '../../test/testStores';
 import { useAuthStore } from '../../features/auth/authStore';
 import { fetchCurrentControlState } from '../../features/control/controlStateApi';
 import { env } from '../../shared/config/env';
+import { useRecentEventsStore } from '../../features/logs/recentEventsStore';
 
 const realtimeMock = vi.hoisted(() => ({
   options: null as Record<string, unknown> | null,
@@ -109,9 +110,12 @@ describe('RealtimeProvider', () => {
     act(() => useAuthStore.getState().clearSession());
     act(() => {
       handlers?.telemetry({ destination: '', body: JSON.stringify({ robotId: TEST_ROBOT_ID, batteryLevel: 99 }) });
+      handlers?.events({ destination: '', body: JSON.stringify({ id: 'old-event', robotId: TEST_ROBOT_ID,
+        severity: 'warning', eventType: 'sensor-fault', source: 'edge', occurredAt: '2026-09-10T00:00:00Z', message: 'old' }) });
       onStateChange('connected');
     });
     expect(useTelemetryStore.getState().telemetryByRobotId).toEqual({});
+    expect(useRecentEventsStore.getState().eventsByRobotId).toEqual({});
     expect(useTelemetryStore.getState().connectionState).toBe('disconnected');
     expect(realtimeMock.deactivate).toHaveBeenCalled();
   });

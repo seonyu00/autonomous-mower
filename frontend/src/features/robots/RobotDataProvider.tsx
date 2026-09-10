@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import type { PropsWithChildren } from 'react';
+import { useTelemetryStore } from '../telemetry/telemetryStore';
 import { useAuthStore } from '../auth/authStore';
 import { getRobots } from './api';
 import { useRobotStore } from './robotStore';
@@ -24,6 +25,9 @@ export function RobotDataProvider({ children }: PropsWithChildren) {
       setError('로봇 목록을 불러오지 못했습니다. 연결 상태를 확인하세요.');
     } else if (robotsQuery.data) {
       setRobots(robotsQuery.data);
+      robotsQuery.data.forEach((robot) => {
+        if (robot.telemetryReception) useTelemetryStore.getState().upsertReception(robot.id, robot.telemetryReception);
+      });
       setError(null);
     }
   }, [isAuthenticated, sessionVersion, robotsQuery.data, robotsQuery.isError, setRobots, setError]);

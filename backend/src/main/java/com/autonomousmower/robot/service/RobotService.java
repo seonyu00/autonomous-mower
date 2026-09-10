@@ -6,6 +6,7 @@ import com.autonomousmower.robot.dto.RobotResponse;
 import com.autonomousmower.robot.entity.Robot;
 import com.autonomousmower.robot.repository.RobotRepository;
 import java.util.List;
+import com.autonomousmower.telemetry.service.TelemetryReceptionService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,21 +14,23 @@ import org.springframework.transaction.annotation.Transactional;
 public class RobotService {
 
     private final RobotRepository robotRepository;
+    private final TelemetryReceptionService receptionService;
 
-    public RobotService(RobotRepository robotRepository) {
+    public RobotService(RobotRepository robotRepository, TelemetryReceptionService receptionService) {
         this.robotRepository = robotRepository;
+        this.receptionService = receptionService;
     }
 
     @Transactional(readOnly = true)
     public List<RobotResponse> findAll() {
         return robotRepository.findAll().stream()
-                .map(RobotResponse::summary)
+                .map(robot -> RobotResponse.summary(robot, receptionService.snapshot(robot.getRobotId())))
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public RobotResponse findById(String robotId) {
-        return RobotResponse.detail(getRobot(robotId));
+        return RobotResponse.detail(getRobot(robotId), receptionService.snapshot(robotId));
     }
 
     @Transactional(readOnly = true)

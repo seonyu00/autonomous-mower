@@ -1,6 +1,7 @@
 package com.autonomousmower.realtime.dto;
 
 import java.time.Instant;
+import com.autonomousmower.telemetry.dto.TelemetryReception;
 
 public record RobotStatusMessage(
         String robotId,
@@ -9,6 +10,7 @@ public record RobotStatusMessage(
         String wssState,
         String edgeState,
         Instant lastSeenAt,
-        boolean stale
+        boolean stale,
+        TelemetryReception telemetryReception
 ) {
 }

@@ -1,7 +1,12 @@
 import type { ControlCommandEvent, ControlLockSnapshot } from '../../features/control/types';
-import type { RobotStatus, Telemetry } from '../../features/telemetry/types';
+import type { RecentEvent } from '../../features/logs/types';
+import type { RobotStatus, Telemetry, TelemetryReception } from '../../features/telemetry/types';
 
 export type TopicMessage =
+  | {
+      type: 'events';
+      payload: RecentEvent;
+    }
   | {
       type: 'telemetry';
       payload: Telemetry;
@@ -46,6 +51,10 @@ export function parseTopicMessage(topic: string, rawPayload: string): TopicMessa
     };
   }
 
+  if (isRecentEvent(payload) && topic === `/topic/robots/${payload.robotId}/events`) {
+    return { type: 'events', payload };
+  }
+
   if (topic.endsWith('/control-lock') && isControlLockSnapshot(payload)) {
     return {
       type: 'control-lock',
@@ -68,6 +77,14 @@ export function parseTopicMessage(topic: string, rawPayload: string): TopicMessa
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function isRecentEvent(value: unknown): value is RecentEvent {
+  return isRecord(value) && isString(value.id) && value.id.length > 0 &&
+    isString(value.robotId) &&
+    (value.severity === 'info' || value.severity === 'warning' || value.severity === 'critical') &&
+    isString(value.eventType) && isString(value.message) && isString(value.source) &&
+    isString(value.occurredAt) && Number.isFinite(Date.parse(value.occurredAt));
 }
 
 function isString(value: unknown): value is string {
@@ -103,7 +120,9 @@ function isTelemetry(value: unknown): value is Telemetry {
     isString(value.workState) &&
     typeof value.speedMps === 'number' &&
     typeof value.signalStrength === 'number' &&
-    isString(value.lastReceivedAt)
+    isString(value.lastReceivedAt) &&
+    (value.edgeSampledAt === undefined || isNullableString(value.edgeSampledAt)) &&
+    (value.serverTimestamp === undefined || isString(value.serverTimestamp))
   );
 }
 
@@ -118,9 +137,16 @@ function isRobotStatus(value: unknown): value is RobotStatus {
     isString(value.mqttState) &&
     isString(value.wssState) &&
     isString(value.edgeState) &&
-    isString(value.lastSeenAt) &&
+    isNullableString(value.lastSeenAt) &&
+    (value.telemetryReception === undefined || isTelemetryReception(value.telemetryReception)) &&
     typeof value.stale === 'boolean'
   );
+}
+
+function isTelemetryReception(value: unknown): value is TelemetryReception {
+  return isRecord(value) &&
+    (value.state === 'never-seen' || value.state === 'normal' || value.state === 'delayed') &&
+    isNullableString(value.lastReceivedAt) && isNullableString(value.edgeSampledAt) && isString(value.checkedAt);
 }
 
 function isControlLockSnapshot(value: unknown): value is ControlLockSnapshot {

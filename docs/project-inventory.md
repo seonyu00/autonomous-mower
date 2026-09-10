@@ -405,6 +405,8 @@ Frontend 주요 파일:
 - `frontend/src/features/logs/api.ts`
 - `frontend/src/features/logs/mockLogs.ts`
 - `frontend/src/features/logs/components/LogTimeline.tsx`
+- `frontend/src/features/logs/components/RecentEventsPanel.tsx`
+- `frontend/src/features/logs/recentEventsStore.ts`
 - `frontend/src/features/logs/components/SnapshotViewer.tsx`
 - `frontend/src/features/logs/types.ts`
 
@@ -426,6 +428,9 @@ Backend 주요 파일:
 - Frontend:
   - `VITE_ENABLE_MOCK_LOGS=true`일 때만 mock log 목록 사용
   - LogTimeline 표시
+  - RecentEventsPanel은 실제 모드에서 기존 로그 API로 선택 로봇의 초기 목록을 조회하고 STOMP events를 합쳐 최신 3건을 표시한다.
+  - 이벤트 ID 중복을 제거하고 로봇·세션이 바뀐 뒤 도착한 이전 조회 응답을 무시한다. 조회 중 받은 실시간 이벤트는 늦은 초기 목록으로 덮어쓰지 않는다.
+  - 로딩·조회 실패·빈 목록·명시적 샘플 모드를 구분한다. 로그아웃 시 최근 이벤트 store를 비우며 기존 Zustand를 사용한다.
   - 현재 WebRTC 영상 프레임을 Canvas에서 JPEG로 캡처하고 multipart로 업로드
   - SnapshotViewer가 인증된 JPEG 응답을 Blob으로 받아 미리보기 표시
 - Backend:
@@ -794,10 +799,12 @@ Telemetry persistence:
 - persistence -> `MqttInboundPersistenceService.persistTelemetry()`
 - DB -> `telemetry_log`
 - STOMP publish -> `/topic/robots/{robotId}/telemetry`
+- `TelemetryReceptionService`: 서버 수신 시각과 Edge 샘플 시각을 분리하고 로봇별 never-seen·normal·delayed 상태를 관리한다. 3초 이상 미수신 전이·복구를 status로 전달하고 이벤트를 한 번씩 기록한다.
+- `useTelemetryReception`: 브라우저 메시지 중단 시에도 타이머로 지연 표시를 갱신한다. 수신 상태는 서버 프로세스 메모리에 보관하며 실제 장비 정지 기능과 별개다.
 
 Status/event persistence:
 
-- status inbound -> `robot_event`에 `status-update` event 저장
+- status inbound -> 이전과 상태 필드가 달라진 경우에만 `robot_event`에 `status-update` event 저장
 - event inbound -> `robot_event` 저장
 - logs 조회 -> `/api/logs`
 

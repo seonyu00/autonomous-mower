@@ -6,6 +6,7 @@ import { mockTelemetry } from '../features/telemetry/mockTelemetry';
 import { useTelemetryStore } from '../features/telemetry/telemetryStore';
 import { useVideoStore } from '../features/video/videoStore';
 import { useZoneStore } from '../features/map/zoneStore';
+import { useRecentEventsStore } from '../features/logs/recentEventsStore';
 import type { Role } from '../features/auth/types';
 import type { ControlState } from '../features/control/types';
 
@@ -13,6 +14,7 @@ export const TEST_ROBOT_ID = 'MOWER-01';
 export const TEST_USER_ID = 'admin';
 
 export function resetStores(role: Role = 'admin') {
+  useRecentEventsStore.setState(useRecentEventsStore.getInitialState(), true);
   useAuthStore.setState({
     user: {
       id: TEST_USER_ID,
@@ -30,6 +32,7 @@ export function resetStores(role: Role = 'admin') {
   });
 
   useTelemetryStore.setState({
+    receptionByRobotId: {},
     dataSource: 'mock',
     telemetryByRobotId: mockTelemetry,
     statusByRobotId: {},

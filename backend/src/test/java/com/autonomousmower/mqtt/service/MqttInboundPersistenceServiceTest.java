@@ -3,6 +3,7 @@ package com.autonomousmower.mqtt.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 import com.autonomousmower.logs.entity.RobotEvent;
@@ -56,7 +57,7 @@ class MqttInboundPersistenceServiceTest {
         MqttTelemetryPayload payload = telemetry("MOWER-01");
         when(robotRepository.findById("MOWER-01")).thenReturn(Optional.of(robot));
 
-        boolean persisted = persistenceService.persistTelemetry(payload);
+        boolean persisted = persistenceService.persistTelemetry(payload, Instant.parse("2026-05-31T01:00:00Z"));
 
         assertThat(persisted).isTrue();
         ArgumentCaptor<TelemetryLog> captor = ArgumentCaptor.forClass(TelemetryLog.class);
@@ -76,7 +77,7 @@ class MqttInboundPersistenceServiceTest {
         MqttTelemetryPayload payload = telemetry("UNKNOWN");
         when(robotRepository.findById("UNKNOWN")).thenReturn(Optional.empty());
 
-        boolean persisted = persistenceService.persistTelemetry(payload);
+        boolean persisted = persistenceService.persistTelemetry(payload, Instant.parse("2026-05-31T01:00:00Z"));
 
         assertThat(persisted).isFalse();
         verify(telemetryLogRepository, never()).save(org.mockito.Mockito.any());
@@ -143,5 +144,28 @@ class MqttInboundPersistenceServiceTest {
                 Instant.parse("2026-05-31T00:59:59Z"),
                 null
         );
+    }
+
+    @Test
+    void repeatedStatusWithOnlyTimestampChangedDoesNotCreateDuplicateEvents() {
+        when(robotRepository.findById("MOWER-01")).thenReturn(Optional.of(robot));
+        persistenceService.persistStatus(new MqttStatusPayload(
+                "MOWER-01", "online", "connected", "connected", Instant.parse("2026-05-31T00:59:45Z"), false));
+        persistenceService.persistStatus(new MqttStatusPayload(
+                "MOWER-01", "online", "connected", "connected", Instant.parse("2026-05-31T00:59:48Z"), false));
+        verify(robotEventRepository, times(1)).save(org.mockito.Mockito.any());
+    }
+
+    @Test
+    void statusTransitionsAndOtherRobotsStillCreateEvents() {
+        when(robotRepository.findById("MOWER-01")).thenReturn(Optional.of(robot));
+        when(robotRepository.findById("MOWER-02")).thenReturn(Optional.of(
+                new Robot("MOWER-02", "test", LocalDateTime.parse("2026-05-30T00:00:00"))));
+        Instant now = Instant.parse("2026-05-31T00:59:45Z");
+        persistenceService.persistStatus(new MqttStatusPayload("MOWER-01", "online", "connected", "connected", now, false));
+        persistenceService.persistStatus(new MqttStatusPayload("MOWER-02", "online", "connected", "connected", now, false));
+        persistenceService.persistStatus(new MqttStatusPayload("MOWER-01", "degraded", "connected", "connected", now, true));
+        persistenceService.persistStatus(new MqttStatusPayload("MOWER-01", "online", "connected", "connected", now, false));
+        verify(robotEventRepository, times(4)).save(org.mockito.Mockito.any());
     }
 }

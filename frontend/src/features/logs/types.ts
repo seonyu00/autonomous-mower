@@ -34,3 +34,8 @@ export type LogQuery = {
   from: string;
   to: string;
 };
+
+export type RecentEvent = Pick<LogEntry, 'id' | 'robotId' | 'severity' | 'message' | 'occurredAt'> & {
+  eventType: string;
+  source: string;
+};

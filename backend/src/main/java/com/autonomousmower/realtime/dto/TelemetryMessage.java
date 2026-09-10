@@ -12,6 +12,8 @@ public record TelemetryMessage(
         double speedMps,
         int signalStrength,
         Instant lastReceivedAt,
-        String errorState
+        String errorState,
+        Instant edgeSampledAt,
+        Instant serverTimestamp
 ) {
 }

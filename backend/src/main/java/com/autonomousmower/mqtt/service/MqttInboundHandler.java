@@ -6,7 +6,9 @@ import com.autonomousmower.mqtt.dto.MqttEventPayload;
 import com.autonomousmower.mqtt.dto.MqttStatusPayload;
 import com.autonomousmower.mqtt.dto.MqttTelemetryPayload;
 import com.autonomousmower.realtime.dto.RobotEventMessage;
-import com.autonomousmower.realtime.dto.RobotStatusMessage;
+import com.autonomousmower.telemetry.service.TelemetryReceptionService;
+import java.time.Clock;
+import java.time.Instant;
 import com.autonomousmower.realtime.dto.TelemetryMessage;
 import com.autonomousmower.realtime.service.RealtimePublisher;
 import org.springframework.stereotype.Service;
@@ -17,21 +19,29 @@ public class MqttInboundHandler {
     private final RealtimePublisher realtimePublisher;
     private final MqttInboundPersistenceService persistenceService;
     private final CommandExecutionService commandExecutionService;
+    private final TelemetryReceptionService receptionService;
+    private final Clock clock;
 
     public MqttInboundHandler(
             RealtimePublisher realtimePublisher,
             MqttInboundPersistenceService persistenceService,
-            CommandExecutionService commandExecutionService
+            CommandExecutionService commandExecutionService,
+            TelemetryReceptionService receptionService,
+            Clock clock
     ) {
         this.realtimePublisher = realtimePublisher;
         this.persistenceService = persistenceService;
         this.commandExecutionService = commandExecutionService;
+        this.receptionService = receptionService;
+        this.clock = clock;
     }
 
     public void handleTelemetry(MqttTelemetryPayload payload) {
-        if (!persistenceService.persistTelemetry(payload)) {
+        Instant receivedAt = clock.instant();
+        if (!persistenceService.persistTelemetry(payload, receivedAt)) {
             return;
         }
+        receptionService.recordTelemetry(payload.robotId(), receivedAt, payload.receivedAt());
         realtimePublisher.publishTelemetry(new TelemetryMessage(
                 payload.robotId(),
                 payload.latitude(),
@@ -41,8 +51,10 @@ public class MqttInboundHandler {
                 payload.workState(),
                 payload.speedMps(),
                 payload.signalStrength(),
+                receivedAt,
+                payload.errorState(),
                 payload.receivedAt(),
-                payload.errorState()
+                clock.instant()
         ));
     }
 
@@ -50,15 +62,7 @@ public class MqttInboundHandler {
         if (!persistenceService.persistStatus(payload)) {
             return;
         }
-        realtimePublisher.publishStatus(new RobotStatusMessage(
-                payload.robotId(),
-                payload.connectionState(),
-                payload.mqttState(),
-                "connected",
-                payload.edgeState(),
-                payload.lastSeenAt(),
-                payload.stale()
-        ));
+        receptionService.recordStatus(payload);
     }
 
     public void handleEvent(MqttEventPayload payload) {

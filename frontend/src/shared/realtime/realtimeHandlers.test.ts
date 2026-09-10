@@ -4,10 +4,20 @@ import { useRobotStore } from '../../features/robots/robotStore';
 import { useTelemetryStore } from '../../features/telemetry/telemetryStore';
 import { resetStores, TEST_ROBOT_ID } from '../../test/testStores';
 import { applyRealtimeMessage } from './realtimeHandlers';
+import { useRecentEventsStore } from '../../features/logs/recentEventsStore';
+import { env } from '../config/env';
 
 describe('applyRealtimeMessage', () => {
   beforeEach(() => {
     resetStores();
+    env.enableMockLogs = false;
+  });
+
+  it('샘플 로그 모드에 실제 STOMP 이벤트를 섞지 않는다', () => {
+    env.enableMockLogs = true;
+    applyRealtimeMessage({ type: 'events', payload: { id: 'actual', robotId: TEST_ROBOT_ID, severity: 'warning',
+      eventType: 'telemetry-delayed', source: 'telemetry-monitor', occurredAt: '2026-09-10T00:00:00Z', message: 'actual' } });
+    expect(useRecentEventsStore.getState().eventsByRobotId).toEqual({});
   });
 
   it('updates telemetry and robot transport status', () => {

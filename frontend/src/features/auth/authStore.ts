@@ -5,6 +5,7 @@ import { useTelemetryStore } from '../telemetry/telemetryStore';
 import { useControlStore } from '../control/controlStore';
 import { useZoneStore } from '../map/zoneStore';
 import { useVideoStore } from '../video/videoStore';
+import { useRecentEventsStore } from '../logs/recentEventsStore';
 import type { AuthUser, Role } from './types';
 
 type AuthStore = {
@@ -108,6 +109,7 @@ export function getAccessToken() {
 }
 
 function resetDeviceData() {
+  useRecentEventsStore.setState(useRecentEventsStore.getInitialState(), true);
   useRobotStore.setState(useRobotStore.getInitialState(), true);
   useTelemetryStore.setState(useTelemetryStore.getInitialState(), true);
   useControlStore.setState(useControlStore.getInitialState(), true);
