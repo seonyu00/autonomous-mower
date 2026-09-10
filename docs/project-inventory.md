@@ -430,7 +430,8 @@ Backend 주요 파일:
 - Backend:
   - `/api/logs`
   - `logs:read` 권한 필요
-  - robotId, severity, date range 필터 지원
+  - robotId, severity, date range, text 필터 지원
+  - text 검색어는 message, eventType, source를 대상으로 대소문자 구분 없이 필터링
   - MQTT status/event를 `robot_event`로 저장 후 조회 가능
   - `POST /api/robots/{robotId}/snapshots`로 5MB 이하 JPEG 수동 스냅샷 저장
   - `GET /api/logs/snapshots/{snapshotId}`로 인증된 JPEG 조회
@@ -439,7 +440,6 @@ Backend 주요 파일:
 
 제한:
 
-- log text search 파라미터는 API contract 문서에는 있지만 현재 controller에는 없다.
 - 오류 발생 시 Jetson이 자동 업로드하는 흐름과 보관 기간 정리는 아직 구현하지 않았다.
 
 ### Control ownership

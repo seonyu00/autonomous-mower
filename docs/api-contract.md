@@ -290,6 +290,12 @@ Permission: `logs:read`
 
 `severity`: `all | info | warning | critical`
 
+- `robotId` 생략 시 전체 로봇을 조회한다. 날짜·심각도·검색어 조건은 로봇 선택과 독립적으로 함께 적용한다.
+- `from`, `to`는 ISO-8601 UTC 시각이며 경계를 포함한다. `from`만 있으면 해당 시각 이후, `to`만 있으면 해당 시각 이전, 둘 다 없으면 날짜 제한 없이 조회한다.
+- `from > to`는 `400 INVALID_REQUEST`로 처리한다. 날짜 조건은 DB 조회에 적용한다.
+- `text`는 앞뒤 공백을 제거하고 message, eventType, source에서 대소문자 구분 없이 부분 문자열을 검색한다.
+- 웹 날짜 선택은 시작일 `00:00:00.000Z`부터 종료일 `23:59:59.999Z`까지로 변환하며, 비운 날짜는 전송하지 않는다. 한국 시간 날짜로의 변환은 적용하지 않는다.
+
 Response `200`:
 
 ```json

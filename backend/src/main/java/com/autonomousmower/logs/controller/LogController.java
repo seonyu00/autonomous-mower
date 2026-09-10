@@ -30,9 +30,10 @@ public class LogController {
             @RequestParam(required = false) String robotId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
-            @RequestParam(required = false, defaultValue = "all") String severity
+            @RequestParam(required = false, defaultValue = "all") String severity,
+            @RequestParam(required = false, defaultValue = "") String text
     ) {
-        return ApiResponse.success(logService.findLogs(robotId, toUtcLocal(from), toUtcLocal(to), severity));
+        return ApiResponse.success(logService.findLogs(robotId, toUtcLocal(from), toUtcLocal(to), severity, text));
     }
 
     private LocalDateTime toUtcLocal(Instant instant) {

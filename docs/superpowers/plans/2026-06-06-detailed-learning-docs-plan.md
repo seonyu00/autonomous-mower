@@ -1,6 +1,6 @@
 # 상세 코드 흐름 학습 문서 구현 계획
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **과거 계획의 적용 범위:** 이 문서는 작성 당시의 계획과 체크리스트를 보존한다. 당시 제안된 `superpowers:subagent-driven-development`와 `superpowers:executing-plans`는 현재 필수 스킬이 아니다. 이 문서를 읽는 것만으로 스킬 설치, 에이전트 위임 또는 작업 실행을 승인한 것으로 해석하지 않는다. 체크되지 않은 항목도 재실행 지시가 아니며, 현재 사용자의 요청 범위와 프로젝트 작업 지침을 확인한 뒤 필요한 부분만 적용한다.
 
 **Goal:** 현재 코드와 실제 로컬 검증 결과를 근거로 기능별 상세 공개 해설서와 Git 제외 로컬 기록을 작성한다.
 
@@ -62,4 +62,4 @@
 - [ ] Markdown 상대 링크와 문서에 적힌 코드 경로의 존재 여부를 검사한다.
 - [ ] 실제 secret, 개인 경로, 사설 IP가 공개 변경분에 없는지 검사한다.
 - [ ] `.local-docs/`, `.understand-anything/`, `AGENTS.md`가 staged 변경에 포함되지 않는지 확인한다.
-- [ ] 공개 문서만 한국어 커밋 메시지로 커밋하고 `origin/main`에 푸시한다.
+- [ ] 당시 배포 계획: 공개 문서만 한국어 커밋 메시지로 커밋하고 `origin/main`에 푸시한다. 이 항목은 현재 실행 승인이 아니며, 실제 commit·push 전에는 현재 사용자의 별도 승인이 필요하다.

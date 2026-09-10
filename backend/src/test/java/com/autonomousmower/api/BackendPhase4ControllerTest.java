@@ -123,11 +123,12 @@ class BackendPhase4ControllerTest {
     @Test
     @WithMockUser(authorities = "logs:read")
     void logsEndpointUsesLogsReadPermission() throws Exception {
-        when(logService.findLogs(eq("MOWER-01"), any(), any(), eq("critical"))).thenReturn(List.of());
+        when(logService.findLogs(eq("MOWER-01"), any(), any(), eq("critical"), eq("snapshot"))).thenReturn(List.of());
 
         mockMvc.perform(get("/api/logs")
                         .param("robotId", "MOWER-01")
-                        .param("severity", "critical"))
+                        .param("severity", "critical")
+                        .param("text", "snapshot"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(0)));
     }

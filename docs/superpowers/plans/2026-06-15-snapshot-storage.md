@@ -1,6 +1,6 @@
 # 스냅샷 저장·조회 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **과거 계획의 적용 범위:** 이 문서는 작성 당시의 계획과 체크리스트를 보존한다. 당시 제안된 `superpowers:subagent-driven-development`와 `superpowers:executing-plans`는 현재 필수 스킬이 아니다. 이 문서를 읽는 것만으로 스킬 설치, 에이전트 위임 또는 작업 실행을 승인한 것으로 해석하지 않는다. 체크되지 않은 항목도 재실행 지시가 아니며, 현재 사용자의 요청 범위와 프로젝트 작업 지침을 확인한 뒤 필요한 부분만 적용한다.
 
 **Goal:** WebRTC 현재 프레임을 JPEG로 저장하고 수동 로그와 연결해 로그 뷰어에서 조회한다.
 

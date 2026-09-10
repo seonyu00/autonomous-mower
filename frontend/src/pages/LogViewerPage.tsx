@@ -14,6 +14,7 @@ export function LogViewerPage() {
   const [text, setText] = useState('');
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
+  const [searchError, setSearchError] = useState('');
   const initialLogs = env.enableMockLogs ? mockLogEntries : [];
   const [logs, setLogs] = useState<LogEntry[]>(initialLogs);
   const [selectedLogId, setSelectedLogId] = useState(initialLogs[0]?.id ?? null);
@@ -24,9 +25,14 @@ export function LogViewerPage() {
   );
 
   const handleSearch = async () => {
-    const result = await getLogs({ robotId, severity, text, from, to });
-    setLogs(result);
-    setSelectedLogId(result[0]?.id ?? null);
+    setSearchError('');
+    try {
+      const result = await getLogs({ robotId, severity, text, from, to });
+      setLogs(result);
+      setSelectedLogId(result[0]?.id ?? null);
+    } catch (error) {
+      setSearchError(error instanceof Error ? error.message : '로그 검색에 실패했습니다.');
+    }
   };
 
   return (
@@ -75,13 +81,14 @@ export function LogViewerPage() {
 
           <label className="log-search-field">
             검색어
-            <input value={text} placeholder="메시지 또는 이벤트 유형" onChange={(event) => setText(event.target.value)} />
+            <input value={text} placeholder="메시지, 이벤트 유형 또는 출처" onChange={(event) => setText(event.target.value)} />
           </label>
 
           <button className="primary-button" type="button" onClick={handleSearch}>
             검색
           </button>
         </div>
+        {searchError && <p role="alert">{searchError}</p>}
       </section>
 
       <section className="workspace-panel logs-timeline-panel">

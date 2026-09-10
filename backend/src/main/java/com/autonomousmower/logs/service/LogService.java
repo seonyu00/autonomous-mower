@@ -1,6 +1,8 @@
 package com.autonomousmower.logs.service;
 
 import com.autonomousmower.logs.dto.LogEntryResponse;
+import com.autonomousmower.common.exception.BusinessException;
+import com.autonomousmower.common.exception.ErrorCode;
 import com.autonomousmower.logs.dto.SnapshotResponse;
 import com.autonomousmower.logs.entity.RobotEvent;
 import com.autonomousmower.logs.repository.RobotEventRepository;
@@ -8,6 +10,7 @@ import com.autonomousmower.robot.service.RobotService;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,25 +28,29 @@ public class LogService {
     }
 
     @Transactional(readOnly = true)
-    public List<LogEntryResponse> findLogs(String robotId, LocalDateTime from, LocalDateTime to, String severity) {
+    public List<LogEntryResponse> findLogs(
+            String robotId,
+            LocalDateTime from,
+            LocalDateTime to,
+            String severity,
+            String text
+    ) {
         boolean hasRobotId = StringUtils.hasText(robotId);
         boolean hasSeverity = StringUtils.hasText(severity) && !"all".equalsIgnoreCase(severity);
-        boolean hasRange = from != null && to != null;
+        boolean hasRange = from != null || to != null;
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        String normalizedText = StringUtils.hasText(text) ? text.trim().toLowerCase(Locale.ROOT) : "";
 
         if (hasRobotId) {
             robotService.getRobot(robotId);
         }
 
         List<RobotEvent> events;
-        if (hasRobotId && hasSeverity && hasRange) {
-            events = robotEventRepository.findByRobotRobotIdAndSeverityIgnoreCaseAndOccurredAtBetweenOrderByOccurredAtDesc(
-                    robotId,
-                    severity,
-                    from,
-                    to
-            );
-        } else if (hasRobotId && hasRange) {
-            events = robotEventRepository.findByRobotRobotIdAndOccurredAtBetweenOrderByOccurredAtDesc(robotId, from, to);
+        if (hasRange) {
+            events = robotEventRepository.findInDateRange(
+                    hasRobotId ? robotId : null, hasSeverity ? severity : null, from, to);
         } else if (hasRobotId && hasSeverity) {
             events = robotEventRepository.findByRobotRobotIdAndSeverityIgnoreCaseOrderByOccurredAtDesc(robotId, severity);
         } else if (hasRobotId) {
@@ -55,8 +62,15 @@ public class LogService {
         }
 
         return events.stream()
+                .filter(event -> normalizedText.isEmpty() || containsText(event, normalizedText))
                 .map(this::toResponse)
                 .toList();
+    }
+
+    private boolean containsText(RobotEvent event, String text) {
+        return event.getMessage().toLowerCase(Locale.ROOT).contains(text)
+                || event.getEventType().toLowerCase(Locale.ROOT).contains(text)
+                || event.getSource().toLowerCase(Locale.ROOT).contains(text);
     }
 
     private LogEntryResponse toResponse(RobotEvent event) {
