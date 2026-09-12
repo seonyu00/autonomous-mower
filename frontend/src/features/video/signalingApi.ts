@@ -4,7 +4,7 @@ import type { VideoSessionRequest, VideoSessionResponse, VideoStopRequest } from
 
 const mockDelayMs = 250;
 
-export async function startStream(robotId: string, request: VideoSessionRequest): Promise<VideoSessionResponse> {
+export async function startStream(robotId: string, request: VideoSessionRequest, signal?: AbortSignal): Promise<VideoSessionResponse> {
   if (shouldUseMockSignaling()) {
     await delay(mockDelayMs);
 
@@ -21,11 +21,12 @@ export async function startStream(robotId: string, request: VideoSessionRequest)
   const response = await httpClient.post<Omit<VideoSessionResponse, 'mock'>>(
     `${signalingBasePath(robotId)}/offer`,
     request,
+    { signal },
   );
   return { ...response, mock: false };
 }
 
-export async function stopStream(robotId: string, sessionId: string | null): Promise<void> {
+export async function stopStream(robotId: string, sessionId: string | null, signal?: AbortSignal): Promise<void> {
   const request: VideoStopRequest = {
     robotId,
     sessionId,
@@ -36,10 +37,10 @@ export async function stopStream(robotId: string, sessionId: string | null): Pro
     return;
   }
 
-  await httpClient.post<void>(`${signalingBasePath(robotId)}/stop`, request);
+  await httpClient.post<void>(`${signalingBasePath(robotId)}/stop`, request, { signal });
 }
 
-export async function reconnectStream(robotId: string, sessionId: string | null): Promise<VideoSessionResponse> {
+export async function reconnectStream(robotId: string, sessionId: string | null, signal?: AbortSignal): Promise<VideoSessionResponse> {
   if (shouldUseMockSignaling()) {
     await delay(mockDelayMs);
     return {
@@ -55,6 +56,7 @@ export async function reconnectStream(robotId: string, sessionId: string | null)
   const response = await httpClient.post<Omit<VideoSessionResponse, 'mock'>>(
     `${signalingBasePath(robotId)}/reconnect`,
     { robotId, sessionId },
+    { signal },
   );
   return { ...response, mock: false };
 }

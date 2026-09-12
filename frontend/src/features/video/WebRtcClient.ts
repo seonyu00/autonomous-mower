@@ -2,143 +2,130 @@ import { reconnectStream, startStream as startSignaling, stopStream as stopSigna
 import { useAuthStore } from '../auth/authStore';
 import { useVideoStore } from './videoStore';
 import { WhepClient } from './WhepClient';
-import type { VideoSession, VideoSessionResponse } from './types';
+import { videoOperation } from './videoOperation';
+import type { VideoSession } from './types';
 
 type WebRtcClientOptions = {
   onRemoteStream?: (stream: MediaStream | null) => void;
 };
 
+type Attempt = {
+  robotId: string;
+  sessionId: string | null;
+  previousSessionId: string | null;
+  controller: AbortController;
+  whep: WhepClient;
+};
+
 export class WebRTCClient {
   private readonly authSessionVersion = useAuthStore.getState().sessionVersion;
-  private readonly whepClient: WhepClient;
-  private robotId: string | null = null;
-  private sessionId: string | null = null;
-  private readonly onRemoteStream?: (stream: MediaStream | null) => void;
+  private attempt: Attempt | null = null;
 
-  constructor(options: WebRtcClientOptions = {}) {
-    this.onRemoteStream = options.onRemoteStream;
-    this.whepClient = new WhepClient({
-      onRemoteStream: (stream) => {
-        if (!this.isCurrentSession()) return;
-        this.onRemoteStream?.(stream);
-        if (this.robotId) {
-          this.patchSession(this.robotId, {
-            stream,
-            connectionState: 'connected',
-            loading: false,
-          });
+  constructor(private readonly options: WebRtcClientOptions = {}) {}
+
+  startStream(robotId: string) {
+    return this.connect(robotId, false);
+  }
+
+  reconnect(robotId = this.attempt?.robotId) {
+    return robotId ? this.connect(robotId, true) : Promise.resolve();
+  }
+
+  async stopStream(robotId = this.attempt?.robotId) {
+    const attempt = this.attempt;
+    if (!attempt || attempt.robotId !== robotId) return;
+    this.release(attempt);
+  }
+
+  private async connect(robotId: string, reconnect: boolean) {
+    if (!this.isCurrentSession()) return;
+    const previousSessionId = this.attempt?.robotId === robotId ? this.attempt.sessionId : null;
+    if (this.attempt) this.release(this.attempt, !reconnect || !previousSessionId);
+    const controller = new AbortController();
+    const attempt: Attempt = {
+      robotId, sessionId: null, previousSessionId: reconnect ? previousSessionId : null, controller,
+      whep: new WhepClient({
+        onRemoteStream: (stream) => {
+          if (!this.isCurrent(attempt)) return;
+          this.patchSession(robotId, { stream });
+          this.options.onRemoteStream?.(stream);
+        },
+        onConnectionStateChange: (state) => {
+          if (!this.isCurrent(attempt)) return;
+          if (['failed', 'closed', 'disconnected'].includes(state)) {
+            this.release(attempt);
+            this.patchSession(robotId, { connectionState: state === 'failed' ? 'failed' : 'disconnected',
+              error: state === 'failed' ? 'WebRTC 연결에 실패했습니다.' : null });
+          } else {
+            this.patchSession(robotId, { connectionState: state === 'connected' ? 'connected' : 'connecting',
+              loading: state !== 'connected' });
+          }
+        },
+      }),
+    };
+    this.attempt = attempt;
+    this.patchSession(robotId, { connectionState: reconnect ? 'reconnecting' : 'connecting', loading: true,
+      stream: null, lastFrameAt: null, frameReceiving: false, sessionId: null, error: null, lastStartedAt: new Date().toISOString() });
+    try {
+      const session = await videoOperation(async (signal) => {
+        const quality = useVideoStore.getState().getSession(robotId).qualityPolicy;
+        const result = reconnect && previousSessionId
+          ? await reconnectStream(robotId, previousSessionId, signal)
+          : await startSignaling(robotId, { robotId, width: quality.width, height: quality.height,
+            fps: quality.minFps, maxBitrateKbps: quality.maxBitrateKbps }, signal);
+        if (signal.aborted || !this.isCurrent(attempt)) {
+          this.stopBackend(result.robotId, result.sessionId);
+          throw signal.reason ?? new DOMException('연결이 취소되었습니다.', 'AbortError');
         }
-      },
-      onConnectionStateChange: (state) => {
-        if (this.robotId) {
-          this.patchSession(this.robotId, {
-            connectionState: mapPeerConnectionState(state),
-            loading: state === 'connecting' || state === 'new',
-          });
-        }
-      },
-    });
-  }
-
-  async startStream(robotId: string) {
-    if (!this.isCurrentSession()) return;
-    this.robotId = robotId;
-    this.patchSession(robotId, {
-      connectionState: 'connecting',
-      loading: true,
-      error: null,
-      lastStartedAt: new Date().toISOString(),
-    });
-
-    try {
-      const quality = useVideoStore.getState().getSession(robotId).qualityPolicy;
-      const session = await startSignaling(robotId, {
-        robotId,
-        width: quality.width,
-        height: quality.height,
-        fps: quality.minFps,
-        maxBitrateKbps: quality.maxBitrateKbps,
-      });
-      await this.connectSession(session);
-    } catch (error) {
-      await this.whepClient.close();
-      this.patchFailure(robotId, error, '영상 스트림을 시작하지 못했습니다.');
-    }
-  }
-
-  async stopStream(robotId = this.robotId) {
-    if (!robotId) {
-      return;
-    }
-
-    const sessionId = this.sessionId ?? useVideoStore.getState().getSession(robotId).sessionId;
-    await this.whepClient.close();
-    this.onRemoteStream?.(null);
-
-    try {
-      if (!this.isCurrentSession()) return;
-      await stopSignaling(robotId, sessionId);
-      this.patchSession(robotId, {
-        sessionId: null,
-        stream: null,
-        connectionState: 'disconnected',
-        loading: false,
-        error: null,
-        lastStoppedAt: new Date().toISOString(),
-      });
-    } catch (error) {
-      this.patchFailure(robotId, error, '영상 스트림을 중지하지 못했습니다.');
-    } finally {
-      this.robotId = null;
-      this.sessionId = null;
-    }
-  }
-
-  async reconnect(robotId = this.robotId) {
-    if (!this.isCurrentSession()) return;
-    if (!robotId) {
-      return;
-    }
-
-    this.patchSession(robotId, {
-      connectionState: 'reconnecting',
-      loading: true,
-      error: null,
-    });
-
-    try {
-      await this.whepClient.close();
-      if (!this.isCurrentSession()) return;
-      const session = await reconnectStream(robotId, this.sessionId);
-      this.robotId = robotId;
-      await this.connectSession(session);
-    } catch (error) {
-      this.patchFailure(robotId, error, '영상 스트림을 다시 연결하지 못했습니다.');
-    }
-  }
-
-  private async connectSession(session: VideoSessionResponse) {
-    if (!this.isCurrentSession()) return;
-    this.sessionId = session.sessionId;
-
-    if (!session.mock) {
-      if (!session.whepUrl) {
-        throw new Error('WHEP 연결 주소가 없습니다.');
+        return result;
+      }, controller.signal);
+      if (!this.isCurrent(attempt)) { this.stopBackend(session.robotId, session.sessionId); return; }
+      attempt.previousSessionId = null;
+      attempt.sessionId = session.sessionId;
+      if (session.robotId !== robotId) throw new Error('요청한 로봇과 영상 세션이 일치하지 않습니다.');
+      this.patchSession(robotId, { sessionId: session.sessionId, mock: session.mock });
+      if (!session.mock) {
+        if (!session.whepUrl) throw new Error('WHEP 연결 주소가 없습니다.');
+        await attempt.whep.connect(session.whepUrl);
       }
-      await this.whepClient.connect(session.whepUrl);
-      if (!this.isCurrentSession()) {
-        await this.whepClient.close();
+      if (!this.isCurrent(attempt)) {
+        if (this.attempt === attempt) this.release(attempt);
         return;
       }
+      this.patchSession(robotId, { connectionState: 'connected', loading: false, error: null });
+    } catch (error) {
+      // 오래된 시도의 실패가 새 연결을 종료하거나 상태를 덮지 않게 한다.
+      if (!this.isCurrent(attempt)) {
+        if (this.attempt === attempt) this.release(attempt);
+        return;
+      }
+      this.release(attempt);
+      this.patchSession(robotId, { connectionState: 'failed', loading: false,
+        error: error instanceof Error ? error.message : '영상 스트림을 연결하지 못했습니다.' });
     }
+  }
 
-    this.patchSession(session.robotId, {
-      sessionId: session.sessionId,
-      connectionState: 'connected',
-      loading: false,
-      error: null,
-      mock: session.mock,
-    });
+  private release(attempt: Attempt, stopBackend = true) {
+    if (this.attempt === attempt) this.attempt = null;
+    attempt.controller.abort();
+    attempt.whep.close();
+    this.options.onRemoteStream?.(null);
+    this.patchSession(attempt.robotId, { sessionId: null, stream: null, connectionState: 'disconnected',
+      loading: false, error: null, lastFrameAt: null, frameReceiving: false, lastStoppedAt: new Date().toISOString() });
+    if (stopBackend && attempt.sessionId) this.stopBackend(attempt.robotId, attempt.sessionId);
+    if (attempt.previousSessionId) this.stopBackend(attempt.robotId, attempt.previousSessionId);
+    attempt.sessionId = null;
+    attempt.previousSessionId = null;
+  }
+
+  private stopBackend(robotId: string, sessionId: string) {
+    if (!this.isCurrentSession()) return;
+    void videoOperation((signal) => this.isCurrentSession()
+      ? stopSignaling(robotId, sessionId, signal) : Promise.resolve()).catch(() => undefined);
+  }
+
+  private isCurrent(attempt: Attempt) {
+    return this.attempt === attempt && !attempt.controller.signal.aborted && this.isCurrentSession();
   }
 
   private isCurrentSession() {
@@ -148,25 +135,4 @@ export class WebRTCClient {
   private patchSession(robotId: string, patch: Partial<VideoSession>) {
     if (this.isCurrentSession()) useVideoStore.getState().patchSession(robotId, patch);
   }
-
-  private patchFailure(robotId: string, error: unknown, fallback: string) {
-    this.patchSession(robotId, {
-      connectionState: 'failed',
-      loading: false,
-      error: error instanceof Error ? error.message : fallback,
-    });
-  }
-}
-
-function mapPeerConnectionState(state: RTCPeerConnectionState) {
-  if (state === 'connected') {
-    return 'connected';
-  }
-  if (state === 'connecting' || state === 'new') {
-    return 'connecting';
-  }
-  if (state === 'disconnected' || state === 'closed') {
-    return 'disconnected';
-  }
-  return 'failed';
 }

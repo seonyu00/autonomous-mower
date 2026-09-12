@@ -25,6 +25,8 @@ export function createDefaultVideoSession(robotId: string): VideoSession {
     stream: null,
     error: null,
     loading: false,
+    lastFrameAt: null,
+    frameReceiving: false,
     qualityPolicy: { ...defaultVideoQualityPolicy },
     snapshot: null,
     snapshotLoading: false,

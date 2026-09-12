@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Button } from '../../../shared/ui/Button';
 import { hasPermission } from '../../../shared/lib/permissions';
 import { useAuthStore } from '../../auth/authStore';
@@ -12,12 +12,12 @@ export function VideoPanel() {
   const selectedRobotId = useRobotStore((state) => state.selectedRobotId);
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const sessionVersion = useAuthStore((state) => state.sessionVersion);
   const sessionsByRobotId = useVideoStore((state) => state.sessionsByRobotId);
   const patchSession = useVideoStore((state) => state.patchSession);
   const setSnapshot = useVideoStore((state) => state.setSnapshot);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const clientRef = useRef<WebRTCClient | null>(null);
-  const previousRobotIdRef = useRef<string | null>(null);
 
   const session = selectedRobotId
     ? sessionsByRobotId[selectedRobotId] ?? createDefaultVideoSession(selectedRobotId)
@@ -27,28 +27,13 @@ export function VideoPanel() {
   const hasActiveStream = Boolean(session && activeVideoStates.includes(session.connectionState));
 
   useEffect(() => {
-    clientRef.current = new WebRTCClient({
-      onRemoteStream: (stream) => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      },
-    });
-
+    const client = new WebRTCClient();
+    clientRef.current = client;
     return () => {
-      void clientRef.current?.stopStream();
+      void client.stopStream();
+      if (clientRef.current === client) clientRef.current = null;
     };
-  }, []);
-
-  useEffect(() => {
-    const previousRobotId = previousRobotIdRef.current;
-
-    if (previousRobotId && previousRobotId !== selectedRobotId) {
-      void clientRef.current?.stopStream(previousRobotId);
-    }
-
-    previousRobotIdRef.current = selectedRobotId;
-  }, [selectedRobotId]);
+  }, [selectedRobotId, sessionVersion]);
 
   useEffect(() => {
     if (!canUseVideo && selectedRobotId && hasActiveStream) {
@@ -78,27 +63,60 @@ export function VideoPanel() {
   }, []);
 
   useEffect(() => {
-    if (videoRef.current && session?.stream) {
-      videoRef.current.srcObject = session.stream;
-    }
-  }, [session?.stream]);
+    const video = videoRef.current;
+    const stream = session?.stream;
+    if (!video || !stream || !selectedRobotId) return;
+    video.srcObject = stream;
+    let active = true;
+    let callbackId: number | undefined;
+    let lastFrame = 0;
+    let lastMediaTime = -1;
+    const current = () => active && useAuthStore.getState().sessionVersion === sessionVersion
+      && useRobotStore.getState().selectedRobotId === selectedRobotId
+      && useVideoStore.getState().getSession(selectedRobotId).stream === stream;
+    const received = () => {
+      if (!current()) return;
+      lastFrame = Date.now();
+      patchSession(selectedRobotId, { lastFrameAt: new Date(lastFrame).toISOString(), frameReceiving: true });
+    };
+    const onFrame: VideoFrameRequestCallback = () => {
+      if (!current()) return;
+      received();
+      callbackId = video.requestVideoFrameCallback(onFrame);
+    };
+    const onTimeUpdate = () => {
+      if (video.readyState >= 2 && video.currentTime !== lastMediaTime) {
+        lastMediaTime = video.currentTime;
+        received();
+      }
+    };
+    if (video.requestVideoFrameCallback) callbackId = video.requestVideoFrameCallback(onFrame);
+    else video.addEventListener('timeupdate', onTimeUpdate);
+    const timer = setInterval(() => {
+      if (current() && Date.now() - lastFrame >= 3000) patchSession(selectedRobotId, { frameReceiving: false });
+    }, 1000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      if (callbackId !== undefined) video.cancelVideoFrameCallback(callbackId);
+      video.removeEventListener('timeupdate', onTimeUpdate);
+      video.srcObject = null;
+    };
+  }, [session?.stream, selectedRobotId, sessionVersion, patchSession]);
 
-  const statusText = useMemo(() => {
-    if (!selectedRobotId) {
-      return '로봇 없음';
-    }
-
-    return session?.connectionState ?? 'idle';
-  }, [selectedRobotId, session?.connectionState]);
+  const statusText = !selectedRobotId ? '로봇 없음' : session?.mock ? '샘플 모드'
+    : ({ idle: '대기', connecting: '연결 중', connected: '연결됨', reconnecting: '재연결 중',
+      disconnected: '연결 종료', failed: '연결 실패' }[session?.connectionState ?? 'idle']);
 
   const startDisabled = !selectedRobotId || !canUseVideo || session?.loading || session?.connectionState === 'connected';
-  const stopDisabled = !selectedRobotId || session?.loading || !['connected', 'failed', 'reconnecting'].includes(session?.connectionState ?? '');
+  const stopDisabled = !selectedRobotId || !['connecting', 'connected', 'failed', 'reconnecting'].includes(session?.connectionState ?? '');
   const reconnectDisabled =
     !selectedRobotId || !canUseVideo || session?.loading || !['connected', 'failed', 'disconnected'].includes(session?.connectionState ?? '');
   const snapshotDisabled =
     !selectedRobotId ||
     !canUseVideo ||
     session?.connectionState !== 'connected' ||
+    !session?.frameReceiving ||
     session?.snapshotLoading;
 
   const handleStart = async () => {
@@ -163,7 +181,7 @@ export function VideoPanel() {
 
       <div className="video-frame">
         {session?.stream ? (
-          <video ref={videoRef} className="video-element" autoPlay muted playsInline aria-label="로봇 실시간 카메라 스트림" />
+          <video key={selectedRobotId} ref={videoRef} className="video-element" autoPlay muted playsInline aria-label="로봇 실시간 카메라 스트림" />
         ) : (
           <div className="mock-video-placeholder" aria-label={session?.mock ? "샘플 영상 영역" : "영상 수신 대기 영역"}>
             <span>{session?.loading ? '스트림 연결 중' : '카메라 스트림 대기 중'}</span>
@@ -174,8 +192,8 @@ export function VideoPanel() {
           <span>{session?.qualityPolicy.width ?? 640}×{session?.qualityPolicy.height ?? 480} 요청</span>
           <span>최소 {session?.qualityPolicy.minFps ?? 15} FPS</span>
           <span>지연 미수집</span>
-          <span className={session?.connectionState === 'connected' ? 'recording-state live' : 'recording-state'}>
-            {session?.connectionState === 'connected' ? 'LIVE' : 'STANDBY'}
+          <span className={session?.frameReceiving ? 'recording-state live' : 'recording-state'}>
+            {session?.mock ? '샘플 · 실제 프레임 없음' : session?.frameReceiving ? '프레임 수신 중' : session?.lastFrameAt ? '프레임 수신 중단' : '프레임 수신 대기'}
           </span>
         </div>
       </div>
@@ -185,7 +203,7 @@ export function VideoPanel() {
           스트림 시작
         </Button>
         <Button type="button" disabled={stopDisabled} onClick={() => void handleStop()}>
-          스트림 중지
+          {session?.loading ? '연결 취소' : '스트림 중지'}
         </Button>
         <Button type="button" disabled={reconnectDisabled} onClick={() => void handleReconnect()}>
           재연결
@@ -203,7 +221,7 @@ export function VideoPanel() {
 
       <div className="video-policy" aria-label="WebRTC 스트림 정책">
         <span>녹화 OFF</span>
-        <span>마지막 프레임 미수집</span>
+        <span>마지막 프레임 {session?.lastFrameAt ? new Date(session.lastFrameAt).toLocaleTimeString() : '미수신'}</span>
         <span>세션 시작 {session?.lastStartedAt ? new Date(session.lastStartedAt).toLocaleTimeString() : '미시작'}</span>
         <span>{session?.qualityPolicy.maxBitrateKbps ?? 500}kbps 제한</span>
       </div>

@@ -571,6 +571,10 @@ Request:
 
 백엔드는 MediaMTX와 SDP를 중계하지 않는다. 인증된 사용자에게 로봇별 WHEP URL을 발급하고 논리적인 세션 상태만 관리한다. 브라우저는 발급받은 WHEP URL에 직접 SDP offer를 전송한다.
 
+브라우저의 시그널링 요청은 10초, WHEP 연결 준비 전체(SDP 생성·ICE 수집·HTTP 응답 및 본문·실제 PeerConnection 연결)는 별도로 10초를 제한한다. 연결 중 취소할 수 있으며, 취소·실패·재연결 시 이전 시도의 응답과 이벤트는 새 연결 상태에 반영하지 않는다. 로컬 트랙·PeerConnection·영상 요소를 먼저 정리하고 WHEP DELETE와 백엔드 stop은 각각 10초 제한으로 별도 시도한다. 응답이 없거나 세션 ID/Location을 받지 못한 경우 원격 삭제 완료는 보장하지 않는다. 늦게 확인한 이전 세션은 삭제를 시도하되 새 로그인 세션의 권한으로 이전 백엔드 세션을 정리하지 않는다.
+
+SDP 교환이나 ontrack만으로 연결 성공·프레임 수신을 확정하지 않는다. 연결 표시는 실제 PeerConnection 상태를 따르고, 프레임 표시는 영상 요소의 프레임 콜백을 기준으로 별도 관리한다. 프레임 콜백을 지원하지 않는 브라우저는 재생 시간 진행과 readyState를 사용한다. 1초 주기로 검사해 3초 이상 새 프레임이 없으면 수신 중단을 표시하고 새 프레임에서 복구한다. 이 값은 영상 표시 관측이며 네트워크 지연·FPS 측정값은 아니다. 샘플 세션에는 실제 프레임이 있다고 표시하지 않는다.
+
 #### `POST /api/video/{robotId}/offer`
 
 Permission: `telemetry:read` under the current frontend RBAC model.
@@ -633,7 +637,7 @@ Request:
 Response:
 
 - 기존 세션을 중지하고 새 `sessionId`와 동일한 로봇의 `whepUrl`을 반환한다.
-- 프론트는 기존 WHEP resource에 `DELETE`를 보낸 뒤 새 WHEP 세션을 생성한다.
+- 프론트는 기존 로컬 연결을 즉시 닫고 WHEP resource의 `DELETE`를 별도로 시도하며, 삭제 응답을 기다리지 않고 새 WHEP 연결을 진행한다.
 
 Open backend decisions:
 

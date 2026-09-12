@@ -21,6 +21,8 @@ export type VideoSession = {
   stream: MediaStream | null;
   error: string | null;
   loading: boolean;
+  lastFrameAt: string | null;
+  frameReceiving: boolean;
   qualityPolicy: VideoQualityPolicy;
   snapshot: VideoSnapshot | null;
   snapshotLoading: boolean;

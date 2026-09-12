@@ -569,6 +569,8 @@ Backend:
 
 - `frontend/src/features/video/components/VideoPanel.tsx`
 - `frontend/src/features/video/WebRtcClient.ts`
+- `frontend/src/features/video/WhepClient.ts`
+- `frontend/src/features/video/videoOperation.ts`
 - `frontend/src/features/video/signalingApi.ts`
 - `frontend/src/features/video/videoStore.ts`
 - `frontend/src/features/video/types.ts`
@@ -584,8 +586,11 @@ Backend:
 - 실제 영상 연결:
   - 백엔드 `/api/video/{robotId}/offer`에서 WHEP URL과 세션 ID 발급
   - `WhepClient`가 MediaMTX에 SDP offer를 전송하고 H.264 WebRTC stream 수신
-  - 중지 시 WHEP resource에 `DELETE`를 보내고 백엔드 세션 종료
-  - 재연결 시 새 영상 세션과 WHEP 연결 생성
+  - 시그널링 10초, WHEP 연결 준비 전체 10초 제한과 AbortSignal 취소 처리
+  - 중지·취소 시 로컬 트랙·PeerConnection·영상 요소를 즉시 정리하고 WHEP DELETE와 백엔드 stop을 각 10초 제한으로 별도 시도
+  - 연결 시도·로봇·로그인 세션을 구분해 늦은 응답과 이벤트가 새 연결을 덮지 않도록 처리
+  - 재연결 시 새 영상 세션과 WHEP 연결 생성, 로봇 전환 시 이전 클라이언트와 영상 요소 정리
+  - 실제 PeerConnection 연결과 영상 프레임 수신을 구분하며 프레임 콜백·타이머로 수신 대기·수신 중·3초 이상 중단을 표시
 - mock signalling:
   - `VITE_ENABLE_MOCK_VIDEO=true`이면 mock 영상 세션 사용
 - snapshot은 연결된 `<video>` 현재 프레임을 JPEG로 캡처해 백엔드에 저장
@@ -596,6 +601,7 @@ Backend:
 - 영상 품질 정책 값은 세션 상태에 표시되지만 네트워크 상태에 따른 자동 품질 조정은 구현되지 않았다.
 - ICE는 MediaMTX의 WHEP 구현을 사용하며 별도 trickle ICE API는 제공하지 않는다.
 - 원격 MediaMTX가 연결되지 않으면 영상 프레임이 없어 스냅샷 버튼이 비활성화된다.
+- 원격 정리는 응답 유실·네트워크 실패·세션 식별자 미수신 시 완료를 보장하지 않는다. 로컬 종료는 원격 응답과 독립적으로 처리한다.
 
 ### API client/proxy/mock 처리
 
