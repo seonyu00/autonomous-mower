@@ -228,6 +228,33 @@ Response `200`:
 - latitude 범위: `-90..90`
 - exterior ring은 자기 교차가 없어야 한다.
 
+#### `POST /api/robots/{robotId}/work-zone/cpp-preview`
+
+`robots:read` 권한으로 저장된 작업 구역의 예정 경로만 생성한다. 요청에는 좌표·실행 파일·명령을 받지 않는다. MQTT·ROS 명령 발행과 결과 영속화는 없다.
+
+```json
+{"expectedVersion": 5, "cellSizeM": 1.0}
+```
+
+성공 시 공통 `ApiResponse.data`에 다음 형식이 반환된다. `path` 순서는 CPP가 반환한 이동 순서이며 빈 배열도 성공 응답이다.
+
+```json
+{
+  "robotId": "<ROBOT_ID>", "zoneId": 12, "version": 5, "cellSizeM": 1.0,
+  "rows": 22, "columns": 17, "origin": {"lat": 37.0, "lon": 127.0},
+  "path": [{"lat": 37.00003144, "lon": 127.00003936}]
+}
+```
+
+- 저장 GeoJSON `[경도, 위도]`를 CLI의 `{lat, lon}`으로 바꾼다. 내부 ring은 지원하지 않으며 조용히 제거하지 않는다.
+- 유한 좌표·유효 Polygon·위도 ±85도·경도 ±180도, 닫는 점 제외 최대 500점, 위경도 폭 각각 1도 이하, 격자 간격 0.2~5m를 검사한다. 지구 반경 6,378,137m와 위경도 범위의 보수적 직사각형으로 계산한 격자는 최대 100,000개다.
+- 실행 전후 버전 변경은 409 `WORK_ZONE_CONFLICT`, 잘못된 입력은 400 `CPP_INPUT_INVALID` 또는 `INVALID_REQUEST`다. 구역 미등록은 404다.
+- 구역의 남북 높이 또는 평균 위도로 보정한 동서 폭이 격자 간격보다 작으면 CLI 실행 전에 422 `CPP_GRID_TOO_LARGE`로 거부하고 `격자 간격을 줄이세요`를 안내한다. 격자를 만들 수 있지만 반환 경로가 빈 경우는 기존처럼 200이다.
+- 기본 실행 제한 5초, stdout 2MiB, 반환 경로 20,000점, 서버 인스턴스당 동시 실행 1개다. 설정 시간의 상한은 30초이며 출력 상한은 설정으로 늘릴 수 없다. stderr는 보관하지 않는다.
+- 웹은 네트워크·DB 대기·응답 본문 처리를 포함한 요청을 15초로 제한하고 재시도를 허용한다. 웹 취소가 서버의 DB 처리 중단을 보장하지는 않는다.
+- 503 `CPP_UNAVAILABLE`/`CPP_BUSY`, 502 `CPP_FAILED`/`CPP_OUTPUT_INVALID`, 504 `CPP_TIMEOUT`으로 실패를 구분한다.
+- **실기체 주행 승인, 경로 연결의 경계 내 포함, 장애물 우회, 커버리지 90%, 기체 폭·회전 반경은 검증하지 않는다.** 다른 사용자의 저장을 실시간으로 웹에 알리는 기능은 없으며, 재조회 및 다음 생성 시 버전을 확인한다.
+
 ### 3.4 이력(History)
 
 #### `GET /api/history?robotId=&from=&to=`

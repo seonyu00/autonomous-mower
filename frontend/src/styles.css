@@ -2618,3 +2618,12 @@ body:has(.map-console-page) {
     grid-column: auto;
   }
 }
+
+.cpp-preview-controls { position: absolute; top: 58px; left: 14px; z-index: 5; width: min(320px, 65%); padding: 12px; border: 1px solid #36516b; border-radius: 10px; background: #132235ed; color: #edf5ff; font-size: 12px; }
+.cpp-preview-controls summary { cursor: pointer; font-weight: 700; }
+.cpp-preview-controls[open] summary { margin-bottom: 8px; }
+.cpp-preview-controls input { width: 58px; margin: 0 8px; }
+.cpp-preview-controls p { margin: 6px 0 0; }
+.cpp-preview-controls button { padding: 5px 8px; cursor: pointer; }
+.cpp-preview-controls button:disabled { cursor: default; opacity: .5; }
+.cpp-preview-marker { background: #132235; border: 1px solid #61b6ff; border-radius: 4px; color: white; padding: 2px 4px; white-space: nowrap; font-size: 12px; }

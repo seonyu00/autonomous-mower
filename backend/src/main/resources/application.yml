@@ -40,6 +40,10 @@ logging:
     com.autonomousmower: INFO
 
 app:
+  cpp:
+    executable: ${CPP_EXECUTABLE:}
+    timeout-ms: 5000
+    max-output-bytes: 2097152
   security:
     jwt:
       secret: ${JWT_SECRET}

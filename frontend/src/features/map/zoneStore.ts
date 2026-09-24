@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import type { LngLat, PolygonGeometry } from './geojson';
 
 type ZoneStore = {
+  mapReady: boolean;
+  setMapReady: (ready: boolean) => void;
   zonesByRobotId: Record<string, PolygonGeometry | null>;
   versionsByRobotId: Record<string, number | null>;
   draftVerticesByRobotId: Record<string, LngLat[]>;
@@ -17,6 +19,8 @@ type ZoneStore = {
 };
 
 export const useZoneStore = create<ZoneStore>((set) => ({
+  mapReady: false,
+  setMapReady: (mapReady) => set({ mapReady }),
   zonesByRobotId: {},
   versionsByRobotId: {},
   draftVerticesByRobotId: {},

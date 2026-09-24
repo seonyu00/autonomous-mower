@@ -1479,3 +1479,17 @@ npm start
 이 문서:
 
 - `docs/project-inventory.md`: 현재 코드 기준 기능 인벤토리와 온보딩 요약.
+
+## 2026-09-23 오프라인 CPP 모듈 반입
+
+- `edge/mower-navigation/src/mower_map`: 받은 GPS 경계 기반 C++ 경로 생성 소스와 테스트를 반입했다. 웹 미리보기는 아래 구현으로 연결했으며 ROS 주행·STM32 연결은 없다.
+- `edge/mower-navigation/scripts/verify_offline.py`: 장비 없이 g++로 빌드하고 두 C++ 테스트 및 CLI 정밀도 테스트를 실행한다.
+- 경로점 사이의 경계 이탈, 기체 폭과 장애물 우회는 보장하지 않으므로 실기체 주행용 완성 경로로 취급하지 않는다.
+- 실행 방법은 모듈 README, 후속 순서와 차단 조건은 `docs/learning/12-development-roadmap.md`의 2026-09-23 절을 참고한다.
+
+## 2026-09-23 CPP 예정 경로 웹 미리보기
+
+- 서버: `workzone/controller/CppPreviewController`, `service/CppPreviewService`, `service/CppProcessRunner`, `dto/CppPreview*`. 기존 저장 구역 조회와 버전을 활용해 제한된 C++ 프로세스를 실행한다.
+- 웹: `frontend/src/features/map/cppPreview.ts`, `components/CppPreviewControls.tsx`, 기존 `MapViewMap`·`NaverOperationalMap`. 명시적 생성, 시작·끝·순서·방향, 대체 좌표 도식 및 오래된 응답 제거를 구현했다.
+- 미구현/미검증: 결과 영속화, 다른 사용자의 구역 변경 실시간 통지, 실제 주행, 경로 연결 안전성 및 실기체 커버리지 보장. 실제 DB와 네이버 실 SDK를 포함한 전체 연결 검증은 별도다.
+- 실행·제약·검증 범위는 [작업 구역 흐름](learning/07-work-zone-postgis.md#cpp-예정-경로-미리보기), 계약은 [API 문서](api-contract.md)를 따른다.

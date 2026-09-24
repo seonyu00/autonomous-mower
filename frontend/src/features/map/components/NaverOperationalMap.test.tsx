@@ -23,6 +23,7 @@ const naverMock = vi.hoisted(() => {
       return {
         options,
         panTo: vi.fn(),
+        fitBounds: vi.fn(),
         destroy: vi.fn(),
       };
     }),
@@ -52,7 +53,7 @@ const naverMock = vi.hoisted(() => {
         setMap: vi.fn(),
       };
     }),
-    LatLngBounds: vi.fn(),
+    LatLngBounds: vi.fn(function () { return { extend: vi.fn() }; }),
     Event: {
       addListener: vi.fn((target: unknown, eventName: string, handler: (event: unknown) => void) => {
         const listener = { target, eventName, handler };
@@ -168,4 +169,51 @@ describe('NaverOperationalMap', () => {
     });
     expect(onMoveVertex).toHaveBeenCalledWith(0, [127.4544, 36.6258]);
   });
+});
+
+it('CPP 모든 경로점과 시작·끝·방향 표식을 표시하고 변경 시 제거한다', async () => {
+  vi.mocked(loadNaverMaps).mockResolvedValue(naverMock.maps as unknown as typeof naver.maps);
+  vi.clearAllMocks();
+  const props = { clientId: 'test', robotId: 'R1', livePositionAvailable: false,
+    headingDegrees: null, workZone: null, draftVertices: [], plannedRoute: [], completedRoute: [],
+    editing: false, onAddVertex: vi.fn(), onMoveVertex: vi.fn(), onError: vi.fn() };
+  const { rerender, unmount } = render(<NaverOperationalMap {...props}
+    previewRoute={[[127, 37], [127.0001, 37], [127.0001, 37.0001]]} />);
+  await waitFor(() => expect(naverMock.maps.Marker).toHaveBeenCalledTimes(3));
+  const line = naverMock.maps.Polyline.mock.results[0].value;
+  expect(line.options.path.map((point: naver.maps.LatLng) => [point.lng(), point.lat()]))
+    .toEqual([[127, 37], [127.0001, 37], [127.0001, 37.0001]]);
+  const markers = naverMock.maps.Marker.mock.results.map((result) => result.value);
+  expect(markers[0].options.title).toBe('예정 경로 시작 1');
+  expect(markers[2].options.title).toBe('예정 경로 끝 3');
+  expect((markers[0].options.icon as { content: HTMLElement }).content.querySelector('span')?.style.transform).toBe('rotate(90deg)');
+  rerender(<NaverOperationalMap {...props} previewRoute={[]} />);
+  expect(line.setMap).toHaveBeenCalledWith(null);
+  markers.forEach((marker) => expect(marker.setMap).toHaveBeenCalledWith(null));
+  unmount();
+});
+
+it('미리보기 중 위치 마커만 갱신하고 경로 제거 후 자동 추적을 재개한다', async () => {
+  vi.mocked(loadNaverMaps).mockResolvedValue(naverMock.maps as unknown as typeof naver.maps);
+  vi.clearAllMocks();
+  const props = { clientId: 'test', robotId: 'R1', livePositionAvailable: true,
+    headingDegrees: null, workZone: null, draftVertices: [], plannedRoute: [], completedRoute: [],
+    editing: false, onAddVertex: vi.fn(), onMoveVertex: vi.fn(), onError: vi.fn() };
+  const { rerender, unmount } = render(<NaverOperationalMap {...props} markerPosition={[128, 38]} />);
+  await waitFor(() => expect(naverMock.maps.Map).toHaveBeenCalledTimes(1));
+  const map = naverMock.maps.Map.mock.results[0].value;
+  expect(map.panTo).toHaveBeenCalledTimes(1);
+  map.panTo.mockClear();
+  const route: [number, number][] = [[127, 37], [127.001, 37.001]];
+  rerender(<NaverOperationalMap {...props} markerPosition={[128, 38]} previewRoute={route} />);
+  expect(map.fitBounds).toHaveBeenCalledTimes(1);
+  expect(map.panTo).not.toHaveBeenCalled();
+  rerender(<NaverOperationalMap {...props} markerPosition={[128.1, 38.1]} previewRoute={route} />);
+  expect(map.panTo).not.toHaveBeenCalled();
+  const marker = naverMock.maps.Marker.mock.results.at(-1)!.value;
+  const position = marker.options.position as naver.maps.LatLng;
+  expect([position.lng(), position.lat()]).toEqual([128.1, 38.1]);
+  rerender(<NaverOperationalMap {...props} markerPosition={[128.1, 38.1]} previewRoute={[]} />);
+  expect(map.panTo).toHaveBeenCalledTimes(1);
+  unmount();
 });

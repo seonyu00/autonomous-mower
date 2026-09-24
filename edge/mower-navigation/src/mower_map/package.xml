@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>mower_map</name>
+  <version>0.1.0</version>
+  <description>
+    Vendored copy of the GPS coverage path planning (CPP) module from
+    Chaejangwoo/Jetson_Mower (cpp_map), packaged for colcon so cpp_bridge can
+    depend on and locate its installed cpp_map_cli executable. No ROS2
+    dependency itself -- plain C++17, no external libraries.
+  </description>
+  <maintainer email="jangwoo@todo.todo">jangwoo</maintainer>
+  <license>TODO: License declaration</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

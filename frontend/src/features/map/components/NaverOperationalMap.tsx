@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { previewMarkers } from '../cppPreview';
+import { calculateHeadingDegrees } from '../routeGeometry';
 import type { LngLat, PolygonGeometry } from '../geojson';
 import {
   DEFAULT_MAP_CENTER,
@@ -16,12 +18,14 @@ type NaverOperationalMapProps = {
   headingDegrees: number | null;
   workZone: PolygonGeometry | null | undefined;
   draftVertices: LngLat[];
+  previewRoute?: LngLat[];
   plannedRoute: LngLat[];
   completedRoute: LngLat[];
   editing: boolean;
   onAddVertex: (position: LngLat) => void;
   onMoveVertex: (index: number, position: LngLat) => void;
   onError: (message: string) => void;
+  onReadyChange?: (ready: boolean) => void;
 };
 
 export function NaverOperationalMap({
@@ -33,13 +37,16 @@ export function NaverOperationalMap({
   headingDegrees,
   workZone,
   draftVertices,
+  previewRoute,
   plannedRoute,
   completedRoute,
   editing,
   onAddVertex,
   onMoveVertex,
   onError,
+  onReadyChange,
 }: NaverOperationalMapProps) {
+  const previewVisible = Boolean(previewRoute?.length);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<naver.maps.Map | null>(null);
   const [mapsApi, setMapsApi] = useState<typeof naver.maps | null>(null);
@@ -51,6 +58,7 @@ export function NaverOperationalMap({
 
   useEffect(() => {
     let cancelled = false;
+    onReadyChange?.(false);
 
     loadNaverMaps(clientId)
       .then((maps) => {
@@ -71,6 +79,7 @@ export function NaverOperationalMap({
           });
           mapRef.current = map;
           setMapsApi(maps);
+          onReadyChange?.(true);
         } catch (error) {
           onErrorRef.current(toMapErrorMessage(error));
         }
@@ -83,11 +92,41 @@ export function NaverOperationalMap({
 
     return () => {
       cancelled = true;
+      onReadyChange?.(false);
       mapRef.current?.destroy();
       mapRef.current = null;
       setMapsApi(null);
     };
-  }, [clientId]);
+  }, [clientId, onReadyChange]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapsApi || !map || !previewRoute?.length) return;
+    const line = new mapsApi.Polyline({ map,
+      path: previewRoute.map((point) => toLatLng(mapsApi, point)),
+      strokeColor: '#61b6ff', strokeWeight: 4, strokeStyle: 'shortdash',
+    });
+    const markers = previewMarkers(previewRoute).map(({ position, index, label }) => {
+      const content = document.createElement('div');
+      content.className = 'cpp-preview-marker';
+      const next = previewRoute[index + 1];
+      const heading = next ? calculateHeadingDegrees([position, next]) : null;
+      if (heading !== null) {
+        const arrow = document.createElement('span');
+        arrow.textContent = '↑';
+        arrow.style.display = 'inline-block';
+        arrow.style.transform = `rotate(${heading}deg)`;
+        content.append(arrow);
+      }
+      content.append(document.createTextNode(label));
+      return new mapsApi.Marker({ map, position: toLatLng(mapsApi, position),
+        title: `예정 경로 ${label}`, icon: { content, anchor: { x: 8, y: 8 } }, zIndex: 15 });
+    });
+    const bounds = new mapsApi.LatLngBounds(toLatLng(mapsApi, previewRoute[0]), toLatLng(mapsApi, previewRoute[0]));
+    previewRoute.forEach((point) => bounds.extend(toLatLng(mapsApi, point)));
+    map.fitBounds(bounds);
+    return () => { line.setMap(null); markers.forEach((marker) => marker.setMap(null)); };
+  }, [mapsApi, previewRoute]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -220,7 +259,7 @@ export function NaverOperationalMap({
       zIndex: 20,
     });
 
-    if (livePositionAvailable) {
+    if (livePositionAvailable && !previewVisible) {
       map.panTo(toLatLng(mapsApi, markerPosition));
     }
 
@@ -232,6 +271,7 @@ export function NaverOperationalMap({
     markerPosition,
     robotId,
     robotMode,
+    previewVisible,
   ]);
 
   return (

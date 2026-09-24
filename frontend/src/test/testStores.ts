@@ -53,6 +53,7 @@ export function resetStores(role: Role = 'admin') {
   });
 
   useZoneStore.setState({
+    mapReady: true,
     zonesByRobotId: {},
     versionsByRobotId: {},
     draftVerticesByRobotId: {},

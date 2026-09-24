@@ -6,10 +6,12 @@ import { useRobotStore } from '../../robots/robotStore';
 import { useTelemetryStore } from '../../telemetry/telemetryStore';
 import { DEFAULT_MAP_CENTER } from '../mapDefaults';
 import { useZoneStore } from '../zoneStore';
+import { httpClient } from '../../../shared/api/httpClient';
 import { MapViewMap } from './MapViewMap';
 
 const envMock = vi.hoisted(() => ({
   naverMapClientId: '',
+  enableMockWorkZone: true,
 }));
 const naverMapMock = vi.hoisted(() => ({
   failMessage: '지도를 초기화하지 못했습니다. WebGL 초기화 실패',
@@ -25,14 +27,17 @@ vi.mock('./NaverOperationalMap', () => ({
     naverMapMock.props = props;
     const onError = props.onError as (message: string) => void;
     const clientId = props.clientId as string;
+    const onReadyChange = props.onReadyChange as (ready: boolean) => void;
 
     useEffect(() => {
+      onReadyChange(false);
       if (!clientId) {
         onError('지도를 초기화하지 못했습니다. 네이버 지도 Client ID가 설정되지 않았습니다.');
       } else if (naverMapMock.failMessage) {
         onError(naverMapMock.failMessage);
-      }
-    }, [clientId, onError]);
+      } else onReadyChange(true);
+      return () => onReadyChange(false);
+    }, [clientId, onError, onReadyChange]);
 
     return <div aria-label="네이버 위성 작업 지도" />;
   },
@@ -41,6 +46,7 @@ vi.mock('./NaverOperationalMap', () => ({
 describe('MapViewMap', () => {
   beforeEach(() => {
     envMock.naverMapClientId = '';
+    envMock.enableMockWorkZone = true;
     naverMapMock.failMessage = '지도를 초기화하지 못했습니다. WebGL 초기화 실패';
     naverMapMock.props = null;
     resetStores();
@@ -57,7 +63,23 @@ describe('MapViewMap', () => {
     });
   });
 
-  afterEach(cleanup);
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+  it('실제 모드 대체 지도에 CPP 선과 시작·끝을 표시하고 구역 변경 시 제거한다', async () => {
+    envMock.enableMockWorkZone = false;
+    useZoneStore.getState().setZone('MOWER-01', { type: 'Polygon', coordinates: [[[127, 37], [127.001, 37], [127, 37.001], [127, 37]]] }, 2);
+    vi.spyOn(httpClient, 'post').mockResolvedValue({ robotId: 'MOWER-01', version: 2,
+      path: [{ lon: 127.0001, lat: 37.0001 }, { lon: 127.0002, lat: 37.0002 }] });
+    render(<MapViewMap />);
+    fireEvent.click(screen.getByRole('button', { name: '예정 경로 생성' }));
+    expect(await screen.findByLabelText('예정 경로 시작 1')).toBeInTheDocument();
+    expect(screen.getByLabelText('예정 경로 끝 2')).toBeInTheDocument();
+    expect(screen.getByLabelText('CPP 예정 경로 좌표 도식').querySelector('polyline')).toHaveAttribute('points');
+    expect(naverMapMock.props?.previewRoute).toEqual([[127.0001, 37.0001], [127.0002, 37.0002]]);
+    act(() => useZoneStore.getState().setZone('MOWER-01', null, 3));
+    expect(screen.queryByLabelText('예정 경로 시작 1')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '예정 경로 생성' })).toBeDisabled();
+  });
 
   it('네이버 지도 초기화 실패 시 경고와 관제용 fallback layer를 표시한다', async () => {
     envMock.naverMapClientId = 'test-client-id';
@@ -193,6 +215,40 @@ describe('MapViewMap', () => {
     expect(useZoneStore.getState().draftVerticesByRobotId['MOWER-01']).toEqual([
       DEFAULT_MAP_CENTER,
     ]);
+    expect(screen.getByText('개발용 샘플 좌표 편집 · 실제 DB 저장 안 함')).toBeInTheDocument();
+  });
+
+  it('실제 대체 지도는 저장 좌표 도식을 표시하고 클릭·드래그를 차단한다', () => {
+    envMock.enableMockWorkZone = false;
+    // 텔레메트리 Mock 여부가 작업 구역의 실제 저장 정책을 바꾸지 않는다.
+    useZoneStore.getState().setZone('MOWER-01', { type: 'Polygon', coordinates: [[
+      [129, 35], [129.01, 35], [129.01, 35.01], [129, 35],
+    ]] }, 3);
+    useZoneStore.getState().startEditing('MOWER-01', [[128, 36], [128.1, 36], [128.1, 36.1]]);
+    const { container } = render(<MapViewMap />);
+    expect(screen.getByText('저장 구역 좌표 도식 · 실제 배경 지도 아님 · 편집 및 저장 불가')).toBeInTheDocument();
+    expect(container.querySelector('.fallback-work-zone')).toBeInTheDocument();
+    expect(screen.getByLabelText('대체 작업 구역')).toHaveTextContent('저장된 작업 구역');
+    expect(screen.queryByLabelText('작업 구역 편집 지도')).not.toBeInTheDocument();
+    const svg = container.querySelector('.map-fallback-layer svg')!;
+    fireEvent.click(svg, { clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(svg, { pointerId: 1, clientX: 500, clientY: 300 });
+    expect(useZoneStore.getState().draftVerticesByRobotId['MOWER-01']).toEqual([[128, 36], [128.1, 36], [128.1, 36.1]]);
+  });
+
+  it('정상 지도 편집은 유지하고 런타임 실패 뒤 늦은 지도 이벤트는 차단한다', () => {
+    envMock.enableMockWorkZone = false;
+    envMock.naverMapClientId = 'test';
+    naverMapMock.failMessage = '';
+    useZoneStore.getState().startEditing('MOWER-01');
+    render(<MapViewMap />);
+    const add = naverMapMock.props?.onAddVertex as (position: [number, number]) => void;
+    act(() => add([129, 35]));
+    expect(useZoneStore.getState().draftVerticesByRobotId['MOWER-01']).toEqual([[129, 35]]);
+    act(() => (naverMapMock.props?.onError as (message: string) => void)('runtime failure'));
+    act(() => add([127, 37]));
+    expect(useZoneStore.getState().mapReady).toBe(false);
+    expect(useZoneStore.getState().draftVerticesByRobotId['MOWER-01']).toEqual([[129, 35]]);
   });
 
   it('실제 모드의 미수신 상태에서는 샘플 경로와 대체 로봇 위치를 표시하지 않는다', () => {
