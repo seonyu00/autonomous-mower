@@ -136,3 +136,20 @@ it('샘플 연결을 실제 프레임 수신으로 표시하지 않는다', () =
   expect(screen.getByText('샘플 모드')).toBeInTheDocument();
   expect(screen.getByText('샘플 · 실제 프레임 없음')).toBeInTheDocument();
 });
+
+it('영상 상세를 접어도 프레임 중단과 오류 안내를 노출한다', () => {
+  render(<VideoPanel />);
+  const details = screen.getByText('영상 상세 · 스냅샷').closest('details');
+  expect(details).not.toHaveAttribute('open');
+  start();
+  supplyStream();
+  act(() => frameCallbacks.get(1)?.(0, {} as VideoFrameCallbackMetadata));
+  act(() => vi.advanceTimersByTime(3000));
+  act(() => useVideoStore.getState().patchSession('MOWER-01', {
+    error: '영상 연결을 확인하세요.', snapshotError: '스냅샷 저장 실패',
+  }));
+  for (const text of ['프레임 수신 중단', '영상 연결을 확인하세요.', '스냅샷 저장 실패']) {
+    expect(screen.getByText(text).closest('details')).toBeNull();
+  }
+  expect(screen.getByRole('button', { name: '스냅샷' })).toBeDisabled();
+});

@@ -1,10 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MapViewPage } from './MapViewPage';
-
-const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
 
 vi.mock('../features/map/components/MapViewMap', () => ({
   MapViewMap: () => <div>지도 컴포넌트</div>,
@@ -44,8 +40,8 @@ describe('MapViewPage', () => {
     expect(screen.getByText('작업 구역 편집기')).toBeInTheDocument();
   });
 
-  it('하단 제어 dock은 안전 정보가 잘리지 않는 224px 높이를 사용한다', () => {
-    expect(styles).toMatch(/grid-template-rows:\s*minmax\(0,\s*1fr\)\s+224px/);
-    expect(styles).toMatch(/\.map-console-controls\s*\{[^}]*height:\s*224px[^}]*max-height:\s*224px/s);
+  it('실제 연결에서도 샘플 정상 상태를 고정 표시하지 않는다', () => {
+    render(<MapViewPage />);
+    expect(screen.queryByText('1Hz 샘플 텔레메트리(Telemetry)')).not.toBeInTheDocument();
   });
 });

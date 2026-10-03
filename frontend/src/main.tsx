@@ -8,6 +8,7 @@ import { RealtimeProvider } from './app/providers/RealtimeProvider';
 import { RobotDataProvider } from './features/robots/RobotDataProvider';
 import { ErrorBoundary } from './shared/ui/ErrorBoundary';
 import './styles.css';
+import './light-theme.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

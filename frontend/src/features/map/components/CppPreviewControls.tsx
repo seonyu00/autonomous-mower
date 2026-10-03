@@ -3,7 +3,7 @@ import type { useCppPreview } from '../cppPreview';
 
 export function CppPreviewControls({ preview }: { preview: ReturnType<typeof useCppPreview> }) {
   const [cellSize, setCellSize] = useState(1);
-  return <details open className="cpp-preview-controls" aria-label="CPP 예정 경로 미리보기">
+  return <details className="cpp-preview-controls" name="map-tools" aria-label="CPP 예정 경로 미리보기">
     <summary>CPP 예정 경로 · 검토용 미리보기</summary>
     <label>격자 간격(m) <input type="number" min="0.2" max="5" step="0.1" value={cellSize}
       onChange={(event) => setCellSize(event.target.valueAsNumber)} /></label>

@@ -189,6 +189,7 @@ React VideoPanel
   - `frontend/src/shared/ui/Toast.tsx`
 - 스타일:
   - `frontend/src/styles.css`
+  - `frontend/src/light-theme.css`: 밝은 바탕·녹색 강조색, 상단 장비 요약, 지도·제어 패널 및 작은 화면 배치를 적용한다.
 
 ### 인증/Login
 

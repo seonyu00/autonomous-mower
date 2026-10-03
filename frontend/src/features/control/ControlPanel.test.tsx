@@ -41,16 +41,18 @@ describe('ControlPanel compact dock', () => {
     expect(debugDetails).toHaveTextContent('held-by-other');
   });
 
-  it('비활성 제어 그룹마다 사용자용 제한 사유를 compact하게 표시한다', () => {
+  it('공통 제한 안내를 각 제어 그룹의 접근성 설명으로 연결한다', () => {
     render(
       <AuthProvider>
         <ControlPanel compact />
       </AuthProvider>,
     );
 
-    expect(within(screen.getByLabelText('모드 선택 제어')).getByText('제어권을 먼저 획득하세요')).toBeInTheDocument();
-    expect(within(screen.getByLabelText('작업 제어')).getByText('제어권을 먼저 획득하세요')).toBeInTheDocument();
-    expect(within(screen.getByLabelText('예초 장치 제어')).getByText('제어권을 먼저 획득하세요')).toBeInTheDocument();
+    expect(screen.getByLabelText('모드 선택 제어')).toHaveAccessibleDescription('제어권을 먼저 획득하세요');
+    expect(screen.getByLabelText('작업 제어')).toHaveAccessibleDescription('제어권을 먼저 획득하세요');
+    expect(screen.getByLabelText('예초 장치 제어')).toHaveAccessibleDescription('제어권을 먼저 획득하세요');
+    expect(within(screen.getByLabelText('모드 및 예초 장치 명령')).getAllByText('제어권을 먼저 획득하세요')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'AUTO' })).toBeDisabled();
     expect(within(screen.getByLabelText('수동 조이스틱 제어')).getByText('제어권을 먼저 획득하세요')).toBeInTheDocument();
   });
 });

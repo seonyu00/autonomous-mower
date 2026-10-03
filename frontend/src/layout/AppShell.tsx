@@ -24,7 +24,7 @@ export function AppShell() {
           <span className="brand-mark" aria-hidden="true">AM</span>
           <div>
             <p className="eyebrow">자율주행 예초기</p>
-            <h1>Fleet Operations Console</h1>
+            <h1>예초기 관제</h1>
           </div>
         </div>
         <div className="header-operations">
@@ -38,7 +38,7 @@ export function AppShell() {
       </header>
 
       <aside className="app-sidebar" aria-label="장비 탐색 및 요약">
-        <nav className="nav-list" aria-label="Primary navigation">
+        <nav className="nav-list" aria-label="주요 메뉴">
           {navigationItems.map((item) => (
             <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>
               {item.label}
@@ -46,8 +46,15 @@ export function AppShell() {
           ))}
         </nav>
         <RobotList />
-        <TelemetryPanel compact />
       </aside>
+
+      <section className="fleet-overview" aria-label="선택 장비 상태 요약">
+        <div className="fleet-overview-heading">
+          <h2>현장의 흐름을 한눈에.</h2>
+          <p>선택한 장비의 작업 위치와 상태를 확인하세요.</p>
+        </div>
+        <TelemetryPanel compact />
+      </section>
 
       <main className="app-main">
         <Outlet />

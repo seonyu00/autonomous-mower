@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetStores, TEST_ROBOT_ID } from '../../../test/testStores';
 import { useTelemetryStore } from '../telemetryStore';
@@ -23,13 +23,13 @@ describe('TelemetryPanel compact summary', () => {
     expect(screen.getByText('지연')).toBeInTheDocument();
   });
 
-  it('좁은 사이드바용 핵심 텔레메트리를 compact하게 표시한다', () => {
+  it('핵심 텔레메트리를 한국어 요약으로 표시한다', () => {
     render(<TelemetryPanel compact />);
 
-    expect(screen.getByRole('heading', { name: '선택 로봇 요약' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '예초 중' })).toBeInTheDocument();
     expect(screen.getByText('82%')).toBeInTheDocument();
-    expect(screen.getByText('AUTONOMOUS')).toBeInTheDocument();
-    expect(screen.getByText('MOWING')).toBeInTheDocument();
+    expect(screen.getByText('자율 주행')).toBeInTheDocument();
+    expect(screen.getByText('예초 중')).toBeInTheDocument();
     expect(screen.getByText('0.8 m/s')).toBeInTheDocument();
     expect(screen.getByText('샘플 위치')).toBeInTheDocument();
     expect(screen.getByText('온라인')).toBeInTheDocument();
@@ -61,17 +61,10 @@ describe('TelemetryPanel compact summary', () => {
     expect(screen.queryByText('경도')).not.toBeInTheDocument();
   });
 
-  it('핵심 상태와 보조 정보를 시각적 우선순위로 구분한다', () => {
+  it('수신 시점과 샘플 출처를 요약에서 유지한다', () => {
     render(<TelemetryPanel compact />);
-
-    const primary = screen.getByLabelText('핵심 장비 상태');
-    const secondary = screen.getByLabelText('보조 텔레메트리');
-
-    expect(within(primary).getByText('배터리')).toBeInTheDocument();
-    expect(within(primary).getByText('모드')).toBeInTheDocument();
-    expect(within(primary).getByText('작업 상태')).toBeInTheDocument();
-    expect(within(primary).getByText('통신 상태')).toBeInTheDocument();
-    expect(within(secondary).getByText('GPS / RTK')).toBeInTheDocument();
-    expect(within(secondary).getByText('마지막 수신')).toBeInTheDocument();
+    expect(screen.getByText('마지막 수신')).toBeInTheDocument();
+    expect(screen.getByText(/샘플 텔레메트리/)).toBeInTheDocument();
+    expect(screen.getByLabelText('텔레메트리 수신 상태')).toBeInTheDocument();
   });
 });

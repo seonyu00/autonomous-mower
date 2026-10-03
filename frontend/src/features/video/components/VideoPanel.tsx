@@ -173,7 +173,6 @@ export function VideoPanel() {
     <section className="video-panel" aria-label="실시간 카메라 영상 패널">
       <div className="panel-heading compact">
         <div>
-          <p className="eyebrow">영상</p>
           <h2>실시간 카메라</h2>
         </div>
         <span className={statusClassName(session?.connectionState ?? 'idle')}>{statusText}</span>
@@ -189,9 +188,6 @@ export function VideoPanel() {
           </div>
         )}
         <div className="video-status-overlay" aria-label="영상 수신 정보">
-          <span>{session?.qualityPolicy.width ?? 640}×{session?.qualityPolicy.height ?? 480} 요청</span>
-          <span>최소 {session?.qualityPolicy.minFps ?? 15} FPS</span>
-          <span>지연 미수집</span>
           <span className={session?.frameReceiving ? 'recording-state live' : 'recording-state'}>
             {session?.mock ? '샘플 · 실제 프레임 없음' : session?.frameReceiving ? '프레임 수신 중' : session?.lastFrameAt ? '프레임 수신 중단' : '프레임 수신 대기'}
           </span>
@@ -219,19 +215,24 @@ export function VideoPanel() {
       {session?.connectionState === 'disconnected' ? <p className="muted">영상 스트림 연결이 끊겼습니다.</p> : null}
       {!canUseVideo ? <p className="warning-line">온디맨드 영상을 보려면 텔레메트리(Telemetry) 권한이 필요합니다.</p> : null}
 
-      <div className="video-policy" aria-label="WebRTC 스트림 정책">
-        <span>녹화 OFF</span>
-        <span>마지막 프레임 {session?.lastFrameAt ? new Date(session.lastFrameAt).toLocaleTimeString() : '미수신'}</span>
-        <span>세션 시작 {session?.lastStartedAt ? new Date(session.lastStartedAt).toLocaleTimeString() : '미시작'}</span>
-        <span>{session?.qualityPolicy.maxBitrateKbps ?? 500}kbps 제한</span>
-      </div>
-
-      <div className="snapshot-placeholder compact" aria-label="스냅샷 상태">
-        <span>스냅샷</span>
-        <small>
-          {session?.snapshot ? `${new Date(session.snapshot.capturedAt).toLocaleTimeString()} 저장됨` : '캡처된 스냅샷 없음'}
-        </small>
-      </div>
+      <details className="video-details">
+        <summary>영상 상세 · 스냅샷</summary>
+        <div className="video-policy" aria-label="WebRTC 스트림 정책">
+          <span>{session?.qualityPolicy.width ?? 640}×{session?.qualityPolicy.height ?? 480} 요청</span>
+          <span>최소 {session?.qualityPolicy.minFps ?? 15} FPS</span>
+          <span>지연 미수집</span>
+          <span>녹화 OFF</span>
+          <span>마지막 프레임 {session?.lastFrameAt ? new Date(session.lastFrameAt).toLocaleTimeString() : '미수신'}</span>
+          <span>세션 시작 {session?.lastStartedAt ? new Date(session.lastStartedAt).toLocaleTimeString() : '미시작'}</span>
+          <span>{session?.qualityPolicy.maxBitrateKbps ?? 500}kbps 제한</span>
+        </div>
+        <div className="snapshot-placeholder compact" aria-label="스냅샷 상태">
+          <span>스냅샷</span>
+          <small>
+            {session?.snapshot ? `${new Date(session.snapshot.capturedAt).toLocaleTimeString()} 저장됨` : '캡처된 스냅샷 없음'}
+          </small>
+        </div>
+      </details>
     </section>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Button } from '../../shared/ui/Button';
 import { useRobotStore } from '../robots/robotStore';
 import { changeMode, ControlPrecheckError, sendMowerAttachmentCommand } from './controlApi';
@@ -25,6 +25,7 @@ type GeneralControlCommandsProps = {
 };
 
 export function GeneralControlCommands({ compact = false }: GeneralControlCommandsProps) {
+  const disabledReasonId = useId();
   const selectedRobotId = useRobotStore((state) => state.selectedRobotId);
   const controlByRobotId = useControlStore((state) => state.controlByRobotId);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -80,9 +81,9 @@ export function GeneralControlCommands({ compact = false }: GeneralControlComman
         </span>
       </div> : null}
 
-      <div className="command-section mode-control" aria-label="모드 선택 제어">
+      <div className="command-section mode-control" aria-label="모드 선택 제어" aria-describedby={compact && disabledReason ? disabledReasonId : undefined}>
         <div className="command-section-heading">
-          <span>01</span>
+          {!compact ? <span>01</span> : null}
           <strong>모드 선택</strong>
           {!compact ? <small>운용 방식을 먼저 선택합니다.</small> : null}
         </div>
@@ -99,12 +100,11 @@ export function GeneralControlCommands({ compact = false }: GeneralControlComman
             </Button>
           ))}
         </div>
-        {compact && disabledReason ? <span className="compact-disabled-reason">{disabledReason}</span> : null}
       </div>
 
-      <div className="command-section work-control" aria-label="작업 제어">
+      <div className="command-section work-control" aria-label="작업 제어" aria-describedby={compact && disabledReason ? disabledReasonId : undefined}>
         <div className="command-section-heading">
-          <span>02</span>
+          {!compact ? <span>02</span> : null}
           <strong>작업 제어</strong>
           {!compact ? <small>선택한 모드에서 작업을 시작하거나 정지합니다.</small> : null}
         </div>
@@ -116,12 +116,11 @@ export function GeneralControlCommands({ compact = false }: GeneralControlComman
             작업 정지
           </Button>
         </div>
-        {compact && disabledReason ? <span className="compact-disabled-reason">{disabledReason}</span> : null}
       </div>
 
-      <div className="command-section attachment-control" aria-label="예초 장치 제어">
+      <div className="command-section attachment-control" aria-label="예초 장치 제어" aria-describedby={compact && disabledReason ? disabledReasonId : undefined}>
         <div className="command-section-heading">
-          <span>03</span>
+          {!compact ? <span>03</span> : null}
           <strong>예초 장치</strong>
           {!compact ? <small>작업 장치 출력과 높이를 제어합니다.</small> : null}
         </div>
@@ -137,9 +136,9 @@ export function GeneralControlCommands({ compact = false }: GeneralControlComman
             </Button>
           ))}
         </div>
-        {compact && disabledReason ? <span className="compact-disabled-reason">{disabledReason}</span> : null}
       </div>
 
+      {compact && disabledReason ? <p id={disabledReasonId} className="compact-disabled-reason command-disabled-reason">{disabledReason}</p> : null}
       {!compact && disabled && eligibility.reasons.length > 0 ? (
         <p className="warning-line">{eligibility.reasons.map(formatControlReason).join(' ')}</p>
       ) : null}

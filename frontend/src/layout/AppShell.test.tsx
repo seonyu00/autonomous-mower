@@ -33,7 +33,7 @@ vi.mock('../features/logs/components/RecentEventsPanel', () => ({
 afterEach(cleanup);
 
 describe('AppShell status placement', () => {
-  it('텔레메트리를 왼쪽 사이드바에 배치하고 오른쪽에서는 제거한다', () => {
+  it('상단에 장비 요약을 배치하고 탐색과 영상 영역을 분리한다', () => {
     render(
       <MemoryRouter>
         <AuthProvider>
@@ -45,7 +45,10 @@ describe('AppShell status placement', () => {
     const sidebar = screen.getByRole('complementary', { name: '장비 탐색 및 요약' });
     const statusPanel = screen.getByRole('complementary', { name: '영상 및 이벤트 상태' });
 
-    expect(within(sidebar).getByText('compact 텔레메트리')).toBeInTheDocument();
+    const overview = screen.getByRole('region', { name: '선택 장비 상태 요약' });
+    expect(within(overview).getByText('compact 텔레메트리')).toBeInTheDocument();
+    expect(within(sidebar).queryByText('compact 텔레메트리')).not.toBeInTheDocument();
+    expect(within(sidebar).getByText('로봇 목록 컴포넌트')).toBeInTheDocument();
     expect(within(statusPanel).queryByText('일반 텔레메트리')).not.toBeInTheDocument();
     expect(within(statusPanel).getByText('실시간 카메라')).toBeInTheDocument();
     expect(within(statusPanel).getByText('최근 이벤트')).toBeInTheDocument();
