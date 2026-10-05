@@ -130,6 +130,8 @@ button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visibl
 .work-zone-drawer[open] { width: min(360px, calc(100% - 24px)); }
 .cpp-preview-controls { top: 12px; padding: 8px 12px; }
 .maplibre-shell:has(.map-fallback-warning) .cpp-preview-controls { top: 84px; }
+.map-top-tools { position: absolute; z-index: 12; top: 12px; left: 12px; right: 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-height: calc(100% - 150px); overflow: auto; pointer-events: none; }
+.map-top-tools > .map-fallback-warning, .map-top-tools > .cpp-preview-controls { position: static; transform: none; margin: 0; max-width: 100%; flex-shrink: 0; pointer-events: auto; }
 .map-legend { top: auto; bottom: 70px; max-width: calc(100% - 24px); flex-wrap: wrap; border-radius: 6px; }
 .map-operation-strip { flex-wrap: wrap; }
 .map-operation-primary, .map-operation-item { min-width: 0; }
@@ -285,6 +287,7 @@ input, textarea { caret-color: var(--accent); }
   .work-zone-drawer { top: 8px; right: 8px; width: 160px; }
   .work-zone-drawer[open] { width: calc(100% - 16px); max-height: calc(100% - 16px); }
   .maplibre-shell:has(.map-fallback-warning) .cpp-preview-controls { top: 120px; }
+  .map-top-tools { max-height: calc(100% - 190px); }
   .map-operation-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .map-operation-item strong { white-space: normal; overflow-wrap: anywhere; }
   .map-legend { bottom: 135px; }

@@ -1,6 +1,6 @@
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadNaverMaps } from '../../map/naverMapsLoader';
+import { loadNaverMaps, subscribeNaverMapsAuthFailure } from '../../map/naverMapsLoader';
 import type { HistoryEntry } from '../types';
 import { HistoryMap } from './HistoryMap';
 
@@ -33,6 +33,7 @@ const naverMock = vi.hoisted(() => {
 
 vi.mock('../../map/naverMapsLoader', () => ({
   loadNaverMaps: vi.fn(),
+  subscribeNaverMapsAuthFailure: vi.fn(() => vi.fn()),
 }));
 
 const selectedEntry: HistoryEntry = {
@@ -76,6 +77,14 @@ describe('HistoryMap', () => {
   });
 
   afterEach(cleanup);
+
+  it('지도 생성 후 인증 실패하면 이력 지도 오류를 표시한다', async () => {
+    const { getByText } = render(<HistoryMap selectedEntry={selectedEntry} />);
+    await waitFor(() => expect(naverMock.maps.Map).toHaveBeenCalledOnce());
+    act(() => vi.mocked(subscribeNaverMapsAuthFailure).mock.calls[0][0](new Error('네이버 지도 인증 실패')));
+    expect(getByText('이력 지도를 초기화하지 못했습니다. 네이버 지도 인증 실패')).toBeInTheDocument();
+    expect(naverMock.maps.Map.mock.results[0].value.destroy).toHaveBeenCalledOnce();
+  });
 
   it('선택한 작업 이력을 네이버 위성 지도에 경로와 이벤트로 표시한다', async () => {
     render(<HistoryMap selectedEntry={selectedEntry} />);

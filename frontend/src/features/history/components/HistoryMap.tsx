@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { env } from '../../../shared/config/env';
 import { DEFAULT_MAP_CENTER, MAX_OPERATIONAL_MAP_ZOOM } from '../../map/mapDefaults';
-import { loadNaverMaps } from '../../map/naverMapsLoader';
+import { loadNaverMaps, subscribeNaverMapsAuthFailure } from '../../map/naverMapsLoader';
 import type { HistoryEntry, HistoryEventSeverity } from '../types';
 
 type HistoryMapProps = {
@@ -17,10 +17,20 @@ export function HistoryMap({ selectedEntry }: HistoryMapProps) {
 
   useEffect(() => {
     let cancelled = false;
+    let authenticationFailed = false;
+    const unsubscribeAuthFailure = subscribeNaverMapsAuthFailure((error) => {
+      authenticationFailed = true;
+      setMapError(`이력 지도를 초기화하지 못했습니다. ${error.message}`);
+      overlaysRef.current.forEach((overlay) => overlay.setMap(null));
+      overlaysRef.current = [];
+      mapRef.current?.destroy();
+      mapRef.current = null;
+      setMapsApi(null);
+    });
 
     loadNaverMaps(env.naverMapClientId)
       .then((maps) => {
-        if (cancelled || !mapContainerRef.current) {
+        if (cancelled || authenticationFailed || !mapContainerRef.current) {
           return;
         }
 
@@ -38,12 +48,14 @@ export function HistoryMap({ selectedEntry }: HistoryMapProps) {
         setMapsApi(maps);
       })
       .catch((error: unknown) => {
+        if (cancelled) return;
         const reason = error instanceof Error ? error.message : String(error);
         setMapError(`이력 지도를 초기화하지 못했습니다. ${reason}`);
       });
 
     return () => {
       cancelled = true;
+      unsubscribeAuthFailure();
       overlaysRef.current.forEach((overlay) => overlay.setMap(null));
       overlaysRef.current = [];
       mapRef.current?.destroy();

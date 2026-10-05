@@ -288,7 +288,7 @@ React VideoPanel
 - 네이버 Dynamic Map의 Maps JavaScript API 사용
 - `VITE_NAVER_MAP_CLIENT_ID`로 SDK를 비동기 로드하고 `SATELLITE` 지도 유형 사용
 - 기본 지도 중심과 `MOWER-01` 샘플 위치: 경도 `127.45455324663685`, 위도 `36.6259428230794`
-- 초기 줌 18, 최대 운용 줌 19로 제한
+- 초기 줌 18, 최대 운용 줌 21로 설정하며 작업 지도와 이력 지도에 같은 확대 한도를 적용한다. 확대는 화면 표시 배율을 높이며 위성영상의 원본 해상도나 위치 정확도를 높이지 않는다.
 - 작업 구역은 네이버 Polygon 오버레이로 표시
 - 샘플 경로를 완료 구간과 예정 구간으로 분리해 서로 다른 Polyline 오버레이로 표시
 - 텔레메트리의 명시적인 `dataSource`가 `mock`일 때만 샘플 위치·방향·경로를 표시하며 연결 상태 문자열로 추정하지 않는다.
@@ -296,7 +296,7 @@ React VideoPanel
 - 실제 GPS 좌표를 최대 500개까지 세션 완료 경로로 누적
 - 연속된 두 좌표에서 북쪽 기준 진행 방향 계산
 - telemetry 위치 변경 시 `panTo`로 지도 중심 이동
-- Client ID 누락 또는 SDK 초기화 실패 시 fallback layer를 표시한다. 고정 경로와 샘플 Marker는 Mock 데이터에서만 표시한다.
+- Client ID 누락, SDK 초기화 실패 또는 인증 실패 시 fallback layer를 표시한다. 로딩 후 늦게 전달되는 인증 실패도 지도 준비 상태를 해제하며 실패한 SDK를 성공 상태로 재사용하지 않는다. 고정 경로와 샘플 Marker는 Mock 데이터에서만 표시한다.
 - History 화면도 네이버 위성 지도에 과거 경로와 이벤트 위치를 표시
 
 Mock/Skeleton:

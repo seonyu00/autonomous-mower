@@ -1,7 +1,7 @@
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MAP_CENTER } from '../mapDefaults';
-import { loadNaverMaps } from '../naverMapsLoader';
+import { loadNaverMaps, subscribeNaverMapsAuthFailure } from '../naverMapsLoader';
 import { NaverOperationalMap } from './NaverOperationalMap';
 
 const naverMock = vi.hoisted(() => {
@@ -69,6 +69,7 @@ const naverMock = vi.hoisted(() => {
 
 vi.mock('../naverMapsLoader', () => ({
   loadNaverMaps: vi.fn(),
+  subscribeNaverMapsAuthFailure: vi.fn(() => vi.fn()),
 }));
 
 describe('NaverOperationalMap', () => {
@@ -79,6 +80,38 @@ describe('NaverOperationalMap', () => {
   });
 
   afterEach(cleanup);
+
+  it('인증 실패 뒤 늦게 완료된 SDK 응답은 지도 준비 상태를 되살리지 않는다', async () => {
+    let complete!: (maps: typeof naver.maps) => void;
+    vi.mocked(loadNaverMaps).mockReturnValueOnce(new Promise((resolve) => { complete = resolve; }));
+    const onReadyChange = vi.fn();
+    render(<NaverOperationalMap clientId="test" robotId="R1" livePositionAvailable={false}
+      headingDegrees={null} workZone={null} draftVertices={[]} plannedRoute={[]} completedRoute={[]}
+      editing={false} onAddVertex={vi.fn()} onMoveVertex={vi.fn()} onError={vi.fn()} onReadyChange={onReadyChange} />);
+    act(() => vi.mocked(subscribeNaverMapsAuthFailure).mock.calls[0][0](new Error('네이버 지도 인증 실패')));
+    await act(async () => complete(naverMock.maps as unknown as typeof naver.maps));
+    expect(naverMock.maps.Map).not.toHaveBeenCalled();
+    expect(onReadyChange).not.toHaveBeenCalledWith(true);
+  });
+
+  it('지도 생성 후 인증 실패하면 준비 상태를 해제하고 지도를 제거한다', async () => {
+    const onError = vi.fn();
+    const onReadyChange = vi.fn();
+    const { unmount } = render(<NaverOperationalMap clientId="test" robotId="R1"
+      livePositionAvailable={false} headingDegrees={null} workZone={null} draftVertices={[]}
+      plannedRoute={[]} completedRoute={[]} editing={false} onAddVertex={vi.fn()}
+      onMoveVertex={vi.fn()} onError={onError} onReadyChange={onReadyChange} />);
+    await waitFor(() => expect(onReadyChange).toHaveBeenLastCalledWith(true));
+
+    act(() => vi.mocked(subscribeNaverMapsAuthFailure).mock.calls[0][0](new Error('네이버 지도 인증 실패')));
+    expect(onReadyChange).toHaveBeenLastCalledWith(false);
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('네이버 지도 인증 실패'));
+    const map = naverMock.maps.Map.mock.results[0].value;
+    expect(map.destroy).toHaveBeenCalledTimes(1);
+    unmount();
+    expect(map.destroy).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(subscribeNaverMapsAuthFailure).mock.results[0].value).toHaveBeenCalledOnce();
+  });
 
   it('네이버 위성 지도와 관제 오버레이를 생성한다', async () => {
     const { getByLabelText } = render(
@@ -117,7 +150,7 @@ describe('NaverOperationalMap', () => {
       expect.any(HTMLElement),
       expect.objectContaining({
         zoom: 18,
-        maxZoom: 19,
+        maxZoom: 21,
         mapTypeId: 'satellite',
       }),
     );

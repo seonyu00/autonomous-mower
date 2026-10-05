@@ -7,7 +7,7 @@ import {
   DEFAULT_MAP_ZOOM,
   MAX_OPERATIONAL_MAP_ZOOM,
 } from '../mapDefaults';
-import { loadNaverMaps } from '../naverMapsLoader';
+import { loadNaverMaps, subscribeNaverMapsAuthFailure } from '../naverMapsLoader';
 
 type NaverOperationalMapProps = {
   clientId: string;
@@ -58,11 +58,20 @@ export function NaverOperationalMap({
 
   useEffect(() => {
     let cancelled = false;
+    let authenticationFailed = false;
     onReadyChange?.(false);
+    const unsubscribeAuthFailure = subscribeNaverMapsAuthFailure((error) => {
+      authenticationFailed = true;
+      onReadyChange?.(false);
+      onErrorRef.current(toMapErrorMessage(error));
+      mapRef.current?.destroy();
+      mapRef.current = null;
+      setMapsApi(null);
+    });
 
     loadNaverMaps(clientId)
       .then((maps) => {
-        if (cancelled || !containerRef.current) {
+        if (cancelled || authenticationFailed || !containerRef.current) {
           return;
         }
 
@@ -92,6 +101,7 @@ export function NaverOperationalMap({
 
     return () => {
       cancelled = true;
+      unsubscribeAuthFailure();
       onReadyChange?.(false);
       mapRef.current?.destroy();
       mapRef.current = null;

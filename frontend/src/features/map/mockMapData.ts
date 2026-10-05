@@ -59,11 +59,11 @@ export const mockWorkZoneByRobotId: Record<string, Feature<PolygonGeometry>> = {
       type: 'Polygon',
       coordinates: [
         [
-          offsetFromDefaultCenter(-0.00105, -0.00075),
-          offsetFromDefaultCenter(0.00045, -0.00055),
-          offsetFromDefaultCenter(0.0003, 0.00045),
-          offsetFromDefaultCenter(-0.0012, 0.00022),
-          offsetFromDefaultCenter(-0.00105, -0.00075),
+          [127.454388, 36.625869],
+          [127.454687, 36.625853],
+          [127.454733, 36.625997],
+          [127.454373, 36.626027],
+          [127.454388, 36.625869],
         ],
       ],
     },

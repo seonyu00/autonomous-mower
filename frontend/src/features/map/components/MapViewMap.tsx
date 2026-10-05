@@ -130,7 +130,6 @@ export function MapViewMap() {
         onReadyChange={handleMapReady}
       />
       {mapError ? (
-        <>
           <FallbackMapLayer
             robotId={selectedRobotId}
             sampleMode={sampleMode && !preview.path.length}
@@ -151,14 +150,17 @@ export function MapViewMap() {
               }
             }}
           />
+      ) : null}
+      <div className="map-top-tools">
+        {mapError ? (
           <div className="map-fallback-warning" role="alert">
             <span>Fallback 지도 표시 중</span>
             <strong>{mapError}</strong>
             <span>{sampleEditing ? '개발용 샘플 좌표 편집 · 실제 DB 저장 안 함' : '저장 구역 좌표 도식 · 실제 배경 지도 아님 · 편집 및 저장 불가'}</span>
           </div>
-        </>
-      ) : null}
-      <CppPreviewControls preview={preview} />
+        ) : null}
+        <CppPreviewControls preview={preview} />
+      </div>
       <span className={livePositionAvailable ? 'map-data-source-chip live' : 'map-data-source-chip sample'}>
         {sourceLabel}
       </span>

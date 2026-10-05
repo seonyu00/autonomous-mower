@@ -90,6 +90,8 @@ VITE_ENABLE_MOCK_WORK_ZONE=false  # 백엔드 GET/PUT와 PostGIS 사용
 
 이 설정은 운용자 화면에서 변경하지 않는다. 실제 모드에서는 샘플 Polygon을 실수로 저장하지 않도록 `샘플 구역 불러오기` 액션도 표시하지 않는다.
 
+네이버 SDK 생성 성공과 인증 성공은 별개다. `naverMapsLoader`는 [공식 인증 실패 콜백](https://navermaps.github.io/maps.js.ncp/docs/tutorial-2-Getting-Started.html)의 `navermap_authFailure`를 작업 지도와 이력 지도에 전달한다. 로딩 후 인증 실패가 도착해도 지도 준비 상태를 해제하고 오류를 표시한다. 실패 뒤 도착한 SDK 응답은 준비 상태를 복원하지 않는다. Client ID, 콘솔의 Web 서비스 URL 및 Web Dynamic Map 사용 설정을 확인한 뒤 화면을 새로고침한다. 인증 실패의 구체적인 원인은 콘솔 설정을 확인하기 전에는 확정하지 않는다.
+
 ## 7. 실제 저장 통합 검증
 
 2026년 6월 15일 로컬 Spring Boot와 PostGIS 환경에서 `MOWER-01` 작업 구역을 검증했다.
