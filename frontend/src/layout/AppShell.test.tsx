@@ -13,7 +13,11 @@ vi.mock('../features/telemetry/components/ProtocolIndicators', () => ({
 }));
 
 vi.mock('../features/control/EmergencyStopButton', () => ({
-  EmergencyStopStatus: () => <div>E-STOP 준비</div>,
+  EmergencyStopButton: () => <button type="button">긴급 정지</button>,
+}));
+
+vi.mock('../features/control/ControlPanel', () => ({
+  ControlPanel: () => <div>compact 제어 패널</div>,
 }));
 
 vi.mock('../features/telemetry/components/TelemetryPanel', () => ({
@@ -35,7 +39,7 @@ afterEach(cleanup);
 describe('AppShell status placement', () => {
   it('상단에 장비 요약을 배치하고 탐색과 영상 영역을 분리한다', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/map']}>
         <AuthProvider>
           <AppShell />
         </AuthProvider>
@@ -52,5 +56,19 @@ describe('AppShell status placement', () => {
     expect(within(statusPanel).queryByText('일반 텔레메트리')).not.toBeInTheDocument();
     expect(within(statusPanel).getByText('실시간 카메라')).toBeInTheDocument();
     expect(within(statusPanel).getByText('최근 이벤트')).toBeInTheDocument();
+    expect(within(screen.getByRole('banner')).getByRole('button', { name: '긴급 정지' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '긴급 정지' })).toHaveLength(1);
+    expect(within(screen.getByRole('region', { name: '하단 운용 제어' })).getByText('compact 제어 패널')).toBeInTheDocument();
+  });
+
+  it('이력 화면에는 지도 전용 제어 바를 표시하지 않는다', () => {
+    render(<MemoryRouter initialEntries={['/history']}><AuthProvider><AppShell /></AuthProvider></MemoryRouter>);
+    expect(screen.queryByRole('region', { name: '하단 운용 제어' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('banner')).getByRole('button', { name: '긴급 정지' })).toBeInTheDocument();
+  });
+
+  it('지도 주소 끝에 슬래시가 있어도 제어 바를 유지한다', () => {
+    render(<MemoryRouter initialEntries={['/map/']}><AuthProvider><AppShell /></AuthProvider></MemoryRouter>);
+    expect(screen.getByRole('region', { name: '하단 운용 제어' })).toBeInTheDocument();
   });
 });

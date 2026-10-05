@@ -47,7 +47,6 @@ export function RecentEventsPanel() {
     <section className="recent-events-panel" aria-label="최근 경고 및 이벤트">
       <div className="panel-heading compact">
         <div>
-          <p className="eyebrow">운용 기록</p>
           <h2>최근 경고 및 이벤트</h2>
         </div>
         <span className="status-pill degraded">최근 {recentEvents.length}건</span>

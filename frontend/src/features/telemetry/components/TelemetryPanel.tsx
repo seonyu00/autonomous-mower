@@ -48,7 +48,7 @@ export function TelemetryPanel({ compact = false }: TelemetryPanelProps) {
     return (
       <section className="telemetry-panel compact-telemetry" aria-label="선택 로봇 요약 텔레메트리">
         <div className="overview-state">
-          <p className="eyebrow">{telemetry.robotId}{dataSource === 'mock' ? ' · 샘플 텔레메트리' : ' · 현재 장비'}</p>
+          <p className="overview-source">{telemetry.robotId}{dataSource === 'mock' ? ' · 샘플 텔레메트리' : ' · 현재 장비'}</p>
           <h2>{workLabels[telemetry.workState]}</h2>
           <p><span>{modeLabels[telemetry.mode]}</span> · <span>{connectionText}</span></p>
         </div>

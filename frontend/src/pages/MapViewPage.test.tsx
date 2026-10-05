@@ -10,24 +10,14 @@ vi.mock('../features/map/components/WorkZoneEditor', () => ({
   WorkZoneEditor: () => <div>작업 구역 편집기</div>,
 }));
 
-vi.mock('../features/control/ControlPanel', () => ({
-  ControlPanel: ({ compact }: { compact?: boolean }) => <div>{compact ? 'compact 제어 패널' : '제어 패널'}</div>,
-}));
-
-vi.mock('../features/control/EmergencyStopButton', () => ({
-  EmergencyStopButton: () => <button type="button">E-STOP</button>,
-}));
-
 afterEach(cleanup);
 
 describe('MapViewPage', () => {
-  it('지도와 하단 제어를 분리한 관제 그리드로 렌더링한다', () => {
+  it('작업 지도와 편집 도구를 렌더링한다', () => {
     render(<MapViewPage />);
 
     expect(screen.getByRole('region', { name: '실시간 작업 지도' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: '하단 운용 제어' })).toBeInTheDocument();
-    expect(screen.getByText('compact 제어 패널')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'E-STOP' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '작업 지도' })).toBeInTheDocument();
   });
 
   it('작업 구역 편집기는 지도 내부의 접이식 패널로 시작한다', () => {

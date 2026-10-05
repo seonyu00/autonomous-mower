@@ -12,7 +12,7 @@ const reasonLabels: Record<string, string> = {
   'transport-not-ready': '보안 연결이 아직 준비되지 않았습니다.',
 };
 
-export function EmergencyStopButton() {
+export function EmergencyStopButton({ compact = false }: { compact?: boolean }) {
   const selectedRobotId = useRobotStore((state) => state.selectedRobotId);
   const controlByRobotId = useControlStore((state) => state.controlByRobotId);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -51,8 +51,16 @@ export function EmergencyStopButton() {
     }
   };
 
+  const safetyInformation = (
+    <ul className="estop-safety-meta" aria-label="긴급 정지 안전 정보">
+      <li><span>작동 이력</span><strong>{emergencyActive ? '현재 활성' : '없음'}</strong></li>
+      <li><span>실행 조건</span><strong>확인 후 실행</strong></li>
+      <li><span>제어권</span><strong>제어권 불필요</strong></li>
+    </ul>
+  );
+
   return (
-    <div className="global-estop">
+    <div className={compact ? 'global-estop compact-estop' : 'global-estop'}>
       <button
         className="estop-button"
         type="button"
@@ -60,25 +68,24 @@ export function EmergencyStopButton() {
         disabled={disabled}
         onClick={() => setConfirmOpen(true)}
       >
-        E-STOP
+        {compact ? <>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" /><path d="M12 7v10" />
+          </svg>
+          <span>긴급 정지<small>E-STOP</small></span>
+        </> : 'E-STOP'}
       </button>
-      <span className={emergencyActive ? 'estop-state active' : 'estop-state'}>
-        {emergencyActive ? '긴급 정지 활성' : '준비'}
-      </span>
-      <ul className="estop-safety-meta" aria-label="긴급 정지 안전 정보">
-        <li>
-          <span>작동 이력</span>
-          <strong>{emergencyActive ? '현재 활성' : '없음'}</strong>
-        </li>
-        <li>
-          <span>실행 조건</span>
-          <strong>확인 후 실행</strong>
-        </li>
-        <li>
-          <span>제어권</span>
-          <strong>제어권 불필요</strong>
-        </li>
-      </ul>
+      {compact ? (
+        <details className="estop-details">
+          <summary className={emergencyActive ? 'estop-state active' : 'estop-state'}>
+            {emergencyActive ? '긴급 정지 활성' : '준비'} · 안전 정보
+          </summary>
+          {safetyInformation}
+        </details>
+      ) : <>
+        <span className={emergencyActive ? 'estop-state active' : 'estop-state'}>{emergencyActive ? '긴급 정지 활성' : '준비'}</span>
+        {safetyInformation}
+      </>}
       {disabled && disabledReason ? <small className="estop-disabled-reason">{disabledReason}</small> : null}
 
       <Dialog title="긴급 정지 확인" open={confirmOpen} onClose={() => setConfirmOpen(false)}>
