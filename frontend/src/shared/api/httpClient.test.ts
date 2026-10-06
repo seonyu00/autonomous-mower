@@ -55,6 +55,16 @@ describe('httpClient', () => {
     expect(clearSession).toHaveBeenCalledTimes(1);
   });
 
+  it('버전 충돌의 서버 코드와 안내를 유지하고 로그인을 종료하지 않는다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: false, error: { code: 'ACCOUNT_VERSION_CONFLICT', message: '다른 관리자가 변경했습니다.' },
+    }), { status: 409 })));
+    await expect(httpClient.patch('/api/accounts/target', { expectedVersion: 0 })).rejects.toMatchObject({
+      status: 409, code: 'ACCOUNT_VERSION_CONFLICT', message: '다른 관리자가 변경했습니다.',
+    });
+    expect(clearSession).not.toHaveBeenCalled();
+  });
+
   it('FormData 요청에는 JSON Content-Type을 강제로 지정하지 않는다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: true, data: { id: 'snapshot-001' } }), {

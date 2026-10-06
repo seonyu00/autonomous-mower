@@ -63,7 +63,9 @@ class ControlSafetyServiceTest {
                 realtimePublisher,
                 responseFactory,
                 controlEventPublisher,
-                controlRobotGuard
+                controlRobotGuard,
+                new com.autonomousmower.auth.security.AccountSessionCoordinator(),
+                org.mockito.Mockito.mock(com.autonomousmower.auth.security.JwtTokenProvider.class)
         );
         emergencyStopService = new EmergencyStopService(
                 stateStore,

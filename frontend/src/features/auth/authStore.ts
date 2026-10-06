@@ -14,6 +14,7 @@ type AuthStore = {
   accessToken: string | null;
   isAuthenticated: boolean;
   setSession: (user: AuthUser, accessToken: string) => void;
+  updateProfile: (user: AuthUser) => void;
   loginAsMock: (role?: Role) => void;
   clearSession: () => void;
 };
@@ -92,6 +93,13 @@ export const useAuthStore = create<AuthStore>((set) => ({
     }
     resetDeviceData();
     set((state) => ({ user, accessToken, isAuthenticated: true, sessionVersion: state.sessionVersion + 1 }));
+  },
+  updateProfile: (user) => {
+    const token = useAuthStore.getState().accessToken;
+    if (!token) return;
+    if (token !== 'mock-access-token') writeStoredSession(user, token);
+    if (user.mustChangePassword) resetDeviceData();
+    set({ user });
   },
   loginAsMock: (role = 'admin') => {
     if (!env.enableMockAuth) return;

@@ -43,6 +43,17 @@ describe('createStompClient', () => {
     stompMock.instances.length = 0;
   });
 
+  it('서버의 세션 폐기 종료 시 재접속을 멈추고 인증 초기화를 요청한다', () => {
+    const onAuthLost = vi.fn();
+    const onStateChange = vi.fn();
+    createStompClient({ brokerURL: 'ws://localhost/ws', enabled: true, accessToken: 'test', onAuthLost, onStateChange });
+    const instance = stompMock.instances[0];
+    (instance.config.onWebSocketClose as (event: { code: number }) => void)({ code: 1008 });
+    expect(instance.deactivate).toHaveBeenCalled();
+    expect(onAuthLost).toHaveBeenCalledTimes(1);
+    expect(onStateChange).toHaveBeenLastCalledWith('disconnected');
+  });
+
   it('sends the JWT in the STOMP CONNECT headers', () => {
     createStompClient({
       brokerURL: 'ws://localhost:8080/ws',

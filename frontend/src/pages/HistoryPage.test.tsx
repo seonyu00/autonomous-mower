@@ -15,7 +15,17 @@ vi.mock('../features/history/components/HistoryMap', () => ({ HistoryMap: () => 
 vi.mock('../features/history/components/HistoryTimeline', () => ({ HistoryTimeline: () => null }));
 
 beforeEach(() => { resetStores(); env.enableMockHistory = false; vi.mocked(getHistory).mockReset().mockResolvedValue([]); });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.useRealTimers(); });
+
+it('실제 조회 기본 날짜는 현재 UTC 날짜를 사용한다', async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-10-04T23:30:00Z'));
+  render(<HistoryPage />);
+  expect(screen.getByLabelText('시작일 (UTC)')).toHaveValue('2026-10-04');
+  expect(screen.getByLabelText('종료일 (UTC)')).toHaveValue('2026-10-04');
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: '검색' })));
+  expect(getHistory).toHaveBeenCalledWith(expect.objectContaining({ from: '2026-10-04', to: '2026-10-04' }));
+});
 
 it('실제 이력은 조회 전 샘플 결과가 없고 로봇 선택은 현재 목록을 따른다', () => {
   useRobotStore.getState().setRobots([]);
@@ -32,6 +42,8 @@ it('명시적인 개발 이력 Mock은 기존 샘플을 표시한다', () => {
   env.enableMockHistory = true;
   render(<HistoryPage />);
   expect(screen.getByText('샘플 데이터')).toBeInTheDocument();
+  expect(screen.getByLabelText('시작일 (UTC)')).toHaveValue('2026-05-28');
+  expect(screen.getByLabelText('종료일 (UTC)')).toHaveValue('2026-05-29');
   expect(screen.queryByText('0건')).not.toBeInTheDocument();
 });
 

@@ -27,9 +27,11 @@ public class StompJwtAuthenticationInterceptor implements ChannelInterceptor {
     );
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final AccountWebSocketSessions sessions;
 
-    public StompJwtAuthenticationInterceptor(JwtTokenProvider jwtTokenProvider) {
+    public StompJwtAuthenticationInterceptor(JwtTokenProvider jwtTokenProvider, AccountWebSocketSessions sessions) {
         this.jwtTokenProvider = jwtTokenProvider;
+        this.sessions = sessions;
     }
 
     @Override
@@ -52,12 +54,14 @@ public class StompJwtAuthenticationInterceptor implements ChannelInterceptor {
         }
 
         SecurityUser user = jwtTokenProvider.parse(token);
+        if (user.isMustChangePassword()) throw new AccessDeniedException("먼저 비밀번호를 변경해야 합니다.");
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                 user,
                 token,
                 user.getAuthorities()
         );
         accessor.setUser(authentication);
+        sessions.authenticate(accessor.getSessionId(), user, token);
         return message;
     }
 
@@ -71,7 +75,13 @@ public class StompJwtAuthenticationInterceptor implements ChannelInterceptor {
             throw new AccessDeniedException("Missing STOMP authentication.");
         }
 
-        boolean canReadRobotTopic = authentication.getAuthorities().stream()
+        if (!(authentication.getCredentials() instanceof String token)) {
+            throw new AccessDeniedException("Missing STOMP session token.");
+        }
+        SecurityUser current = jwtTokenProvider.parse(token);
+        if (current.isMustChangePassword()) throw new AccessDeniedException("먼저 비밀번호를 변경해야 합니다.");
+
+        boolean canReadRobotTopic = current.getAuthorities().stream()
                 .anyMatch(authority -> "telemetry:read".equals(authority.getAuthority()));
         if (!canReadRobotTopic) {
             throw new AccessDeniedException("Missing telemetry:read authority for robot topic subscription.");

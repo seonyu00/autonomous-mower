@@ -53,6 +53,9 @@ class AuthControllerTest {
     private AuthService authService;
 
     @MockBean
+    private com.autonomousmower.account.service.AccountService accountService;
+
+    @MockBean
     private JwtTokenProvider jwtTokenProvider;
 
     @Test
@@ -61,7 +64,7 @@ class AuthControllerTest {
                 "admin",
                 "admin",
                 "admin",
-                java.util.List.of("robots:read", "control:write", "control:takeover")
+                java.util.List.of("robots:read", "control:write", "control:takeover"), false
         );
         when(authService.login(any(LoginRequest.class))).thenReturn(new LoginResponse(
                 "jwt-access-token",

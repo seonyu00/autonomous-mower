@@ -17,6 +17,11 @@ public class ControlStateStore {
         return states.computeIfAbsent(robotId, MutableControlState::new);
     }
 
+    public boolean hasActiveLock(String adminId) {
+        return states.values().stream().map(MutableControlState::snapshot)
+                .anyMatch(snapshot -> "held".equals(snapshot.lockState()) && adminId.equals(snapshot.controlOwner()));
+    }
+
     public static class MutableControlState {
         private final String robotId;
         private String lockState = "none";

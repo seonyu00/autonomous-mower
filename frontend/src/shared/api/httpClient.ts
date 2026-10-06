@@ -50,7 +50,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       useAuthStore.getState().clearSession();
     }
 
-    throw new ApiError(response.statusText || '요청을 처리하지 못했습니다.', classifyStatus(response.status), response.status);
+    const failure = await response.json().catch(() => null) as { error?: { message?: string; code?: string } } | null;
+    throw new ApiError(failure?.error?.message || response.statusText || '요청을 처리하지 못했습니다.', classifyStatus(response.status), response.status, failure?.error?.code);
   }
 
   if (response.status === 204) {
@@ -79,4 +80,6 @@ export const httpClient = {
     request<Blob>(path, { ...options, method: 'GET', responseType: 'blob' }),
   put: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
+  patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>
+    request<T>(path, { ...options, method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
 };

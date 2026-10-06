@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../app/providers/authContext';
 import { login } from '../features/auth/api';
 import { useAuthStore } from '../features/auth/authStore';
@@ -11,6 +11,8 @@ export function LoginPage() {
   const [adminId, setAdminId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const location = useLocation();
+  const message = (location.state as { message?: string } | null)?.message;
 
   if (isAuthenticated) {
     return <Navigate to="/map" replace />;
@@ -32,6 +34,7 @@ export function LoginPage() {
       <section className="login-panel">
         <p className="eyebrow">보안 접속</p>
         <h1>관제 대시보드 로그인</h1>
+        {message ? <p role="status">{message}</p> : null}
         <p className="muted">Mock 인증이 꺼져 있으면 발급받은 관리자 계정으로 로그인합니다.</p>
         {env.enableMockAuth ? (
           <button className="primary-button" type="button" onClick={() => loginAsMock('admin')}>

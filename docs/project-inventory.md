@@ -1294,6 +1294,14 @@ README와 현재 구현 기준으로 확인 가능한 local integration flow:
 
 ## 7. 아직 mock/skeleton/TODO인 것
 
+### 계정·권한 설정 구현과 후속 범위
+
+- `frontend/src/pages/SettingsPage.tsx`와 `features/accounts/`는 내 계정·본인 비밀번호 변경, admin 전용 검색·생성·역할·활성 상태·재설정·감사 조회를 실제 API로 처리한다. `ChangePasswordPage.tsx`는 임시 비밀번호 사용자를 관제 진입 전 변경 절차로 연결한다. 샘플 인증에서는 실제 계정 쓰기를 차단한다.
+- `backend/.../account/`의 `AccountController`, `AccountService`, `AccountAuditRepository`는 고정 역할·expectedVersion·마지막 관리자·자기 권한 하향·제어권 보유 검사를 수행한다. 계정과 감사는 하나의 트랜잭션으로 저장한다. 신규 ID 최대 20자·새 비밀번호 최소 10자이며 기존 계정 ID·해시를 유지한다.
+- V9는 계정 상태와 DB 관리 잠금·감사 테이블을 추가한다. `JwtTokenProvider`는 DB의 최신 상태를 확인하고 `AccountWebSocketSessions`는 커밋 후 연결 종료·송신 차단을 수행한다. 단일 서버의 계정 변경과 제어권 취득은 `AccountSessionCoordinator`로 조정한다. 실제 PostgreSQL 동시 변경·감사 롤백과 API·WebSocket·브라우저 검증을 완료했다. 기존 JWT는 배포 후 재로그인이 필요하다.
+- 사용자 정의 역할·계정 삭제·초대·복구·조직별 장비 권한, 최초 관리자 자동 등록·감사 삭제, 다중 서버 제어권 공유는 후속 범위다. [API 계약](api-contract.md#7-계정권한-설정--2026-10-05)과 [작업 순서·완료 기준](learning/12-development-roadmap.md#pc-백엔드-통합-검증과-계정-설정--2026년-10월-5일)을 따른다.
+- 같은 날 프론트 Mock을 끈 전용 PC 환경에서 실제 로그인·장비 조회·상태 갱신·구역 저장·이력·로그를 확인했다. 상태의 원천은 PC MQTT 시뮬레이터이며 Jetson/STM32 실기 검증을 의미하지 않는다. [작업 시점의 증거](development-log.md)를 참조한다.
+
 ### Jetson client 후속 범위
 
 - Phase 1 구현됨: `edge/jetson-client/`

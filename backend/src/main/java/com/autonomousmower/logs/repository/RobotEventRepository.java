@@ -12,7 +12,7 @@ public interface RobotEventRepository extends JpaRepository<RobotEvent, String> 
     @Query("""
             select event from RobotEvent event
             where (:robotId is null or event.robot.robotId = :robotId)
-              and (:severity is null or lower(event.severity) = lower(:severity))
+              and (:severity is null or lower(event.severity) = lower(cast(:severity as string)))
               and event.occurredAt >= coalesce(:from, event.occurredAt)
               and event.occurredAt <= coalesce(:to, event.occurredAt)
             order by event.occurredAt desc

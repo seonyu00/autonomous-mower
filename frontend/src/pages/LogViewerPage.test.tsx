@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ getLogs: vi.fn() }));
 vi.mock('../features/logs/api', () => ({ getLogs: mocks.getLogs }));
@@ -7,9 +7,26 @@ vi.mock('../shared/config/env', () => ({ env: { enableMockLogs: false } }));
 vi.mock('../features/logs/components/SnapshotViewer', () => ({ SnapshotViewer: () => null }));
 
 import { LogViewerPage } from './LogViewerPage';
+import { useRobotStore } from '../features/robots/robotStore';
 
 beforeEach(() => {
   mocks.getLogs.mockReset();
+  mocks.getLogs.mockResolvedValue([]);
+  useRobotStore.setState(useRobotStore.getInitialState(), true);
+});
+
+afterEach(cleanup);
+
+it('실제 모드의 로봇 필터는 조회한 장비만 표시한다', () => {
+  useRobotStore.getState().setRobots([{
+    id: 'PC-INTEGRATION', modelName: '통합 검증 장비', connectionState: 'offline', active: true,
+  }]);
+  render(<LogViewerPage />);
+  expect(screen.getByRole('option', { name: 'PC-INTEGRATION' })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: 'MOWER-01' })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('로봇'), { target: { value: 'PC-INTEGRATION' } });
+  fireEvent.click(screen.getByRole('button', { name: '검색' }));
+  expect(mocks.getLogs).toHaveBeenCalledWith(expect.objectContaining({ robotId: 'PC-INTEGRATION' }));
 });
 
 it('keeps the previous result and displays a failed date search', async () => {

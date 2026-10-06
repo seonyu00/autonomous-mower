@@ -14,8 +14,8 @@ export function HistoryPage() {
   const sessionVersion = useAuthStore((state) => state.sessionVersion);
   const [requestedRobotId, setRobotId] = useState('');
   const robotId = robots.some((robot) => robot.id === requestedRobotId) ? requestedRobotId : robots[0]?.id ?? '';
-  const [from, setFrom] = useState('2026-05-28');
-  const [to, setTo] = useState('2026-05-29');
+  const [from, setFrom] = useState(() => env.enableMockHistory ? '2026-05-28' : new Date().toISOString().slice(0, 10));
+  const [to, setTo] = useState(() => env.enableMockHistory ? '2026-05-29' : new Date().toISOString().slice(0, 10));
   const [entries, setEntries] = useState<HistoryEntry[]>(() =>
     env.enableMockHistory ? mockHistoryEntries.filter((entry) => entry.robotId === (robots[0]?.id ?? '')) : [],
   );

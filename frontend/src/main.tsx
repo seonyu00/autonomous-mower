@@ -9,6 +9,7 @@ import { RobotDataProvider } from './features/robots/RobotDataProvider';
 import { ErrorBoundary } from './shared/ui/ErrorBoundary';
 import './styles.css';
 import './light-theme.css';
+import './features/accounts/settings.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

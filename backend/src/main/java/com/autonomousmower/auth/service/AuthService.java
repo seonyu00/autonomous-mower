@@ -36,12 +36,12 @@ public class AuthService {
         Admin admin = adminRepository.findById(request.adminId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
 
-        if (!passwordEncoder.matches(request.password(), admin.getPasswordHash())) {
+        if (!admin.isEnabled() || !passwordEncoder.matches(request.password(), admin.getPasswordHash())) {
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
         }
 
         RoleName roleName = RoleName.fromValue(admin.getRole());
-        SecurityUser user = SecurityUser.from(admin.getAdminId(), admin.getAdminId(), roleName);
+        SecurityUser user = SecurityUser.from(admin.getAdminId(), roleName, admin.getSessionVersion(), admin.isMustChangePassword());
         JwtTokenProvider.TokenResult tokenResult = jwtTokenProvider.createToken(user);
         return new LoginResponse(
                 tokenResult.token(),

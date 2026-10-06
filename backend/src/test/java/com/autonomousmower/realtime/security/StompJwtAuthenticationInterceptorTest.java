@@ -40,7 +40,7 @@ class StompJwtAuthenticationInterceptorTest {
     void connectWithBearerTokenSetsAuthenticatedPrincipal() {
         SecurityUser user = SecurityUser.from("admin", "ADMIN USER", RoleName.ADMIN);
         when(jwtTokenProvider.parse("valid-token")).thenReturn(user);
-        StompJwtAuthenticationInterceptor interceptor = new StompJwtAuthenticationInterceptor(jwtTokenProvider);
+        StompJwtAuthenticationInterceptor interceptor = new StompJwtAuthenticationInterceptor(jwtTokenProvider, org.mockito.Mockito.mock(AccountWebSocketSessions.class));
         Message<byte[]> message = connectMessage("Bearer valid-token");
 
         Message<?> result = interceptor.preSend(message, messageChannel);
@@ -53,7 +53,7 @@ class StompJwtAuthenticationInterceptorTest {
 
     @Test
     void connectWithoutBearerTokenIsRejected() {
-        StompJwtAuthenticationInterceptor interceptor = new StompJwtAuthenticationInterceptor(jwtTokenProvider);
+        StompJwtAuthenticationInterceptor interceptor = new StompJwtAuthenticationInterceptor(jwtTokenProvider, org.mockito.Mockito.mock(AccountWebSocketSessions.class));
         Message<byte[]> message = connectMessage(null);
 
         assertThatThrownBy(() -> interceptor.preSend(message, messageChannel))
@@ -63,7 +63,7 @@ class StompJwtAuthenticationInterceptorTest {
     @Test
     void invalidJwtCannotAuthenticateConnection() {
         when(jwtTokenProvider.parse("invalid-token")).thenThrow(new JwtException("Invalid test token"));
-        StompJwtAuthenticationInterceptor interceptor = new StompJwtAuthenticationInterceptor(jwtTokenProvider);
+        StompJwtAuthenticationInterceptor interceptor = new StompJwtAuthenticationInterceptor(jwtTokenProvider, org.mockito.Mockito.mock(AccountWebSocketSessions.class));
         Message<byte[]> message = connectMessage("Bearer invalid-token");
         assertThatThrownBy(() -> interceptor.preSend(message, messageChannel)).isInstanceOf(JwtException.class);
         assertThat(StompHeaderAccessor.wrap(message).getUser()).isNull();
@@ -72,7 +72,7 @@ class StompJwtAuthenticationInterceptorTest {
     @ParameterizedTest
     @ValueSource(strings = {"telemetry", "status", "events", "control-lock", "control-events", "video-status"})
     void readOnlyUserCanSubscribeToPublishedTopics(String topic) {
-        StompJwtAuthenticationInterceptor interceptor = new StompJwtAuthenticationInterceptor(jwtTokenProvider);
+        StompJwtAuthenticationInterceptor interceptor = new StompJwtAuthenticationInterceptor(jwtTokenProvider, org.mockito.Mockito.mock(AccountWebSocketSessions.class));
         SecurityUser user = SecurityUser.from("viewer", "VIEWER", RoleName.READ_ONLY);
         when(jwtTokenProvider.parse("valid-token")).thenReturn(user);
         Message<?> connected = interceptor.preSend(connectMessage("Bearer valid-token"), messageChannel);
@@ -130,7 +130,7 @@ class StompJwtAuthenticationInterceptorTest {
 
     @Test
     void unsubscribeDisconnectAndHeartbeatRemainAvailable() {
-        StompJwtAuthenticationInterceptor interceptor = new StompJwtAuthenticationInterceptor(jwtTokenProvider);
+        StompJwtAuthenticationInterceptor interceptor = new StompJwtAuthenticationInterceptor(jwtTokenProvider, org.mockito.Mockito.mock(AccountWebSocketSessions.class));
         for (StompCommand command : List.of(StompCommand.UNSUBSCRIBE, StompCommand.DISCONNECT)) {
             Message<byte[]> message = frame(command, null, reader());
             assertThat(interceptor.preSend(message, messageChannel)).isSameAs(message);
@@ -140,8 +140,26 @@ class StompJwtAuthenticationInterceptorTest {
         assertThat(interceptor.preSend(heartbeat, messageChannel)).isSameAs(heartbeat);
     }
 
+    @Test
+    void revokedTokenCannotAddSubscriptionDespitePreviousReadAuthority() {
+        SecurityUser user = SecurityUser.from("viewer", "viewer", RoleName.READ_ONLY);
+        when(jwtTokenProvider.parse("revoked-token")).thenThrow(new JwtException("revoked"));
+        var principal = new UsernamePasswordAuthenticationToken(user, "revoked-token", user.getAuthorities());
+        var interceptor = new StompJwtAuthenticationInterceptor(jwtTokenProvider, org.mockito.Mockito.mock(AccountWebSocketSessions.class));
+        assertThatThrownBy(() -> interceptor.preSend(frame(StompCommand.SUBSCRIBE, "/topic/robots/mower-01/telemetry", principal), messageChannel))
+                .isInstanceOf(JwtException.class);
+    }
+
+    @Test
+    void temporaryPasswordLoginCannotConnectToRobotTopics() {
+        when(jwtTokenProvider.parse("temporary-token")).thenReturn(SecurityUser.from("viewer", RoleName.READ_ONLY, 1, true));
+        var interceptor = new StompJwtAuthenticationInterceptor(jwtTokenProvider, org.mockito.Mockito.mock(AccountWebSocketSessions.class));
+        assertThatThrownBy(() -> interceptor.preSend(connectMessage("Bearer temporary-token"), messageChannel))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
     private void assertRejected(StompCommand command, String destination, Principal principal) {
-        StompJwtAuthenticationInterceptor interceptor = new StompJwtAuthenticationInterceptor(jwtTokenProvider);
+        StompJwtAuthenticationInterceptor interceptor = new StompJwtAuthenticationInterceptor(jwtTokenProvider, org.mockito.Mockito.mock(AccountWebSocketSessions.class));
         assertThatThrownBy(() -> interceptor.preSend(frame(command, destination, principal), messageChannel))
                 .isInstanceOf(AccessDeniedException.class);
     }

@@ -4,10 +4,11 @@ import { LogTimeline } from '../features/logs/components/LogTimeline';
 import { SnapshotViewer } from '../features/logs/components/SnapshotViewer';
 import { mockLogEntries } from '../features/logs/mockLogs';
 import type { LogEntry, LogSeverity } from '../features/logs/types';
-import { mockRobots } from '../features/robots/mockRobots';
+import { useRobotStore } from '../features/robots/robotStore';
 import { env } from '../shared/config/env';
 
 export function LogViewerPage() {
+  const robots = useRobotStore((state) => state.robots);
   const today = new Date().toISOString().slice(0, 10);
   const [robotId, setRobotId] = useState('all');
   const [severity, setSeverity] = useState<LogSeverity | 'all'>('all');
@@ -51,7 +52,7 @@ export function LogViewerPage() {
             로봇
             <select value={robotId} onChange={(event) => setRobotId(event.target.value)}>
               <option value="all">전체 로봇</option>
-              {mockRobots.map((robot) => (
+              {robots.map((robot) => (
                 <option key={robot.id} value={robot.id}>
                   {robot.id}
                 </option>

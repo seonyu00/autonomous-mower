@@ -1,8 +1,8 @@
 import type { Permission, Role } from '../../features/auth/types';
 
 const rolePermissions: Record<Role, Permission[]> = {
-  'read-only': ['robots:read', 'telemetry:read', 'history:read', 'logs:read'],
-  operator: ['robots:read', 'telemetry:read', 'history:read', 'logs:read', 'control:write'],
+  'read-only': ['robots:read', 'telemetry:read', 'history:read', 'logs:read', 'settings:read'],
+  operator: ['robots:read', 'telemetry:read', 'history:read', 'logs:read', 'settings:read', 'control:write'],
   supervisor: [
     'robots:read',
     'telemetry:read',
@@ -18,6 +18,8 @@ const rolePermissions: Record<Role, Permission[]> = {
     'history:read',
     'logs:read',
     'settings:read',
+    'accounts:read',
+    'accounts:write',
     'control:write',
     'control:takeover',
   ],

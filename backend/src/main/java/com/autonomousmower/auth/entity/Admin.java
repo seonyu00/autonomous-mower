@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
@@ -24,6 +25,21 @@ public class Admin {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    @Column(nullable = false)
+    private boolean enabled = true;
+
+    @Version
+    private long version;
+
+    @Column(name = "session_version", nullable = false)
+    private long sessionVersion;
+
+    @Column(name = "must_change_password", nullable = false)
+    private boolean mustChangePassword;
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
     protected Admin() {
     }
 
@@ -32,6 +48,7 @@ public class Admin {
         this.passwordHash = Objects.requireNonNull(passwordHash, "passwordHash must not be null");
         this.role = Objects.requireNonNull(role, "role must not be null");
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt must not be null");
+        this.updatedAt = createdAt;
     }
 
     public String getAdminId() {
@@ -48,5 +65,25 @@ public class Admin {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public boolean isEnabled() { return enabled; }
+    public long getVersion() { return version; }
+    public long getSessionVersion() { return sessionVersion; }
+    public boolean isMustChangePassword() { return mustChangePassword; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+
+    public void changeAccess(String role, boolean enabled, LocalDateTime now) {
+        this.role = role;
+        this.enabled = enabled;
+        this.sessionVersion++;
+        this.updatedAt = now;
+    }
+
+    public void changePassword(String hash, boolean temporary, LocalDateTime now) {
+        this.passwordHash = hash;
+        this.mustChangePassword = temporary;
+        this.sessionVersion++;
+        this.updatedAt = now;
     }
 }

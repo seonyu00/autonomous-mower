@@ -7,6 +7,7 @@ import { HistoryPage } from '../pages/HistoryPage';
 import { LogViewerPage } from '../pages/LogViewerPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { RequireAuth } from './RequireAuth';
+import { ChangePasswordPage } from '../pages/ChangePasswordPage';
 
 export const routes: RouteObject[] = [
   {
@@ -16,6 +17,7 @@ export const routes: RouteObject[] = [
   {
     element: <RequireAuth />,
     children: [
+      { path: '/change-password', element: <ChangePasswordPage /> },
       {
         path: '/',
         element: <AppShell />,

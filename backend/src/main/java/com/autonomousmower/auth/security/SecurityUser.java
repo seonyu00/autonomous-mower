@@ -12,12 +12,16 @@ public class SecurityUser implements UserDetails {
     private final String displayName;
     private final RoleName roleName;
     private final List<GrantedAuthority> authorities;
+    private final long sessionVersion;
+    private final boolean mustChangePassword;
 
-    private SecurityUser(String adminId, String displayName, RoleName roleName) {
+    private SecurityUser(String adminId, String displayName, RoleName roleName, long sessionVersion, boolean mustChangePassword) {
         this.adminId = adminId;
         this.displayName = displayName;
         this.roleName = roleName;
-        this.authorities = roleName.getPermissions().stream()
+        this.sessionVersion = sessionVersion;
+        this.mustChangePassword = mustChangePassword;
+        this.authorities = (mustChangePassword ? List.<Permission>of() : roleName.getPermissions()).stream()
                 .map(Permission::getValue)
                 .map(SimpleGrantedAuthority::new)
                 .map(GrantedAuthority.class::cast)
@@ -25,8 +29,15 @@ public class SecurityUser implements UserDetails {
     }
 
     public static SecurityUser from(String adminId, String displayName, RoleName roleName) {
-        return new SecurityUser(adminId, displayName, roleName);
+        return new SecurityUser(adminId, displayName, roleName, 0, false);
     }
+
+    public static SecurityUser from(String adminId, RoleName roleName, long sessionVersion, boolean mustChangePassword) {
+        return new SecurityUser(adminId, adminId, roleName, sessionVersion, mustChangePassword);
+    }
+
+    public long getSessionVersion() { return sessionVersion; }
+    public boolean isMustChangePassword() { return mustChangePassword; }
 
     public String getAdminId() {
         return adminId;
@@ -41,7 +52,7 @@ public class SecurityUser implements UserDetails {
     }
 
     public List<String> getPermissionValues() {
-        return roleName.getPermissions().stream()
+        return (mustChangePassword ? List.<Permission>of() : roleName.getPermissions()).stream()
                 .map(Permission::getValue)
                 .toList();
     }

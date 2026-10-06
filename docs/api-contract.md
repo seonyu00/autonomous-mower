@@ -860,3 +860,65 @@ Payload:
 - Whether STOMP command ack uses a new `/control-events` topic or is folded into `/control-lock` and `/events`.
 - Exact MQTT topic/QoS mapping between Spring Boot and Jetson.
 - Exact command idempotency and sequence policy.
+
+## 7. 계정·권한 설정 — 2026-10-05
+
+사용자는 계정·권한 서버 설정의 설계를 먼저 선택한 뒤 구현을 요청했고, 신규 ID 최대 20자·새 비밀번호 최소 10자를 확정했다. 아래는 현재 구현된 계약이다. 기존 네 역할과 제어·MQTT 메시지 계약을 유지하며 인증에는 계정 상태와 세션 폐기를 적용한다. 작업 순서와 완료 기준은 [개발 로드맵](learning/12-development-roadmap.md)의 계정 설정 절에서 관리한다. 수행한 검증과 하드웨어 검증의 경계는 [개발 로그](development-log.md)를 따른다.
+
+### 7.1 구현과 기존 계정 호환성
+
+- `SettingsPage.tsx`에 내 계정·계정 관리·감사 조회·연결 상태를 구현했다. `GET /api/auth/me`를 재사용하고 `mustChangePassword`를 추가했다.
+- V9는 `Admin`에 활성 여부·변경 버전·세션 버전·비밀번호 변경 필요 여부·수정 시각을 추가한다. 기존 ID·해시·역할·생성 시각은 보존하며 기존 계정은 활성·세션 버전 0·강제 변경 없음으로 시작한다. DB의 ID 50자 한도는 기존 계정을 위해 유지한다.
+- 역할은 `read-only`, `operator`, `supervisor`, `admin` 네 가지다. 역할별 개별 권한 편집은 범위 밖이다.
+- 모든 역할에 `settings:read`를 부여하도록 프론트를 서버와 맞췄다. 별도의 `accounts:read`, `accounts:write`는 admin만 가진다.
+- JWT 인증, STOMP 연결·구독·송신은 최신 DB 상태를 확인한다. 변경 후 열린 WebSocket 종료와 기존 JWT 거부를 실제 PC 서버에서 확인했다. 다중 서버 운영 및 하드웨어 검증 완료를 의미하지 않는다.
+
+### 7.2 화면과 관리 범위
+
+설정 화면은 내 계정, 계정 관리, 계정 변경 기록, 연결 상태로 구성한다. 내 계정에는 ID·역할·권한·로그아웃·본인 비밀번호 변경을 표시한다. 연결 상태는 계정 API 조회 결과, STOMP 상태, 지도 설정 여부를 보여준다. 영상 연결은 기존 영상 패널에서 확인한다. 토큰, Client Secret, MQTT 비밀번호를 노출하지 않는다. 연결 주소와 TLS·데드맨·제어 정책을 일반 운용자 화면에서 변경하지 않는다.
+
+계정 관리에는 ID 검색과 페이지 목록, 계정 생성, 역할 변경, 활성·비활성 전환, 비밀번호 재설정을 제공한다. 권한·상태 저장 전 대상 ID, 변경 전후 값, 기존 세션 종료 영향을 표시하고 확인을 받는다. 목록과 변경 폼은 같은 페이지에 있으며 실패 시 입력을 유지한다. 모바일에서는 각 행의 ID·역할·상태·동작 순서와 표 내부 스크롤을 유지한다. 성공 문구는 서버 응답 후에만 표시한다. 샘플 인증에서는 관리 API와 비밀번호 변경을 호출하지 않는다.
+
+모든 인증 사용자는 자기 정보만 읽고 본인 비밀번호를 변경할 수 있다. 다른 계정 목록·감사 조회와 변경은 admin만 허용한다. `settings:read`로 계정 관리 권한을 얻지 못한다. supervisor의 제어권 강제 회수 권한도 별개다. 서버는 매 요청의 계정 상태와 권한을 검사하며 프론트의 버튼 숨김에만 의존하지 않는다. 기존 역할의 장비 제어 권한은 유지한다.
+
+계정 물리 삭제, 사용자 정의 역할, 사용자별 임의 권한, 이메일 초대·복구, 조직별 장비 접근 정책은 별도 범위다. 비활성화를 사용해 과거 제어·감사 기록의 행위자 참조를 보존한다.
+
+### 7.3 REST 계약
+
+기존 `{success, data, error, timestamp}` 응답과 Bearer 인증 형식을 유지한다. 모든 시간은 UTC ISO-8601이며 비밀번호 해시와 토큰 원문을 계정 조회 응답에 포함하지 않는다.
+
+| 메서드·경로 | 권한 | 요청·응답 요약 |
+|---|---|---|
+| `GET /api/auth/me` | 인증 사용자 본인 | ID, 역할, 실제 권한, 비밀번호 변경 필요 여부 |
+| `GET /api/accounts?search=&page=0&size=20` | `accounts:read` | ID 검색, 기본 20·최대 100건, 안정적인 ID 정렬, 총 건수 포함 |
+| `GET /api/accounts/{adminId}` | `accounts:read` | 충돌 이후 대상의 최신 정보·version을 정확한 ID로 재조회 |
+| `POST /api/accounts` | `accounts:write` | `{adminId, role, temporaryPassword}` → 생성 계정의 ID·역할·활성 상태·version·생성 시각 |
+| `PATCH /api/accounts/{adminId}` | `accounts:write` | `{role, enabled, expectedVersion}` → 변경된 계정 정보 |
+| `POST /api/accounts/{adminId}/password-reset` | `accounts:write` 및 현재 관리자 비밀번호 재확인 | `{temporaryPassword, currentPassword, expectedVersion}` → 변경 계정의 새 version·mustChangePassword=true |
+| `PUT /api/auth/password` | 인증 사용자 본인 | `{currentPassword, newPassword}` → 기존 세션 폐기 후 재로그인 |
+| `GET /api/accounts/audit?page=0&size=20` | `accounts:read` | 행위자·대상 ID, 작업, 역할·상태 변경 전후, UTC 시각 |
+
+신규 ID는 영문·숫자·점·밑줄·하이픈으로 1~20자이며 공백을 허용하지 않는다. 생성 후 ID는 바꿀 수 없다. 기존 20자 초과 ID는 로그인·검색·관리할 수 있도록 DB 50자 한도와 조회 경로를 유지한다. 역할은 기존 네 값만 허용하고 임의 권한 배열은 받지 않는다.
+
+새 비밀번호와 임시 비밀번호는 Unicode 문자 수 기준 최소 10자, UTF-8 최대 72바이트다. 공백만으로 구성된 값은 거부하고 숫자·대소문자·특수문자 혼합을 강제하지 않는다. 기존 비밀번호를 자동 변경하지 않는다. BCrypt 입력 제한을 초과한 값을 묵시적으로 자르지 않으며 원문은 요청 처리 중에만 사용한다. 초기·재설정 비밀번호는 응답·로그·감사에 재출력하지 않는다.
+
+목록은 `{items,page,size,totalElements,totalPages}`이고 page는 0 이상, size는 1~100이다. ID 검색은 최대 50자이며 대소문자를 구분하지 않는 부분 검색이다. 계정 응답에는 `{adminId,role,enabled,version,mustChangePassword,createdAt,updatedAt}`만 포함하고 세션 버전·해시는 노출하지 않는다. 본인 비밀번호 변경 성공은 `{requiresLogin:true}`를 반환한다.
+
+### 7.4 동시 변경과 세션 처리
+
+- V9는 계정 상태, `account_management_guard` 잠금 행, `account_audit`를 추가한다. 기존 계정의 강제 비밀번호 변경 전환은 적용하지 않는다.
+- 계정 변경은 `expectedVersion`을 비교해 충돌을 409로 반환한다. 프론트는 편집 내용을 보존하고 최신 정보 재조회를 안내한다.
+- 모든 계정 쓰기는 트랜잭션 시작 시 `account_management_guard.id=1`을 `FOR UPDATE`로 잠근 뒤 행위자 상태를 새로 읽는다. 마지막 활성 admin의 비활성화·권한 하향을 거부한다. 독립 서비스 인스턴스의 실제 PostgreSQL 동시 변경 테스트에서 활성 admin이 한 명 남는 것을 확인했다.
+- 자기 계정 비활성화·역할 하향을 거부한다. 대상이 유효한 제어권을 보유하면 권한·상태 변경·비밀번호 재설정과 본인 비밀번호 변경을 409로 거부한다. 제어권 반납을 먼저 수행하며 계정 설정은 예초기 명령이나 강제 정지를 자동 발행하지 않는다. 단일 서버에서 계정 쓰기와 제어권 취득·인수를 같은 `AccountSessionCoordinator`로 조정하고 취득 직전 현재 계정 권한을 재검사한다. 현재 제어권은 메모리 저장소이므로 여러 서버의 제어권 동기화는 별도 구현·검증이 필요하다.
+- JWT에 `sessionVersion`을 담고 REST 인증 시 DB의 활성 여부·현재 세션 버전을 검사한다. 역할·활성 상태 또는 비밀번호 변경·재설정 시 세션 버전을 증가시킨다. 이전 토큰은 401로 거부한다. 변경 없는 PATCH는 버전·감사·세션을 유지한다. **업데이트 배포 시 sessionVersion이 없는 기존 JWT는 일괄 재로그인이 필요하다.**
+- STOMP CONNECT·SUBSCRIBE·서버 송신에도 같은 검증을 적용한다. 계정·감사 커밋 후 대상의 열린 연결을 1008로 종료하며 프론트는 자동 재연결을 중단한다. 다른 서버에서의 변경과 토큰 만료도 1초 주기 검사와 송신 검사로 감지한다. 이미 연결된 세션을 남겨두고 새 로그인만 차단하는 구현은 완료로 인정하지 않는다.
+- 초기·재설정 비밀번호 로그인은 일반 관제 API와 STOMP를 이용할 수 없는 제한된 변경 절차로 연결한다. 비밀번호 변경 후 새로 로그인해야 한다.
+- 프론트는 401과 세션 폐기 시 인증·장비·조회 캐시를 기존 `clearSession()` 흐름으로 비우고 로그인 화면으로 이동한다. 기존 세션에서 늦게 도착한 응답으로 데이터를 복원하지 않는다.
+
+### 7.5 오류·감사 정책
+
+401은 미인증·종료된 세션, 403은 권한 없음 또는 임시 비밀번호의 관제 접근, 404 `ACCOUNT_NOT_FOUND`는 없는 계정이다. 409는 `ACCOUNT_DUPLICATE`, `ACCOUNT_VERSION_CONFLICT`, `ACCOUNT_LAST_ADMIN`, `ACCOUNT_SELF_CHANGE`, `ACCOUNT_CONTROL_HELD`로 구분한다. 400은 잘못된 입력·역할, `PASSWORD_POLICY`, 현재 비밀번호 불일치 `PASSWORD_CURRENT_INVALID`이며 마지막 오류는 현재 로그인과 폼 입력을 유지한다.
+
+계정 변경 감사는 로봇 이벤트와 별도 테이블에 기록한다. 변경 성공과 감사 기록은 같은 트랜잭션으로 저장하고 행위자·대상·작업·역할 및 상태 변경 전후를 포함한다. 비밀번호·해시·JWT는 남기지 않는다. 감사 저장 실패 시 계정 변경을 롤백하고 열린 세션도 종료하지 않는다. 조회는 admin만 허용하며 UTC 시각 내림차순·동률 ID 순으로 페이지화한다. 최초 관리자는 기존 수동 등록 절차를 유지하며 공개 가입·자동 기본 관리자 생성을 추가하지 않았다. 감사 기록은 자동 삭제하지 않고 보존 기간 확정·삭제 기능은 운영 후속 범위로 남긴다.
+
+설계 참고: [OWASP 권한 검사 지침](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html), [세션 관리 지침](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html). 이 자료는 서버 권한 검사·세션 종료 원칙의 근거이며 프로젝트의 구현 완료 증거가 아니다.

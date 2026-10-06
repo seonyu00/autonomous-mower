@@ -8,6 +8,7 @@ type StompClientOptions = {
   enabled: boolean;
   accessToken: string | null;
   onStateChange: (state: RealtimeConnectionState) => void;
+  onAuthLost?: () => void;
 };
 
 export type StompClientHandle = {
@@ -40,6 +41,7 @@ export function createStompClient({
   enabled,
   accessToken,
   onStateChange,
+  onAuthLost,
 }: StompClientOptions): StompClientHandle {
   if (!enabled) {
     return {
@@ -70,7 +72,13 @@ export function createStompClient({
     },
     onDisconnect: () => onStateChange('disconnected'),
     onStompError: () => onStateChange('degraded'),
-    onWebSocketClose: () => onStateChange('reconnecting'),
+    onWebSocketClose: (event) => {
+      if (event.code === 1008) {
+        void client.deactivate();
+        onAuthLost?.();
+        onStateChange('disconnected');
+      } else onStateChange('reconnecting');
+    },
   });
 
   return {

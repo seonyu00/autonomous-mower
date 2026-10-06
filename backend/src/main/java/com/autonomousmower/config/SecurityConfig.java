@@ -34,6 +34,16 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers("/api/auth/login", "/api/health", "/actuator/health", "/actuator/info", "/ws/**").permitAll()
+                        .requestMatchers("/api/auth/me", "/api/auth/password").authenticated()
+                        .requestMatchers("/api/accounts/**").hasAuthority("accounts:read")
+                        .requestMatchers("/api/**").access(org.springframework.security.authorization.AuthorizationManagers.allOf(
+                                org.springframework.security.authorization.AuthenticatedAuthorizationManager.authenticated(),
+                                (authentication, context) -> {
+                            var principal = authentication.get().getPrincipal();
+                            boolean allowed = !(principal instanceof com.autonomousmower.auth.security.SecurityUser user
+                                    && user.isMustChangePassword());
+                            return new org.springframework.security.authorization.AuthorizationDecision(allowed);
+                        }))
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

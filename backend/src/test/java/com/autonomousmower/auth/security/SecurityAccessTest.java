@@ -61,6 +61,20 @@ class SecurityAccessTest {
                 .andExpect(jsonPath("$.data", is("ok")));
     }
 
+    @Test
+    void temporaryPasswordSessionCannotUseOrdinaryApi() throws Exception {
+        var user = SecurityUser.from("temporary", RoleName.ADMIN, 1, true);
+        org.mockito.Mockito.when(jwtTokenProvider.parse("temporary-token")).thenReturn(user);
+        mockMvc.perform(get("/api/test/protected").header("Authorization", "Bearer temporary-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(authorities = "settings:read")
+    void settingsReadDoesNotGrantAccountManagement() throws Exception {
+        mockMvc.perform(get("/api/accounts")).andExpect(status().isForbidden());
+    }
+
     @RestController
     static class ProtectedController {
 

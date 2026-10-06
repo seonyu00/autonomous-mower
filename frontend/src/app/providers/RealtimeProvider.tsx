@@ -16,11 +16,12 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
   const setConnectionState = useTelemetryStore((state) => state.setConnectionState);
   const selectedRobotId = useRobotStore((state) => state.selectedRobotId);
   const accessToken = useAuthStore((state) => state.accessToken);
+  const mustChangePassword = useAuthStore((state) => state.user?.mustChangePassword);
 
   const sessionVersion = useAuthStore((state) => state.sessionVersion);
 
   useEffect(() => {
-    if (!selectedRobotId || !accessToken) {
+    if (!selectedRobotId || !accessToken || mustChangePassword) {
       setConnectionState('disconnected');
       return;
     }
@@ -38,6 +39,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       enabled: env.enableMockRealtime === false,
       accessToken,
       onStateChange: (state) => { if (isCurrentSession()) setConnectionState(state); },
+      onAuthLost: () => { if (isCurrentSession()) useAuthStore.getState().clearSession(); },
     });
 
     const applyMessage = (topic: string, body: string) => {
@@ -79,7 +81,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       unsubscribeRobotTopics();
       client.deactivate();
     };
-  }, [accessToken, sessionVersion, selectedRobotId, setConnectionState]);
+  }, [accessToken, sessionVersion, selectedRobotId, mustChangePassword, setConnectionState]);
 
   return children;
 }

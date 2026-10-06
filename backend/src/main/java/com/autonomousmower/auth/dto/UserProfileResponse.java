@@ -7,14 +7,16 @@ public record UserProfileResponse(
         String id,
         String name,
         String role,
-        List<String> permissions
+        List<String> permissions,
+        boolean mustChangePassword
 ) {
     public static UserProfileResponse from(SecurityUser user) {
         return new UserProfileResponse(
                 user.getAdminId(),
                 user.getDisplayName(),
                 user.getRoleName(),
-                user.getPermissionValues()
+                user.getPermissionValues(),
+                user.isMustChangePassword()
         );
     }
 }

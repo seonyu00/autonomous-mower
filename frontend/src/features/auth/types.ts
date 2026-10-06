@@ -6,6 +6,8 @@ export type Permission =
   | 'history:read'
   | 'logs:read'
   | 'settings:read'
+  | 'accounts:read'
+  | 'accounts:write'
   | 'control:write'
   | 'control:takeover';
 
@@ -13,4 +15,6 @@ export type AuthUser = {
   id: string;
   name: string;
   role: Role;
+  permissions?: Permission[];
+  mustChangePassword?: boolean;
 };

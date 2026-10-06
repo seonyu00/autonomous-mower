@@ -6,6 +6,8 @@ public enum Permission {
     HISTORY_READ("history:read"),
     LOGS_READ("logs:read"),
     SETTINGS_READ("settings:read"),
+    ACCOUNTS_READ("accounts:read"),
+    ACCOUNTS_WRITE("accounts:write"),
     CONTROL_WRITE("control:write"),
     CONTROL_TAKEOVER("control:takeover");
 
