@@ -53,6 +53,8 @@ public class MqttCommandPublisher {
     }
 
     private void publish(String topic, MqttCommandPayload payload, int qos) {
+        // 별도 트랜잭션의 등록이 완료된 뒤에만 전송해 즉시 도착한 ACK도 조회할 수 있게 한다.
+        commandExecutionService.register(payload);
         try {
             byte[] bytes = objectMapper.writeValueAsString(payload).getBytes(StandardCharsets.UTF_8);
             log.info(
@@ -64,9 +66,13 @@ public class MqttCommandPublisher {
                     payload.commandType()
             );
             mqttTransport.publish(topic, bytes, qos, false);
-            commandExecutionService.markSent(payload);
         } catch (JsonProcessingException exception) {
+            commandExecutionService.markPublishFailed(payload.commandId());
             throw new IllegalArgumentException("Invalid MQTT command payload.", exception);
+        } catch (RuntimeException exception) {
+            commandExecutionService.markPublishFailed(payload.commandId());
+            throw exception;
         }
+        commandExecutionService.markSent(payload.commandId());
     }
 }

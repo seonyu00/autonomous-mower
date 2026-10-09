@@ -7,9 +7,12 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 
 public interface CommandExecutionRepository extends JpaRepository<CommandExecution, String> {
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<CommandExecution> findByCommandId(String commandId);
 
     Optional<CommandExecution> findFirstByRobotRobotIdAndIdempotencyKeyOrderBySentAtDesc(
@@ -17,5 +20,6 @@ public interface CommandExecutionRepository extends JpaRepository<CommandExecuti
             String idempotencyKey
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<CommandExecution> findByStatusInAndSentAtBefore(Collection<CommandExecutionStatus> statuses, Instant sentBefore);
 }

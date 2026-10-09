@@ -47,7 +47,7 @@ export async function releaseControl(robotId: string) {
     throw new ControlPrecheckError(['control-owned-by-other-user']);
   }
 
-  return requestControlCommand(robotId, 'release-control', `/api/control/${robotId}/release`, {});
+  return requestControlCommand(robotId, 'release-control', `/api/control/${robotId}/release`, { lockVersion: state.lockVersion });
 }
 
 export async function takeoverControl(robotId: string) {
@@ -63,7 +63,7 @@ export async function changeMode(robotId: string, mode: ControlMode) {
     robotId,
     mode,
     idempotencyKey: createIdempotencyKey('mode'),
-    lockVersion: 0,
+    lockVersion: useControlStore.getState().getControlState(robotId).lockVersion,
   };
   useControlStore.getState().patchControlState(robotId, {
     lastCommandPayload: command,
@@ -77,7 +77,7 @@ export async function sendManualCommand(robotId: string, command: ManualCommand)
   const commandWithDefaults: ManualCommand = {
     ...command,
     idempotencyKey: command.idempotencyKey ?? createIdempotencyKey('manual'),
-    lockVersion: command.lockVersion ?? 0,
+    lockVersion: command.lockVersion ?? useControlStore.getState().getControlState(robotId).lockVersion,
     clientSentAt: command.clientSentAt ?? new Date().toISOString(),
   };
   useControlStore.getState().recordManualInput(robotId);
@@ -88,8 +88,8 @@ export async function sendManualCommand(robotId: string, command: ManualCommand)
   return requestControlCommand(robotId, 'manual-command', `/api/control/${robotId}/manual`, commandWithDefaults);
 }
 
-export async function sendStopCommand(robotId: string) {
-  const eligibility = canSendStopCommand(robotId);
+export async function sendStopCommand(robotId: string, options: { allowUnselected?: boolean } = {}) {
+  const eligibility = canSendStopCommand(robotId, options.allowUnselected);
 
   if (!eligibility.allowed) {
     throw new ControlPrecheckError(eligibility.reasons);
@@ -101,7 +101,7 @@ export async function sendStopCommand(robotId: string) {
     direction: 'stop',
     speed: 0,
     idempotencyKey: createIdempotencyKey('stop'),
-    lockVersion: 0,
+    lockVersion: useControlStore.getState().getControlState(robotId).lockVersion,
   };
   useControlStore.getState().patchControlState(robotId, {
     lastCommandPayload: command,
@@ -137,7 +137,7 @@ export async function sendMowerAttachmentCommand(robotId: string, action: MowerA
     robotId,
     attachmentAction: action,
     idempotencyKey: createIdempotencyKey('attachment'),
-    lockVersion: 0,
+    lockVersion: useControlStore.getState().getControlState(robotId).lockVersion,
   };
   useControlStore.getState().patchControlState(robotId, {
     lastCommandPayload: command,
@@ -207,6 +207,7 @@ async function requestControlCommand(
         robotId,
         commandType,
         requestedAt,
+        lockVersion: useControlStore.getState().getControlState(robotId).lockVersion,
         mock: true,
       };
     }
@@ -240,7 +241,11 @@ function withCommandDefaults(commandType: ControlCommandType, body: ControlReque
 }
 
 function applyBackendControlResult(robotId: string, result: ControlCommandResult) {
+  const currentVersion = useControlStore.getState().getControlState(robotId).lockVersion;
+  // 늦은 HTTP 응답이 새 소유권이나 버전을 되돌리지 않도록 한다.
+  if (result.lockVersion === undefined || result.lockVersion < currentVersion) return;
   const patch = {
+    lockVersion: result.lockVersion,
     ...(result.lockState ? { lockState: result.lockState } : {}),
     ...(result.controlOwner !== undefined ? { controlOwner: result.controlOwner } : {}),
     ...(result.mode ? { mode: result.mode } : {}),
@@ -260,6 +265,10 @@ function createIdempotencyKey(prefix: string) {
 
 function applyMockControlResult(robotId: string, commandType: ControlCommandType, body: ControlRequestBody) {
   const user = useAuthStore.getState().user;
+  if (['claim-control', 'takeover-control', 'release-control', 'change-mode', 'emergency-stop', 'reset-after-emergency'].includes(commandType)) {
+    const state = useControlStore.getState().getControlState(robotId);
+    useControlStore.getState().patchControlState(robotId, { lockVersion: state.lockVersion + 1 });
+  }
 
   if (commandType === 'claim-control' || commandType === 'takeover-control') {
     useControlStore.getState().patchControlState(robotId, {

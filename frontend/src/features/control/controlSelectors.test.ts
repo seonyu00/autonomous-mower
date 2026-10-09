@@ -1,12 +1,27 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useControlStore } from './controlStore';
-import { canControlRobot, canResetAfterEmergency } from './controlSelectors';
+import { canControlRobot, canResetAfterEmergency, canSendStopCommand } from './controlSelectors';
+import { useRobotStore } from '../robots/robotStore';
+import { useAuthStore } from '../auth/authStore';
 import { useTelemetryStore } from '../telemetry/telemetryStore';
 import { resetStores, holdControl, TEST_ROBOT_ID } from '../../test/testStores';
 
 describe('control selectors', () => {
   beforeEach(() => {
     resetStores();
+  });
+
+  it('이전 로봇 정지는 선택 검사만 생략하고 소유권과 인증은 유지한다', () => {
+    holdControl();
+    useRobotStore.setState({ selectedRobotId: 'MOWER-02' });
+    expect(canSendStopCommand(TEST_ROBOT_ID).reasons).toContain('robot-not-selected');
+    expect(canSendStopCommand(TEST_ROBOT_ID, true).allowed).toBe(true);
+    holdControl({ controlOwner: 'other-user' });
+    expect(canSendStopCommand(TEST_ROBOT_ID, true).reasons).toContain('control-owned-by-other-user');
+    holdControl({ lockState: 'revoked' });
+    expect(canSendStopCommand(TEST_ROBOT_ID, true).reasons).toContain('control-lock-not-held');
+    useAuthStore.setState({ isAuthenticated: false, user: null });
+    expect(canSendStopCommand(TEST_ROBOT_ID, true).reasons).toContain('not-authenticated');
   });
 
   describe('canControlRobot', () => {

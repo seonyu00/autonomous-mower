@@ -21,7 +21,8 @@ public class ControlResponseFactory {
                 snapshot.lockState(),
                 snapshot.controlOwner(),
                 snapshot.mode(),
-                snapshot.emergency()
+                snapshot.emergency(),
+                snapshot.lockVersion()
         );
     }
 }

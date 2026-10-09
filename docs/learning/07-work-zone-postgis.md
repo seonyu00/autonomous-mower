@@ -16,9 +16,9 @@ WorkZoneEditor
   -> WorkZoneService.saveWorkZone()
      -> RobotRepository.findById()
      -> GeoJsonPolygonMapper.toPolygon()
-     -> WorkZoneRepository.findFirstByRobotRobotId()
+     -> WorkZoneRepository.findByRobotRobotId()
      -> version 검사
-     -> WorkZoneRepository.save()
+     -> WorkZoneRepository.saveAndFlush()
   -> PostGIS work_zone
 ```
 
@@ -33,7 +33,52 @@ WorkZoneEditor
 - 최소 좌표 개수를 만족하는지
 - JTS가 만든 Polygon이 valid인지
 
-기존 구역을 수정할 때 `expectedVersion`이 현재 version과 다르면 저장을 거부한다. 성공하면 entity version이 증가한다.
+기존 구역을 수정할 때 `expectedVersion`이 없거나 현재 version과 다르면 HTTP 409 `WORK_ZONE_CONFLICT`로 거부한다. 최초 생성만 null 버전을 사용한다. JPA `@Version`이 DB UPDATE 조건에 이전 버전을 포함하므로 같은 버전의 동시 수정 중 하나만 성공하며, flush 후 증가한 version을 응답한다. 최초 생성 경쟁은 robot_id 고유 제약으로 제한한다. 아래 5절의 HTTP 400은 과거 검증 기록이며 이 변경의 실행 결과가 아니다.
+
+### 기존 DB 마이그레이션과 검증 범위
+
+SRS 7.3에는 로봇당 활성 구역 1개가 명시돼 있다. 현재 모델에는 활성·비활성 구분이 없어 V8은 `uq_work_zone_robot_id` 제약을 추가한다. 기존 V2·V3 파일이나 저장된 version·Polygon은 변경하지 않는다.
+
+### V9 이후 V8을 추가하는 DB의 적용 순서 — 2026-10-06
+
+V9가 적용됐지만 V8이 없는 DB에 이번 V8 파일을 추가하면 기본 Flyway 설정에서 `resolved migration not applied ... 8` 검증 오류로 서버가 시작하지 않는다. 새 DB의 V1~V9 순차 적용에는 이 문제가 없다. 적용된 V8·V9 파일의 이름·내용·체크섬을 변경하거나 이력 행을 삭제하지 않는다.
+
+1. DB 백업과 작업 구역 쓰기 중단을 준비한다. `flyway_schema_history`에서 V9 적용 여부와 V8 누락을 확인하고, 위 중복 조회 SQL을 실행한다. 중복 구역이 있거나 V8 외의 누락·체크섬 오류가 있으면 아래 절차로 넘어가지 않는다.
+2. V8만 누락되고 중복이 없는 경우에 한해 적용용 서버 프로세스에서 `SPRING_FLYWAY_OUT_OF_ORDER=true`를 일회성으로 지정한다. 자동 설정이나 영구 환경 파일에는 추가하지 않는다. 이는 이미 적용된 V9를 수정하지 않고 원본 V8을 뒤늦게 적용하기 위한 절차다.
+3. V8 성공과 `uq_work_zone_robot_id` 생성을 확인한다. 기존 zone_id·version·Polygon·시각 값이 보존됐는지 확인한다. 실패한 중복 검사에서 데이터를 자동 삭제하거나 Flyway repair로 실패 원인을 숨기지 않는다.
+4. 적용용 프로세스를 종료하고 위 환경변수를 제거한 기본 설정으로 다시 시작한다. Flyway validate·migrate가 통과하고 추가 적용이 없는지 확인한다. 배포 DB의 실제 잠금 대기 시간과 업무 중단 시간은 별도로 평가해야 한다.
+
+`WorkZoneMigrationOrderTest`는 loopback의 별도 `mower_workzone_test` DB에 UUID 스키마를 만들어 V1~V7·V9를 먼저 적용한다. 기본 설정 실패 → 일회성 outOfOrder 적용 → 기본 설정 validate·migrate 성공, 기존 version=4 구역의 전체 행 보존, 계정 관리 잠금 테이블 보존을 검사한다. 중복 2행이면 V8 적용이 중단되고 데이터·Flyway 이력·고유 제약이 부분 적용되지 않는지도 검사한다. 테스트는 자신이 만든 스키마만 제거한다.
+
+2026-10-06 전용 PostgreSQL/PostGIS에서 위 2개와 `WorkZoneConcurrencyTest` 2개가 skip 없이 통과했다. 실제 HTTP 동시 최초 생성·수정도 각각 성공 한 건/409 한 건이었고, null 버전으로 기존 구역을 덮지 않았으며 DB 구역은 한 행이었다. HTTP 검사 재실행 조건은 [Edge 검증 도구](../../tools/edge-mock-client/README.md#제어ack구역-저장-통합-검증)를 따른다. 테스트 실행 환경은 [개발 로그](../development-log.md)에 기록했다.
+
+### V8 적용 기본 검사와 과거 검증
+
+- 사전 확인 SQL: `SELECT robot_id, COUNT(*) FROM work_zone GROUP BY robot_id HAVING COUNT(*) > 1;`
+- 중복이 있으면 V8이 예외로 중단된다. 기존 구역을 임의로 선택하거나 삭제하지 않는다. 백업 후 보존할 구역과 이력 보관 방법을 확인하고 데이터를 정리한 뒤 적용해야 한다.
+- 마이그레이션은 ACCESS EXCLUSIVE 잠금과 고유 인덱스 생성이 필요해 적용 중 읽기·쓰기가 대기할 수 있다. 실제 데이터 양·잠금 대기 시간·중복 여부는 아직 확인하지 않았다. Flyway 트랜잭션으로 적용하며 실패 시 제약을 부분 적용하지 않는다.
+- 7-1에서 보류했던 검증을 7-2와 함께 실행했다. 관련 프론트 36개, 백엔드 Mock·컨트롤러·엔티티·Polygon 테스트 20개와 운영 빌드·TypeScript·ESLint·bootJar가 통과했다. `WorkZoneServiceTest`는 Mock 예외 변환만 검사하며 DB 경쟁 성공을 증명하지 않는다.
+- `WorkZoneConcurrencyTest`는 두 실제 트랜잭션을 같은 조회 버전에서 만나게 한 뒤 수정·최초 생성 경쟁의 성공 한 건/실패 한 건을 검사한다. 2026-09-12 실행에서는 환경 조건 미충족으로 2개가 skip됐다. Docker 엔진 연결이 불가능하고 로컬 PostgreSQL 실행 도구도 확인되지 않아 실제 DB 검증과 V8 적용은 수행하지 않았다. 새 로컬 전용 PostgreSQL/PostGIS DB `mower_workzone_test`를 준비하고 `WORK_ZONE_TEST_JDBC_URL=jdbc:postgresql://localhost:<port>/mower_workzone_test`, `WORK_ZONE_TEST_DB_USER`, `WORK_ZONE_TEST_DB_PASSWORD`를 명시해야 한다. skip을 통과로 보고하지 않는다. 테스트 DB에는 전체 Flyway 마이그레이션·seed가 적용되므로 기존 업무 DB를 지정하지 않는다.
+
+2026-09-15에는 Docker 내부 런타임 소켓 폴더를 보존한 뒤 재시작해 엔진을 복구하고, 기존 프로젝트 서비스와 분리한 `postgis/postgis:16-3.4`에서 위 테스트 2개를 실행했다. 결과 XML은 tests=2, skipped=0, failures=0, errors=0이었다. 동일 버전 수정 경쟁과 최초 생성 경쟁 모두 성공 한 건/실패 한 건을 확인했으며 테스트 로봇은 정리됐다. Flyway V1~V8도 전부 적용됐다. 이는 Repository 실제 트랜잭션 검증이며 HTTP 409 변환은 앞서 수행한 Mock·컨트롤러 검증과 구분한다.
+
+같은 격리 컨테이너의 별도 DB `mower_migration_check`에 V1~V7과 version=4 구역을 준비해 V8을 트랜잭션으로 적용했다. 적용 전후 행 차이가 0이며 고유 제약이 생성됐다. 이후 해당 테스트 DB에서만 제약을 제거하고 중복 구역을 넣어 재적용했을 때 의도한 오류로 중단됐고, 중복 2행은 보존되며 부분 적용된 고유 제약은 없었다. 운영 DB 데이터·잠금 대기 시간은 검증하지 않았다.
+
+로컬 재실행은 준비된 컨테이너 `mower-workzone-test-20260915`와 `127.0.0.1:55432`를 사용한다. 종료돼 있다면 `docker start mower-workzone-test-20260915`로 시작한다. 아래 명령은 저장소의 `backend` 폴더에서 실행한다. 비밀번호는 전용 컨테이너 설정에서 프로세스 환경변수로 읽고 출력하지 않는다. 기존 업무 DB로 대체하지 않는다.
+
+```powershell
+$testContainer = docker inspect mower-workzone-test-20260915 | ConvertFrom-Json
+$env:WORK_ZONE_TEST_DB_PASSWORD = ($testContainer.Config.Env | Where-Object { $_ -like 'POSTGRES_PASSWORD=*' }).Substring(18)
+$env:WORK_ZONE_TEST_DB_USER = 'mower_test'
+$env:WORK_ZONE_TEST_JDBC_URL = 'jdbc:postgresql://localhost:55432/mower_workzone_test'
+try {
+    .\gradlew.bat --offline test --tests '*WorkZoneConcurrencyTest' --rerun-tasks --console=plain
+} finally {
+    Remove-Item Env:WORK_ZONE_TEST_DB_PASSWORD, Env:WORK_ZONE_TEST_DB_USER, Env:WORK_ZONE_TEST_JDBC_URL
+}
+```
+
+환경변수 변경만으로 Gradle이 테스트를 다시 실행한다고 가정하지 않고 `--rerun-tasks`를 사용한다. 테스트 후 XML의 skipped 수까지 확인한다. 사용 후에는 `docker stop mower-workzone-test-20260915`로 종료할 수 있다. 이번 복구는 현재 기동 성공을 확인한 것이며 Windows 재부팅 후 재발 여부는 확인하지 않았다.
 
 ## 4. 공개용 요청 예제
 
@@ -77,11 +122,16 @@ WorkZoneEditor
 - 작업 구역이 없는 404 응답은 빈 작업 구역으로 처리한다.
 - 조회 실패 시 연결 상태 안내를 표시한다.
 - 저장 실패 시 편집 중인 꼭짓점을 유지한다.
+- 409 충돌 시 저장을 막고 `최신 구역 다시 불러오기`를 안내한다. 사용자가 재조회하면 최신 저장본·버전만 갱신하고 편집 꼭짓점은 유지한다.
 - 저장된 Polygon은 `기존 구역 수정`으로 꼭짓점을 그대로 불러올 수 있다.
 - 편집 중 꼭짓점을 드래그하면 해당 좌표만 변경된다.
 - `편집 취소`를 누르면 저장된 Polygon 표시로 돌아간다.
 
 Mock 여부는 `VITE_ENABLE_MOCK_WORK_ZONE`으로 결정한다.
+
+실제 모드는 네이버 지도 준비 완료 전과 지도 오류 이후에는 새 구역 편집·저장을 막는다. 기존 구역 조회와 초안은 유지하며, 대체 지도에는 저장 Polygon의 범위로 맞춘 읽기 전용 좌표 도식을 표시한다. 이 도식은 현장 배경 지도가 아니며 좌표 입력에 사용하지 않는다. 정상 지도 복구 후 보존한 초안을 저장할 수 있다. 고정 샘플 범위 편집은 명시적 개발 작업 구역 Mock에서만 허용하고 샘플·실제 DB 저장 안 함을 표시한다. 텔레메트리의 데이터 출처나 연결 문자열로 작업 구역 편집 허용 여부를 판단하지 않는다.
+
+네이버 SDK 생성 성공과 인증 성공은 별개다. `naverMapsLoader`는 [공식 인증 실패 콜백](https://navermaps.github.io/maps.js.ncp/docs/tutorial-2-Getting-Started.html)의 `navermap_authFailure`를 작업 지도와 이력 지도에 전달한다. 로딩 후 인증 실패가 도착해도 지도 준비 상태를 해제하고 오류를 표시한다. 실패 뒤 도착한 SDK 응답은 준비 상태를 복원하지 않는다. Client ID, 콘솔의 Web 서비스 URL 및 Web Dynamic Map 사용 설정을 확인한 뒤 화면을 새로고침한다. 인증 실패의 구체적인 원인은 콘솔 설정을 확인하기 전에는 확정하지 않는다.
 
 ```text
 VITE_ENABLE_MOCK_WORK_ZONE=true   # 샘플 조회·가상 저장
@@ -89,8 +139,6 @@ VITE_ENABLE_MOCK_WORK_ZONE=false  # 백엔드 GET/PUT와 PostGIS 사용
 ```
 
 이 설정은 운용자 화면에서 변경하지 않는다. 실제 모드에서는 샘플 Polygon을 실수로 저장하지 않도록 `샘플 구역 불러오기` 액션도 표시하지 않는다.
-
-네이버 SDK 생성 성공과 인증 성공은 별개다. `naverMapsLoader`는 [공식 인증 실패 콜백](https://navermaps.github.io/maps.js.ncp/docs/tutorial-2-Getting-Started.html)의 `navermap_authFailure`를 작업 지도와 이력 지도에 전달한다. 로딩 후 인증 실패가 도착해도 지도 준비 상태를 해제하고 오류를 표시한다. 실패 뒤 도착한 SDK 응답은 준비 상태를 복원하지 않는다. Client ID, 콘솔의 Web 서비스 URL 및 Web Dynamic Map 사용 설정을 확인한 뒤 화면을 새로고침한다. 인증 실패의 구체적인 원인은 콘솔 설정을 확인하기 전에는 확정하지 않는다.
 
 ## 7. 실제 저장 통합 검증
 

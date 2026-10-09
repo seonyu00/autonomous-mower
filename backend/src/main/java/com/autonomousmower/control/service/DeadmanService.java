@@ -18,17 +18,14 @@ public class DeadmanService {
     private static final Duration DEFAULT_TIMEOUT = Duration.ofMillis(500);
 
     private final ControlStateStore controlStateStore;
-    private final ControlEventPublisher controlEventPublisher;
     private final MqttCommandPublisher mqttCommandPublisher;
     private final Set<String> trackedRobots = ConcurrentHashMap.newKeySet();
 
     public DeadmanService(
             ControlStateStore controlStateStore,
-            ControlEventPublisher controlEventPublisher,
             MqttCommandPublisher mqttCommandPublisher
     ) {
         this.controlStateStore = controlStateStore;
-        this.controlEventPublisher = controlEventPublisher;
         this.mqttCommandPublisher = mqttCommandPublisher;
     }
 
@@ -67,7 +64,6 @@ public class DeadmanService {
                 "stop",
                 Map.of("reason", "deadman-timeout", "speed", 0)
         ));
-        controlEventPublisher.publishSyntheticStop(robotId, "deadman-timeout");
         return true;
     }
 }

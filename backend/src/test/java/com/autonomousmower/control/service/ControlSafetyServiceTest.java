@@ -57,7 +57,7 @@ class ControlSafetyServiceTest {
         stateStore = new ControlStateStore();
         ControlResponseFactory responseFactory = new ControlResponseFactory();
         ControlEventPublisher controlEventPublisher = new ControlEventPublisher(realtimePublisher);
-        deadmanService = new DeadmanService(stateStore, controlEventPublisher, mqttCommandPublisher);
+        deadmanService = new DeadmanService(stateStore, mqttCommandPublisher);
         controlLockService = new ControlLockService(
                 stateStore,
                 realtimePublisher,
@@ -79,7 +79,6 @@ class ControlSafetyServiceTest {
                 stateStore,
                 deadmanService,
                 responseFactory,
-                controlEventPublisher,
                 mqttCommandPublisher,
                 controlRobotGuard
         );
@@ -115,7 +114,7 @@ class ControlSafetyServiceTest {
 
         ControlCommandResponse release = controlLockService.release(
                 "MOWER-01",
-                new ReleaseControlRequest("release-key", 0),
+                new ReleaseControlRequest("release-key", takeover.lockVersion()),
                 supervisor
         );
         assertThat(release.lockState()).isEqualTo("none");
@@ -198,7 +197,7 @@ class ControlSafetyServiceTest {
     }
 
     @Test
-    void deadmanTimeoutPublishesSyntheticStopEvent() {
+    void deadmanTimeoutPublishesOneTrackedStopWithoutAnotherCommandId() {
         Instant commandAt = Instant.parse("2026-05-30T01:00:00Z");
         deadmanService.recordCommand("MOWER-01", commandAt);
 
@@ -210,6 +209,7 @@ class ControlSafetyServiceTest {
 
         assertThat(issued).isTrue();
         verify(mqttCommandPublisher).publishStopCommand(any());
-        verify(realtimePublisher).publishControlEvent(any(ControlEventMessage.class));
+        org.mockito.Mockito.verifyNoInteractions(realtimePublisher);
+        assertThat(deadmanService.evaluateTimeout("MOWER-01", commandAt.plusSeconds(1), Duration.ofMillis(500))).isFalse();
     }
 }

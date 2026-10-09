@@ -12,6 +12,7 @@ public record ControlCommandResponse(
         String lockState,
         String controlOwner,
         String mode,
-        boolean emergency
+        boolean emergency,
+        long lockVersion
 ) {
 }

@@ -59,7 +59,6 @@ public class EmergencyStopService {
                 Map.of("reason", request.reason() == null ? "operator emergency stop" : request.reason())
         ));
         realtimePublisher.publishControlLock(ControlRealtimeMapper.toMessage(snapshot));
-        controlEventPublisher.publishAccepted(response, user.getAdminId());
         return response;
     }
 

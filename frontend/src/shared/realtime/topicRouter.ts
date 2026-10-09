@@ -101,6 +101,8 @@ function isControlEventStatus(value: unknown): value is ControlCommandEvent['sta
     value === 'rejected' ||
     value === 'sent-to-edge' ||
     value === 'edge-ack' ||
+    value === 'executing' ||
+    value === 'completed' ||
     value === 'edge-timeout' ||
     value === 'failed'
   );

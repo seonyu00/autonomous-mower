@@ -60,8 +60,13 @@ public class ControlLockService {
     public ControlCommandResponse release(String robotId, ReleaseControlRequest request, SecurityUser user) {
         controlRobotGuard.requireKnownRobot(robotId);
         Instant requestedAt = Instant.now();
-        ControlLockSnapshot snapshot = controlStateStore.stateFor(robotId)
-                .release(user.getAdminId(), requestedAt);
+        ControlStateStore.MutableControlState state = controlStateStore.stateFor(robotId);
+        ControlLockSnapshot snapshot;
+        synchronized (state) {
+            state.requireOwner(user.getAdminId());
+            state.requireVersion(request.lockVersion());
+            snapshot = state.release(user.getAdminId(), requestedAt);
+        }
         publishLock(snapshot);
         ControlCommandResponse response = responseFactory.accepted("release-control", snapshot, requestedAt);
         controlEventPublisher.publishAccepted(response, user.getAdminId());

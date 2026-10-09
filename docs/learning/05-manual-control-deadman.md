@@ -8,8 +8,8 @@
 
 ```text
 ManualJoystick.onPointerDown
-  -> sendDirection()
-  -> DeadmanSwitch.reset()
+  -> 최신 입력 저장 및 100ms 반복 tick
+  -> 진행 중인 이동 요청이 없을 때만 전송
   -> controlApi.sendManualCommand()
   -> POST /api/control/<ROBOT_ID>/manual
   -> ControlController.manual()
@@ -30,13 +30,18 @@ ManualJoystick.onPointerDown
 
 - `pointerup`
 - `pointercancel`
-- 500ms local timer 만료
+- 포인터 캡처 상실
+- 제어 비활성화, 로봇 전환, 컴포넌트 해제
 - window `blur`
 - `pagehide`
 - `beforeunload`
 - document가 hidden으로 변경
 
-현재 `pointerdown`에서 한 번만 manual 명령을 보낸다. 버튼을 계속 누르고 있어도 주기적으로 갱신하지 않으므로 약 500ms 뒤 브라우저 또는 Jetson timeout으로 정지한다.
+2026-09-15 조이스틱 수정에서는 누르는 동안 100ms마다 최신 입력을 전송한다. 이동 HTTP 요청은 한 개만 진행하고 중간 입력은 큐에 쌓지 않는다. 놓기·취소·비활성화·로봇 전환 시 반복을 끝내며, 로봇 전환에서는 이전 로봇 ID로 정지를 시도한다. 이 정지 경로는 선택 검사만 생략하고 인증·권한·제어권 소유자·HTTPS 준비 검사를 유지한다.
+
+정지 요청은 이동 응답을 기다리지 않으며 한 개만 진행한다. 이전 이동 요청이 정지 이후 늦게 끝나면 정지를 추가 시도한다. 요청이 남은 동안 새 누르기는 이동을 시작하지 않으며, 요청 종료 후 다시 눌러야 한다. 무한 대기 HTTP의 시간 제한은 이번에 추가하지 않았으나 대기 요청 수를 제한한다. 기존 `DeadmanSwitch` 유틸리티는 남아 있지만 조이스틱은 단발 500ms 타이머 대신 입력 반복 수명을 관리한다. 백엔드 데드맨은 그대로 유지한다.
+
+관련 가짜 전송·가짜 시계 회귀 테스트를 작업 8의 제어권·ACK 변경과 함께 실행했다. 프론트 55개·백엔드 55개 및 TypeScript·프론트 빌드·ESLint·bootJar가 통과했다. 실제 명령 발행은 하지 않았다.
 
 ## 4. 백엔드 데드맨
 
@@ -46,7 +51,7 @@ ManualJoystick.onPointerDown
 
 1. `ControlStateStore.consumeDeadmanTimeout()`이 한 번만 timeout을 소비한다.
 2. system 사용자가 만든 stop 명령을 MQTT QoS 1로 발행한다.
-3. STOMP에 synthetic `deadman-timeout` 이벤트를 발행한다.
+3. 작업 8-3부터는 해당 stop 명령 ID의 추적 이벤트를 사용하며 별도 ID의 synthetic 접수 이벤트를 추가 발행하지 않는다.
 
 현재 `ControlCommandService.stop()`도 `recordCommand()`를 호출하므로 명시적 stop 이후 약 500ms 뒤 system stop이 한 번 더 발생할 수 있다.
 
@@ -66,7 +71,7 @@ Jetson은 `_last_manual_command_monotonic`에 마지막 manual 수신 시각을 
 ## 7. 안전상 남은 문제
 
 - STM32 독립 watchdog이 없다. Jetson 이후 통신이 끊기면 실제 모터 정지를 보장할 수 없다.
-- 계속 누르는 조작을 유지하려면 manual 명령을 500ms보다 빠른 주기로 갱신해야 하지만 현재 UI에는 반복 전송이 없다.
+- 반복 전송과 정지 시도를 가짜 전송·시계 회귀 테스트로 검증했다. 브라우저 종료·통신 단절 시 HTTP 정지 전달과 HTTP/MQTT 간 처리 순서를 보장하지 않는다. 실제 정지 완료나 실행 완료 ACK를 만들어내지 않는다. 명령 순서·만료 및 장비 실행 완료 응답 계약이 필요한 부분은 미구현이며 하드웨어 담당 팀원 협의 항목이다.
 - 백엔드는 속도 범위를 검증하지만 방향 값은 Jetson에서 최종 검증한다.
 - 프론트엔드는 `reverse`, MQTT 계약은 주로 `backward`를 사용해 용어가 일치하지 않는다.
 
@@ -81,3 +86,10 @@ Jetson은 `_last_manual_command_monotonic`에 마지막 manual 수신 시각을 
 7. `backend/src/main/java/com/autonomousmower/mqtt/service/MqttCommandPublisher.java`
 8. `edge/jetson-client/jetson_mower_client/main.py`
 9. `edge/jetson-client/jetson_mower_client/command_mapping.py`
+
+## 작업 8 공통 제한
+
+받은 하드웨어 코드와 MQTT·STM32 계약은 변경하지 않는다.
+현재 장비가 보내지 않는 실행 완료 응답을 만들어내지 않는다.
+계약 변경이 필요한 부분은 미구현으로 구분하고 팀원 협의 항목으로 남긴다.
+2026-09-15 검증은 실제 명령 발행 없이 가짜 전송 계층을 사용했다. 2026-10-06에는 실장비와 분리된 전용 PC 브로커에서 새 수동 입력이 끊기면 deadman-timeout·speed=0 정지가 수신됨을 확인했다. STM32 출력과 물리 정지는 별도 검증이 필요하다.

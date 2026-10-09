@@ -1,8 +1,9 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AuthProvider } from '../../app/providers/AuthProvider';
-import { resetStores } from '../../test/testStores';
+import { resetStores, TEST_ROBOT_ID } from '../../test/testStores';
 import { ControlPanel } from './ControlPanel';
+import { useControlStore } from './controlStore';
 
 describe('ControlPanel compact dock', () => {
   beforeEach(() => {
@@ -10,6 +11,26 @@ describe('ControlPanel compact dock', () => {
   });
 
   afterEach(cleanup);
+
+  it.each([
+    ['edge-ack', '장비 수신 확인 · 실행 완료 미확인'],
+    ['completed', '장비 실행 완료 응답 확인'],
+    ['failed', '명령 실패'],
+  ] as const)('개발 상세를 열지 않아도 %s 명령 결과를 볼 수 있다', (status, label) => {
+    useControlStore.getState().applyCommandEvent({
+      robotId: TEST_ROBOT_ID, commandId: 'visibility-test', commandType: 'stop', status,
+      reason: null, requestedBy: 'admin', serverTimestamp: '2026-10-06T00:00:00Z', edgeAckAt: null,
+    });
+    render(<AuthProvider><ControlPanel compact /></AuthProvider>);
+    expect(screen.getByText(new RegExp(label))).toBeVisible();
+    expect(screen.getByText('개발/디버그 상세').closest('details')).not.toHaveAttribute('open');
+  });
+
+  it('명령 API 오류를 개발 상세 밖에 표시한다', () => {
+    useControlStore.getState().patchControlState(TEST_ROBOT_ID, { commandError: '명령을 보내지 못했습니다.' });
+    render(<AuthProvider><ControlPanel compact /></AuthProvider>);
+    expect(screen.getByText('명령을 보내지 못했습니다.')).toBeVisible();
+  });
 
   it('기본 화면에는 사용자용 제어 상태와 한글 경고만 표시한다', () => {
     render(

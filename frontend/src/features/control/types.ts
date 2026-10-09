@@ -77,7 +77,7 @@ export type ControlCommandEvent = {
   robotId: string;
   commandId: string;
   commandType: string;
-  status: 'accepted' | 'rejected' | 'sent-to-edge' | 'edge-ack' | 'edge-timeout' | 'failed';
+  status: 'accepted' | 'rejected' | 'sent-to-edge' | 'edge-ack' | 'executing' | 'completed' | 'edge-timeout' | 'failed';
   reason: string | null;
   requestedBy: string;
   serverTimestamp: string;
@@ -107,6 +107,7 @@ export type ControlCommandResult = {
   commandType: ControlCommandType;
   requestedAt: string;
   acceptedAt?: string;
+  lockVersion?: number;
   lockState?: ControlLockState;
   controlOwner?: string | null;
   mode?: ControlMode;

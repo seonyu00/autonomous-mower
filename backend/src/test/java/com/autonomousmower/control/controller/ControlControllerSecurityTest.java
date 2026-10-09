@@ -136,7 +136,8 @@ class ControlControllerSecurityTest {
                 "held",
                 "operator",
                 "manual",
-                false
+                false,
+                1
         );
     }
 }

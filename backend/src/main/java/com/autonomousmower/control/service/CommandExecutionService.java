@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 @Service
 public class CommandExecutionService {
@@ -27,9 +28,7 @@ public class CommandExecutionService {
     private static final Logger log = LoggerFactory.getLogger(CommandExecutionService.class);
     private static final Duration DEFAULT_ACK_TIMEOUT = Duration.ofSeconds(5);
     private static final List<CommandExecutionStatus> TIMEOUT_CANDIDATES = List.of(
-            CommandExecutionStatus.SENT,
-            CommandExecutionStatus.ACKED,
-            CommandExecutionStatus.EXECUTING
+            CommandExecutionStatus.SENT
     );
 
     private final CommandExecutionRepository commandExecutionRepository;
@@ -49,15 +48,14 @@ public class CommandExecutionService {
         this.clock = clock;
     }
 
-    @Transactional
-    public Optional<CommandExecution> markSent(MqttCommandPayload payload) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Optional<CommandExecution> register(MqttCommandPayload payload) {
         Optional<Robot> robot = robotRepository.findById(payload.robotId());
         if (robot.isEmpty()) {
-            log.warn("Skipping command execution tracking for unknown robotId={}", payload.robotId());
-            return Optional.empty();
+            throw new IllegalArgumentException("Unknown command robot: " + payload.robotId());
         }
 
-        CommandExecution execution = commandExecutionRepository.save(new CommandExecution(
+        CommandExecution execution = commandExecutionRepository.saveAndFlush(new CommandExecution(
                 payload.commandId(),
                 robot.get(),
                 payload.commandType(),
@@ -68,6 +66,20 @@ public class CommandExecutionService {
         ));
         publish(execution);
         return Optional.of(execution);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markSent(String commandId) {
+        commandExecutionRepository.findByCommandId(commandId).ifPresent(command -> {
+            if (command.markSent(Instant.now(clock))) publish(command);
+        });
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markPublishFailed(String commandId) {
+        commandExecutionRepository.findByCommandId(commandId).ifPresent(command -> {
+            if (command.markPublishFailed(Instant.now(clock))) publish(command);
+        });
     }
 
     @Transactional
@@ -83,10 +95,10 @@ public class CommandExecutionService {
         }
 
         CommandExecution command = execution.get();
+        if (!command.getRobot().getRobotId().equals(payload.robotId())) return Optional.empty();
         CommandExecutionStatus status = mapAckStatus(payload.status());
         Instant ackedAt = payload.ackedAt() == null ? Instant.now(clock) : payload.ackedAt();
-        command.applyAck(status, payload.reason(), payload.edgeNodeId(), payload.receivedAt(), ackedAt);
-        publish(command);
+        if (command.applyAck(status, payload.reason(), payload.edgeNodeId(), payload.receivedAt(), ackedAt)) publish(command);
         return Optional.of(command);
     }
 
@@ -99,14 +111,13 @@ public class CommandExecutionService {
                 TIMEOUT_CANDIDATES,
                 sentBefore
         )) {
-            execution.markTimedOut(now);
-            publish(execution);
+            if (execution.markTimedOut(now)) publish(execution);
         }
     }
 
     private CommandExecutionStatus mapAckStatus(String status) {
         if (status == null) {
-            return CommandExecutionStatus.ACKED;
+            return null;
         }
         return switch (status.toLowerCase(Locale.ROOT)) {
             case "accepted", "acked" -> CommandExecutionStatus.ACKED;
@@ -114,7 +125,7 @@ public class CommandExecutionService {
             case "executed", "completed" -> CommandExecutionStatus.COMPLETED;
             case "rejected", "failed" -> CommandExecutionStatus.FAILED;
             case "timed_out", "timeout", "timed-out" -> CommandExecutionStatus.TIMED_OUT;
-            default -> CommandExecutionStatus.ACKED;
+            default -> null;
         };
     }
 
@@ -133,8 +144,11 @@ public class CommandExecutionService {
 
     private String toControlEventStatus(CommandExecutionStatus status) {
         return switch (status) {
+            case PREPARED -> "accepted";
             case SENT -> "sent-to-edge";
-            case ACKED, EXECUTING, COMPLETED -> "edge-ack";
+            case ACKED -> "edge-ack";
+            case EXECUTING -> "executing";
+            case COMPLETED -> "completed";
             case FAILED -> "failed";
             case TIMED_OUT -> "edge-timeout";
         };

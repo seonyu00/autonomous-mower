@@ -138,6 +138,11 @@ export function ControlPanel({ compact = false }: ControlPanelProps) {
 
         {actionError ? <p className="warning-line compact-control-error">{actionError}</p> : null}
 
+        <div className="control-command-feedback" role="status" aria-live="polite">
+          {selectedRobotId ? <CommandEventStatus robotId={selectedRobotId} /> : null}
+          {controlState?.commandError ? <p className="warning-line">{controlState.commandError}</p> : null}
+        </div>
+
         <details className="control-debug-details">
           <summary>개발/디버그 상세</summary>
           <div className="control-debug-content">
@@ -162,8 +167,6 @@ export function ControlPanel({ compact = false }: ControlPanelProps) {
                 ))}
               </div>
             ) : null}
-            {selectedRobotId ? <CommandEventStatus robotId={selectedRobotId} /> : null}
-            {controlState?.commandError ? <p className="warning-line">{controlState.commandError}</p> : null}
             {controlState?.lastCommandPayload ? (
               <pre className="payload-preview">{JSON.stringify(controlState.lastCommandPayload, null, 2)}</pre>
             ) : null}

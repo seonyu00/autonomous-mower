@@ -54,22 +54,22 @@ class CommandExecutionServiceTest {
     }
 
     @Test
-    void markSentCreatesCommandExecutionAndPublishesSentEvent() {
+    void registerCreatesPreparedExecutionBeforeTransport() {
         MqttCommandPayload payload = commandPayload();
         when(robotRepository.findById("MOWER-01")).thenReturn(Optional.of(robot));
-        when(commandExecutionRepository.save(any(CommandExecution.class)))
+        when(commandExecutionRepository.saveAndFlush(any(CommandExecution.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Optional<CommandExecution> execution = commandExecutionService.markSent(payload);
+        Optional<CommandExecution> execution = commandExecutionService.register(payload);
 
         assertThat(execution).isPresent();
         assertThat(execution.get().getCommandId()).isEqualTo("cmd-001");
         assertThat(execution.get().getIdempotencyKey()).isEqualTo("idem-001");
-        assertThat(execution.get().getStatus()).isEqualTo(CommandExecutionStatus.SENT);
+        assertThat(execution.get().getStatus()).isEqualTo(CommandExecutionStatus.PREPARED);
 
         ArgumentCaptor<ControlEventMessage> eventCaptor = ArgumentCaptor.forClass(ControlEventMessage.class);
         verify(realtimePublisher).publishControlEvent(eventCaptor.capture());
-        assertThat(eventCaptor.getValue().status()).isEqualTo("sent-to-edge");
+        assertThat(eventCaptor.getValue().status()).isEqualTo("accepted");
         assertThat(eventCaptor.getValue().commandId()).isEqualTo("cmd-001");
     }
 
@@ -118,8 +118,9 @@ class CommandExecutionServiceTest {
                 Instant.parse("2026-05-31T00:59:50Z"),
                 Instant.parse("2026-05-31T00:59:54Z")
         );
+        execution.markSent(Instant.parse("2026-05-31T00:59:54Z"));
         when(commandExecutionRepository.findByStatusInAndSentAtBefore(
-                List.of(CommandExecutionStatus.SENT, CommandExecutionStatus.ACKED, CommandExecutionStatus.EXECUTING),
+                List.of(CommandExecutionStatus.SENT),
                 Instant.parse("2026-05-31T00:59:55Z")
         )).thenReturn(List.of(execution));
 
@@ -131,6 +132,37 @@ class CommandExecutionServiceTest {
         ArgumentCaptor<ControlEventMessage> eventCaptor = ArgumentCaptor.forClass(ControlEventMessage.class);
         verify(realtimePublisher).publishControlEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().status()).isEqualTo("edge-timeout");
+    }
+
+    @Test
+    void wrongRobotUnknownStatusDuplicatesAndLateAcknowledgmentsDoNotRegressState() {
+        CommandExecution execution = new CommandExecution("cmd-001", robot, "stop", "key", "operator", Instant.now(), Instant.now());
+        when(commandExecutionRepository.findByCommandId("cmd-001")).thenReturn(Optional.of(execution));
+        assertThat(commandExecutionService.applyAck(ack("OTHER", "completed"))).isEmpty();
+        commandExecutionService.applyAck(ack("MOWER-01", "unknown"));
+        assertThat(execution.getStatus()).isEqualTo(CommandExecutionStatus.PREPARED);
+        commandExecutionService.applyAck(ack("MOWER-01", "accepted"));
+        commandExecutionService.markSent("cmd-001");
+        commandExecutionService.applyAck(ack("MOWER-01", "accepted"));
+        commandExecutionService.applyAck(ack("MOWER-01", "completed"));
+        commandExecutionService.applyAck(ack("MOWER-01", "executing"));
+        commandExecutionService.applyAck(ack("MOWER-01", "accepted"));
+        assertThat(execution.getStatus()).isEqualTo(CommandExecutionStatus.COMPLETED);
+        verify(realtimePublisher, org.mockito.Mockito.times(2)).publishControlEvent(any());
+    }
+
+    @Test
+    void receivedOnlyIsNotCompletionAndIsNotTimedOut() {
+        CommandExecution execution = new CommandExecution("cmd-001", robot, "stop", "key", "operator", Instant.now(), Instant.now());
+        when(commandExecutionRepository.findByCommandId("cmd-001")).thenReturn(Optional.of(execution));
+        commandExecutionService.applyAck(ack("MOWER-01", "accepted"));
+        assertThat(execution.getCompletedAt()).isNull();
+        assertThat(execution.markTimedOut(Instant.now().plusSeconds(60))).isFalse();
+        assertThat(execution.getStatus()).isEqualTo(CommandExecutionStatus.ACKED);
+    }
+
+    private MqttCommandAckPayload ack(String robotId, String status) {
+        return new MqttCommandAckPayload("cmd-001", robotId, "stop", status, null, "fake-edge", null, Instant.now());
     }
 
     private MqttCommandPayload commandPayload() {

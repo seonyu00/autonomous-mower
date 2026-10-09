@@ -5,10 +5,12 @@
   "description": "Mock MQTT edge client for autonomous mower backend development.",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "verify:control": "node src/verify-control.cjs"
   },
   "dependencies": {
-    "mqtt": "^5.10.4"
+    "mqtt": "^5.10.4",
+    "ws": "^8.22.0"
   },
   "engines": {
     "node": ">=20"

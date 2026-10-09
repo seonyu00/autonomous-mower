@@ -63,7 +63,8 @@ export const useControlStore = create<ControlStore>((set, get) => ({
   setMode: (robotId, mode) => get().patchControlState(robotId, { mode }),
   setPendingCommand: (robotId, pendingCommand) => get().patchControlState(robotId, { pendingCommand }),
   setCommandError: (robotId, commandError) => get().patchControlState(robotId, { commandError }),
-  applyLockSnapshot: (snapshot) =>
+  applyLockSnapshot: (snapshot) => {
+    if (snapshot.lockVersion < get().getControlState(snapshot.robotId).lockVersion) return;
     get().patchControlState(snapshot.robotId, {
       lockState: snapshot.lockState,
       controlOwner: snapshot.controlOwner,
@@ -71,15 +72,25 @@ export const useControlStore = create<ControlStore>((set, get) => ({
       emergency: snapshot.emergency,
       lockVersion: snapshot.lockVersion,
       expiresAt: snapshot.expiresAt,
-    }),
-  applyCommandEvent: (event) =>
+    });
+  },
+  applyCommandEvent: (event) => {
+    const previous = get().getControlState(event.robotId).lastCommandEvent;
+    if (previous) {
+      if (Date.parse(event.serverTimestamp) < Date.parse(previous.serverTimestamp)) return;
+      if (previous.commandId === event.commandId) {
+        const rank = { accepted: 0, 'sent-to-edge': 1, 'edge-ack': 2, executing: 3, completed: 4, rejected: 4, failed: 4, 'edge-timeout': 4 };
+        if (rank[event.status] <= rank[previous.status]) return;
+      }
+    }
     get().patchControlState(event.robotId, {
       lastCommandEvent: event,
       commandError:
         event.status === 'rejected' || event.status === 'edge-timeout' || event.status === 'failed'
           ? event.reason ?? event.status
           : null,
-    }),
+    });
+  },
   recordManualInput: (robotId, at = new Date().toISOString()) =>
     get().patchControlState(robotId, {
       lastInputAt: at,

@@ -144,6 +144,12 @@ Response `200`:
 
 PostGIS 저장 요구사항: `GEOMETRY(Polygon, 4326)`.
 
+SRS 7.3의 현재 정책은 로봇당 활성 작업 구역 1개다. 현재 테이블에는 비활성·이력 구분이 없으므로 `work_zone.robot_id` 고유 제약으로 한 행만 저장한다.
+
+실제 모드에서는 네이버 지도 초기화가 완료된 경우에만 작업 구역 편집·저장을 허용한다. 로딩·초기화 실패·런타임 오류 상태에서는 기존 구역 GET과 편집 초안은 유지하지만 새 편집과 PUT 저장은 제한한다. 대체 지도는 저장된 Polygon의 좌표 범위를 이용한 읽기 전용 도식이며 실제 현장 배경 지도가 아니다. 고정 샘플 범위의 클릭·드래그 좌표 생성은 명시적 개발 작업 구역 Mock에서만 허용하고 실제 DB에는 저장하지 않는다. 텔레메트리 Mock 설정은 이 편집·저장 정책을 바꾸지 않는다.
+
+최초 생성은 `expectedVersion: null`, 기존 구역 수정은 마지막 조회에서 받은 version을 전달한다. 기존 구역에 null 버전을 보내거나 버전이 맞지 않는 경우, 삭제된 구역에 과거 버전으로 저장하는 경우, 동일 버전의 동시 수정 및 최초 생성 경쟁의 패자는 `409 WORK_ZONE_CONFLICT`로 응답한다. 수정의 최종 경쟁은 JPA `@Version`의 조건부 UPDATE가 판정하며 flush 후 새 버전을 반환한다. 프론트는 충돌 시 꼭짓점과 편집 상태를 유지하고 최신 구역을 명시적으로 다시 불러오도록 안내한다. 재조회는 편집 꼭짓점을 덮지 않으며 변경 내용을 확인한 뒤 새 버전으로 저장한다.
+
 #### `GET /api/robots/{robotId}/work-zone`
 
 권한: `robots:read`
@@ -409,14 +415,18 @@ Shared response:
   "lockState": "held",
   "controlOwner": "admin",
   "mode": "manual",
-  "emergency": false
+  "emergency": false,
+  "lockVersion": 7
 }
 ```
+
+2026-09-15 제어권 보완: 제어 응답에 현재 `lockVersion`을 포함한다. manual·stop·mode·attachment·release 요청은 현재 제어권 버전과 일치해야 하며, 불일치는 HTTP 409 `CONTROL_VERSION_CONFLICT`로 거부한다. 같은 로봇의 소유권·버전 확인과 일반 명령 발행 호출은 하나의 모니터 안에서 수행한다. 강제 회수가 먼저 완료된 이전 명령은 발행하지 않는다. 이미 허용·발행된 명령의 소급 취소와 장비 실행 완료 보장은 포함하지 않으며 MQTT·STM32 계약은 변경하지 않는다. 새 응답 버전을 저장하는 웹과 버전을 검사하는 백엔드는 함께 배포해야 한다.
 
 Shared rejection response should use the common error envelope. Important codes:
 
 - `MISSING_CONTROL_PERMISSION`
 - `MISSING_TAKEOVER_PERMISSION`
+- `CONTROL_VERSION_CONFLICT`
 - `CONTROL_LOCK_NOT_HELD`
 - `CONTROL_OWNED_BY_OTHER_USER`
 - `ROBOT_IN_EMERGENCY`
@@ -860,6 +870,13 @@ Payload:
 - Whether STOMP command ack uses a new `/control-events` topic or is folded into `/control-lock` and `/events`.
 - Exact MQTT topic/QoS mapping between Spring Boot and Jetson.
 - Exact command idempotency and sequence policy.
+
+### 작업 8 ACK 추적과 웹 표시 보완 (2026-09-15)
+
+- MQTT topic·QoS·payload·장비 ACK status 계약은 변경하지 않는다. 발행 전 PREPARED 등록을 커밋하고 발행 예외는 FAILED / publish-failed로 표현한다. MQTT 클라이언트의 연결·발행 완료 대기는 각각 최대 5초이며, 시간 초과가 실제 장비 미수신을 증명하지는 않는다.
+- STOMP control-events의 `edge-ack`는 장비 수신 확인만 뜻한다. 기존에 구분하지 않던 `executing`, `completed`를 웹으로 전달하며 실제 해당 ACK가 수신된 경우에만 사용한다. 웹과 백엔드는 함께 배포한다. `accepted` ACK를 `completed`로 만들지 않는다.
+- 저장된 명령과 ACK robotId 불일치, 알 수 없는 status, 중복·역순 전이를 무시한다. COMPLETED·FAILED·TIMED_OUT은 종결 상태이며 늦은 ACK로 재개하지 않는다.
+- SENT만 5초 수신 ACK timeout 대상이다. ACKED·EXECUTING의 완료 기한은 새로 정의하지 않는다. 물리 완료 응답·명령 취소·재전송 계약은 팀원 협의 항목이다.
 
 ## 7. 계정·권한 설정 — 2026-10-05
 

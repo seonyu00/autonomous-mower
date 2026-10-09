@@ -136,6 +136,19 @@ class BackendPhase4ControllerTest {
                 .andExpect(jsonPath("$.data", hasSize(0)));
     }
 
+    @Test
+    @WithMockUser(authorities = "control:write")
+    void workZoneConflictReturns409() throws Exception {
+        when(workZoneService.saveWorkZone(eq("MOWER-01"), any())).thenThrow(
+                new com.autonomousmower.common.exception.BusinessException(
+                        com.autonomousmower.common.exception.ErrorCode.WORK_ZONE_CONFLICT));
+        mockMvc.perform(put("/api/robots/MOWER-01/work-zone")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content(validWorkZoneRequest()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code", is("WORK_ZONE_CONFLICT")));
+    }
+
     private String validWorkZoneRequest() {
         return """
                 {

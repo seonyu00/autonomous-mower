@@ -84,16 +84,18 @@ public class CommandExecution {
         this.requestedBy = Objects.requireNonNull(requestedBy, "requestedBy must not be null");
         this.requestedAt = Objects.requireNonNull(requestedAt, "requestedAt must not be null");
         this.sentAt = Objects.requireNonNull(sentAt, "sentAt must not be null");
-        this.status = CommandExecutionStatus.SENT;
+        this.status = CommandExecutionStatus.PREPARED;
     }
 
-    public void applyAck(
+    public boolean applyAck(
             CommandExecutionStatus nextStatus,
             String reason,
             String edgeNodeId,
             Instant edgeReceivedAt,
             Instant ackedAt
     ) {
+        if (nextStatus == null || status == nextStatus || terminal(status)
+                || (status == CommandExecutionStatus.EXECUTING && nextStatus == CommandExecutionStatus.ACKED)) return false;
         this.status = nextStatus;
         this.reason = reason;
         this.edgeNodeId = edgeNodeId;
@@ -105,12 +107,35 @@ public class CommandExecution {
         if (nextStatus == CommandExecutionStatus.FAILED) {
             this.failedAt = ackedAt;
         }
+        return true;
     }
 
-    public void markTimedOut(Instant timeoutAt) {
+    public boolean markSent(Instant now) {
+        if (status != CommandExecutionStatus.PREPARED) return false;
+        status = CommandExecutionStatus.SENT;
+        sentAt = now;
+        return true;
+    }
+
+    public boolean markPublishFailed(Instant now) {
+        if (status != CommandExecutionStatus.PREPARED) return false;
+        status = CommandExecutionStatus.FAILED;
+        failedAt = now;
+        reason = "publish-failed";
+        return true;
+    }
+
+    private boolean terminal(CommandExecutionStatus value) {
+        return value == CommandExecutionStatus.COMPLETED || value == CommandExecutionStatus.FAILED
+                || value == CommandExecutionStatus.TIMED_OUT;
+    }
+
+    public boolean markTimedOut(Instant timeoutAt) {
+        if (status != CommandExecutionStatus.SENT) return false;
         this.status = CommandExecutionStatus.TIMED_OUT;
         this.timeoutAt = timeoutAt;
         this.reason = "ack-timeout";
+        return true;
     }
 
     public String getCommandId() {

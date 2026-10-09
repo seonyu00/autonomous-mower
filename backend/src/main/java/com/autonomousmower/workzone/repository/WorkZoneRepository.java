@@ -6,5 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface WorkZoneRepository extends JpaRepository<WorkZone, Long> {
 
-    Optional<WorkZone> findFirstByRobotRobotId(String robotId);
+    Optional<WorkZone> findByRobotRobotId(String robotId);
 }

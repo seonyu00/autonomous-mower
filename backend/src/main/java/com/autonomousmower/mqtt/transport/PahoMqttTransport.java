@@ -19,12 +19,12 @@ public class PahoMqttTransport implements MqttTransport {
     public synchronized void publish(String topic, byte[] payload, int qos, boolean retained) {
         try {
             if (!mqttAsyncClient.isConnected()) {
-                mqttAsyncClient.connect(mqttConnectOptions).waitForCompletion();
+                mqttAsyncClient.connect(mqttConnectOptions).waitForCompletion(5000);
             }
             MqttMessage message = new MqttMessage(payload);
             message.setQos(qos);
             message.setRetained(retained);
-            mqttAsyncClient.publish(topic, message);
+            mqttAsyncClient.publish(topic, message).waitForCompletion(5000);
         } catch (MqttException exception) {
             throw new IllegalStateException("Failed to publish MQTT message to " + topic, exception);
         }

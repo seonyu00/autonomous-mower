@@ -27,16 +27,4 @@ public class ControlEventPublisher {
         ));
     }
 
-    public void publishSyntheticStop(String robotId, String reason) {
-        realtimePublisher.publishControlEvent(new ControlEventMessage(
-                robotId,
-                "cmd-" + java.util.UUID.randomUUID(),
-                "stop",
-                "accepted",
-                reason,
-                "server",
-                java.time.Instant.now(),
-                null
-        ));
-    }
 }

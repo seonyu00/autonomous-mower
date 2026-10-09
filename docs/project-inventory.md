@@ -337,12 +337,12 @@ Backend 대응:
   - validation error 표시
 - 지도 클릭으로 로봇별 작업 구역 꼭짓점 추가
 - 저장된 Polygon의 꼭짓점을 편집 초안으로 불러와 수정 시작
-- 네이버 지도와 fallback 지도에서 꼭짓점 드래그 이동 지원
+- 정상 네이버 지도에서 꼭짓점 드래그 이동 지원. fallback 편집은 명시적 개발 작업 구역 Mock에서만 허용
 - 편집 취소 시 저장된 Polygon으로 복귀
 - 저장된 구역이 있으면 `기존 구역 수정`과 `새 구역 다시 그리기` 액션 분리
 - 꼭짓점 3개 이상 선택 시 닫힌 Polygon 미리보기 표시
 - 마지막 점 취소, 전체 초기화, 샘플 구역 불러오기 지원
-- 네이버 정상 지도와 fallback 지도에서 동일한 편집 상태 공유
+- 지도 오류 시 기존 편집 초안은 유지하지만 실제 모드의 편집·저장은 제한. fallback에는 저장 구역의 좌표 도식만 표시하고 정상 지도 복구 후 편집·저장 가능
 - 편집 중인 꼭짓점을 드래그 가능한 Marker로 표시
 - 저장 성공 시 편집 결과를 `zoneStore`에 반영
 - `VITE_ENABLE_MOCK_WORK_ZONE=true`인 개발 환경에서는 실제 API 호출 대신 mock response 반환
@@ -353,6 +353,7 @@ Backend 대응:
 - 실제 모드에서는 샘플 구역 불러오기 액션을 숨겨 샘플 데이터 저장을 방지
 - production 모드에서는 `/api/robots/{robotId}/work-zone` GET/PUT 사용
 - backend는 PostGIS `geometry(Polygon, 4326)` 저장 및 version update 지원
+- 7-1·7-2 수정 코드: JPA `@Version`과 robot_id 고유 제약으로 동시 수정·최초 생성 충돌을 제한하고 409로 응답한다. 프론트는 편집을 유지하고 명시적 재조회를 안내한다. 2026-09-12 관련 프론트 36개·백엔드 20개 테스트와 빌드·린트가 통과했다. 2026-09-15 격리된 PostgreSQL/PostGIS에서 실제 DB 동시성 2개도 skip 없이 통과했으며, 기존 행 보존과 중복 시 V8 적용 거부를 확인했다. 운영 DB의 데이터·잠금 시간은 미검증이다. 실행 방법과 검증 범위는 [작업 구역 책임 문서](learning/07-work-zone-postgis.md)에 정리했다.
 - 실제 로그인 세션의 네이버 지도에서 기존 Polygon 꼭짓점을 이동하고 저장한 뒤 새로고침해 같은 좌표가 재조회되는 것을 확인
 - 브라우저 저장 결과가 PostGIS version 증가, SRID 4326과 `ST_IsValid=true`에 반영되는 것을 확인
 
@@ -511,6 +512,8 @@ Backend 주요 파일:
 - E-Stop command QoS는 1
 - reset은 backend state reset 중심이며 Jetson 실제 reset contract는 미구현/확인 필요
 
+작업 8-2 제어권 보완(2026-09-15): 일반 명령·반납의 실제 lockVersion 전달·검사, 로봇별 소유권 확인과 발행 호출의 원자성, 오래된 HTTP·STOMP 제어권 응답 무시를 추가했다. 작업 8 통합 검증에서 프론트 55개·백엔드 55개와 빌드·린트가 통과했다. 실제 명령 발행은 하지 않았다. 상세 보장 범위와 한계는 [제어권 책임 문서](learning/04-control-lock-flow.md)를 따른다.
+
 ### Manual Joystick
 
 Frontend 주요 파일:
@@ -532,8 +535,9 @@ Backend 주요 파일:
   - `stop`
   - `right`
   - `reverse`
-- pointer down 시 manual command 전송
-- pointer up/cancel 시 stop 전송
+- 누르는 동안 100ms마다 최신 입력 전송. 이동 HTTP 한 개만 진행하며 중간 입력 큐를 만들지 않음
+- pointer up/cancel/capture 상실·비활성화·로봇 전환·해제 시 반복 중단 및 기존 로봇 stop 시도
+- 작업 8 조이스틱 회귀 테스트는 제어권·ACK와 통합 검증을 완료함(프론트 55개·백엔드 55개, 가짜 전송 계층)
 - blur/pagehide/beforeunload/visibility hidden 시 stop 시도
 - command payload preview 표시
 - backend manual command는 MQTT `mowers/{robotId}/commands/manual` QoS 0으로 publish
@@ -548,8 +552,8 @@ Frontend:
 
 - `frontend/src/features/control/DeadmanSwitch.ts`
 - `frontend/src/features/control/ManualJoystick.tsx`
-- timeout: 500ms
-- manual command 이후 timer reset, timeout 시 stop command 호출
+- 기존 500ms `DeadmanSwitch` 유틸리티는 보존돼 있으나 현재 조이스틱에서 사용하지 않음
+- 조이스틱은 입력 반복 수명과 중단 이벤트를 관리하며 백엔드 데드맨은 유지함
 
 Backend:
 
@@ -962,15 +966,20 @@ Inbound topics:
 
 구현 내용:
 
-- command publish 성공 후 `command_execution`에 `SENT` 저장
+- 발행 전 별도 트랜잭션으로 `PREPARED` 추적 등록, 발행 호출 성공 시 아직 PREPARED이면 `SENT`로 변경
+- 직렬화·발행 예외는 `FAILED / publish-failed`로 표현하며 호출자에게 전파함
 - ack 수신 시 status mapping:
   - `accepted`, `acked` -> `ACKED`
   - `executing` -> `EXECUTING`
   - `executed`, `completed` -> `COMPLETED`
   - `rejected`, `failed` -> `FAILED`
   - timeout variants -> `TIMED_OUT`
-- 5초 timeout scheduler가 `SENT`, `ACKED`, `EXECUTING` 오래된 command를 `TIMED_OUT` 처리
+- 5초 timeout scheduler는 오래된 `SENT`만 `TIMED_OUT` 처리하며 ACKED를 완료 미응답만으로 실패 처리하지 않음
+- 저장된 명령과 ACK 로봇 일치 검사, 행 잠금·전이 검사로 중복·역순 응답을 무시함
+- UI는 MQTT 발행·장비 수신·실행 중·완료 응답을 구분함. 자세한 한계는 [ACK 책임 문서](learning/08-mqtt-ack-lifecycle.md)를 따름
 - control-events STOMP topic publish
+
+2026-10-06 제어·ACK·구역 저장 PC 통합 검증을 완료했다. 실제 HTTP·전용 MQTT·PostgreSQL·STOMP 경로는 `tools/edge-mock-client/src/verify-control.cjs`, 실제 ACK 행 잠금 경쟁은 `CommandExecutionConcurrencyTest`, V9 뒤 V8 적용·데이터 보존은 `WorkZoneMigrationOrderTest`로 확인한다. 기본 제어 화면의 ACK·명령 오류도 개발 상세 밖에 표시한다. 재실행·완료 기준은 [로드맵](learning/12-development-roadmap.md), 결과·수치는 [개발 로그](development-log.md)를 따른다. 하드웨어와 다중 서버 제어권은 검증하지 않았다.
 
 고도화 필요:
 

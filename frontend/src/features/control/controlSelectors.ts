@@ -109,7 +109,7 @@ export function canResetAfterEmergency(robotId: string): ControlEligibility {
   };
 }
 
-export function canSendStopCommand(robotId: string): ControlEligibility {
+export function canSendStopCommand(robotId: string, allowUnselected = false): ControlEligibility {
   const reasons: string[] = [];
   const { user, isAuthenticated } = useAuthStore.getState();
   const { selectedRobotId } = useRobotStore.getState();
@@ -122,7 +122,7 @@ export function canSendStopCommand(robotId: string): ControlEligibility {
     reasons.push('missing-control-permission');
   }
 
-  if (selectedRobotId !== robotId) {
+  if (!allowUnselected && selectedRobotId !== robotId) {
     reasons.push('robot-not-selected');
   }
 

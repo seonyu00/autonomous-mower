@@ -1,21 +1,24 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetStores } from '../../../test/testStores';
 import { useZoneStore } from '../zoneStore';
 import { WorkZoneEditor } from './WorkZoneEditor';
+import { ApiError } from '../../../shared/api/errors';
 
 const getWorkZone = vi.fn();
 const saveWorkZone = vi.fn();
+const isMockWorkZoneEnabled = vi.fn(() => false);
 
 vi.mock('../zoneApi', () => ({
   getWorkZone: (...args: unknown[]) => getWorkZone(...args),
   saveWorkZone: (...args: unknown[]) => saveWorkZone(...args),
-  isMockWorkZoneEnabled: () => false,
+  isMockWorkZoneEnabled: () => isMockWorkZoneEnabled(),
 }));
 
 describe('WorkZoneEditor', () => {
   beforeEach(() => {
     resetStores();
+    isMockWorkZoneEnabled.mockReturnValue(false);
     getWorkZone.mockReset();
     saveWorkZone.mockReset();
     getWorkZone.mockResolvedValue({
@@ -41,6 +44,36 @@ describe('WorkZoneEditor', () => {
   });
 
   afterEach(cleanup);
+
+  it('실제 대체 지도에서는 기존 구역을 조회하되 편집과 저장은 차단한다', async () => {
+    useZoneStore.setState({ mapReady: false });
+    useZoneStore.getState().startEditing('MOWER-01', [[127.45, 36.62], [127.46, 36.62], [127.46, 36.63]]);
+    render(<WorkZoneEditor />);
+    await waitFor(() => expect(getWorkZone).toHaveBeenCalledWith('MOWER-01'));
+    expect(screen.getByRole('button', { name: '작업 구역 저장' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '작업 구역 저장' }));
+    expect(saveWorkZone).not.toHaveBeenCalled();
+  });
+
+  it('지도 복구 후 보존된 편집 내용을 저장할 수 있다', async () => {
+    useZoneStore.setState({ mapReady: false });
+    useZoneStore.getState().startEditing('MOWER-01', [[127.45, 36.62], [127.46, 36.62], [127.46, 36.63]]);
+    render(<WorkZoneEditor />);
+    await waitFor(() => expect(getWorkZone).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: '작업 구역 저장' })).toBeDisabled();
+    act(() => useZoneStore.getState().setMapReady(true));
+    fireEvent.click(screen.getByRole('button', { name: '작업 구역 저장' }));
+    await waitFor(() => expect(saveWorkZone).toHaveBeenCalledTimes(1));
+  });
+
+  it('명시적 개발 샘플 편집은 대체 지도에서도 가능하고 샘플임을 안내한다', async () => {
+    isMockWorkZoneEnabled.mockReturnValue(true);
+    useZoneStore.setState({ mapReady: false });
+    render(<WorkZoneEditor />);
+    await waitFor(() => expect(getWorkZone).toHaveBeenCalled());
+    expect(screen.getByText('개발용 샘플 좌표 편집입니다. 실제 DB에는 저장하지 않습니다.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '새 구역 그리기' })).toBeEnabled();
+  });
 
   it('새 구역 편집을 시작하고 꼭짓점이 부족하면 저장을 차단한다', () => {
     render(<WorkZoneEditor />);
@@ -135,6 +168,30 @@ describe('WorkZoneEditor', () => {
     expect(saveWorkZone).toHaveBeenCalledWith('MOWER-01', expect.any(Object), 4);
     expect(useZoneStore.getState().versionsByRobotId['MOWER-01']).toBe(1);
     expect(screen.getByText('작업 구역을 저장했습니다.')).toBeInTheDocument();
+  });
+
+  it('409 충돌 시 편집을 유지하고 명시적 재조회 후 새 버전으로 저장한다', async () => {
+    const geometry = { type: 'Polygon' as const, coordinates: [[
+      [127.45, 36.62] as [number, number], [127.46, 36.62] as [number, number],
+      [127.46, 36.63] as [number, number], [127.45, 36.62] as [number, number],
+    ]] };
+    getWorkZone.mockResolvedValue({ geometry, version: 4, mock: false });
+    saveWorkZone.mockRejectedValueOnce(new ApiError('Conflict', 'validation', 409));
+    render(<WorkZoneEditor />);
+    fireEvent.click(await screen.findByRole('button', { name: '기존 구역 수정' }));
+    const draft = useZoneStore.getState().draftVerticesByRobotId['MOWER-01'];
+    fireEvent.click(screen.getByRole('button', { name: '작업 구역 저장' }));
+    await screen.findByText(/다른 사용자가 작업 구역을 변경했습니다/);
+    expect(useZoneStore.getState().draftVerticesByRobotId['MOWER-01']).toEqual(draft);
+    expect(useZoneStore.getState().versionsByRobotId['MOWER-01']).toBe(4);
+    expect(screen.getByRole('button', { name: '작업 구역 저장' })).toBeDisabled();
+    getWorkZone.mockResolvedValue({ geometry, version: 5, mock: false });
+    fireEvent.click(screen.getByRole('button', { name: '최신 구역 다시 불러오기' }));
+    await screen.findByText(/최신 작업 구역을 불러왔습니다/);
+    expect(useZoneStore.getState().draftVerticesByRobotId['MOWER-01']).toEqual(draft);
+    expect(useZoneStore.getState().editingByRobotId['MOWER-01']).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: '작업 구역 저장' }));
+    await waitFor(() => expect(saveWorkZone).toHaveBeenLastCalledWith('MOWER-01', expect.any(Object), 5));
   });
 
   it('저장 실패 시 편집 내용을 유지하고 사용자 메시지를 표시한다', async () => {

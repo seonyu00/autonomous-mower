@@ -164,6 +164,15 @@ public class ControlStateStore {
             }
         }
 
+        public synchronized void requireVersion(long expectedVersion) {
+            refreshExpiration(Instant.now());
+            if (lockVersion != expectedVersion) {
+                throw new com.autonomousmower.common.exception.BusinessException(
+                        com.autonomousmower.common.exception.ErrorCode.CONTROL_VERSION_CONFLICT
+                );
+            }
+        }
+
         public synchronized void requireNotEmergency() {
             if (emergency) {
                 throw new com.autonomousmower.common.exception.BusinessException(

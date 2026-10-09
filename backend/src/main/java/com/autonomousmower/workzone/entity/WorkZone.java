@@ -10,13 +10,15 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.Polygon;
 
 @Entity
-@Table(name = "work_zone")
+@Table(name = "work_zone", uniqueConstraints = @UniqueConstraint(name = "uq_work_zone_robot_id", columnNames = "robot_id"))
 public class WorkZone {
 
     @Id
@@ -37,6 +39,7 @@ public class WorkZone {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Version
     @Column(name = "version", nullable = false)
     private int version = 1;
 
@@ -81,6 +84,5 @@ public class WorkZone {
     public void replacePolygon(Polygon zonePolygon, LocalDateTime updatedAt) {
         this.zonePolygon = Objects.requireNonNull(zonePolygon, "zonePolygon must not be null");
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt must not be null");
-        this.version += 1;
     }
 }
