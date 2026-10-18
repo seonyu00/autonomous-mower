@@ -1029,30 +1029,6 @@ button {
   width: min(100%, 520px);
 }
 
-.toast {
-  border-radius: 6px;
-  bottom: 18px;
-  padding: 10px 12px;
-  position: fixed;
-  right: 18px;
-  z-index: 30;
-}
-
-.toast.info {
-  background: #12314a;
-  color: #bfe2ff;
-}
-
-.toast.warning {
-  background: #3a3015;
-  color: #ffe19a;
-}
-
-.toast.critical {
-  background: #3a171c;
-  color: #ffb1b7;
-}
-
 /* Industrial dark design system */
 
 .app-header {

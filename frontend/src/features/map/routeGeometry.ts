@@ -1,4 +1,3 @@
-import type { Feature, LineString } from 'geojson';
 import type { LngLat } from './geojson';
 
 const MAX_SESSION_ROUTE_POINTS = 500;
@@ -60,28 +59,6 @@ export function calculateHeadingDegrees(route: readonly LngLat[]) {
   }
 
   return (Math.atan2(east, north) * (180 / Math.PI) + 360) % 360;
-}
-
-export function toLineFeature(
-  robotId: string,
-  coordinates: readonly LngLat[],
-  routeType: 'planned' | 'completed',
-): Feature<LineString> | undefined {
-  if (coordinates.length < 2) {
-    return undefined;
-  }
-
-  return {
-    type: 'Feature',
-    properties: {
-      robotId,
-      routeType,
-    },
-    geometry: {
-      type: 'LineString',
-      coordinates: coordinates.map(toLngLat),
-    },
-  };
 }
 
 function toLngLat(position: readonly number[]): LngLat {

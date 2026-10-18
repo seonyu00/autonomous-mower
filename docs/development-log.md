@@ -22,6 +22,15 @@
 
 ## 2026-09-15
 
+### 미사용 코드 최소 정리
+
+- Toast·StatusBadge·toLineFeature의 현재 소스·테스트·설정·동적 import 참조를 재검색했다. 선언과 과거 계획·현황 문서 외 사용처가 없어 두 UI 파일과 함수·전용 타입 import를 삭제했다.
+- Toast에서만 사용하던 .toast 계열 CSS 24줄을 함께 제거했다. StatusBadge가 사용하던 status-pill은 다른 화면에서도 사용하므로 유지했다. 제품 코드 삭제는 총 67줄이며 나머지 경로 계산 함수는 유지했다.
+- useAuth는 AppShell·PermissionGate에서, useAuthStore는 라우트·API 등에서 실제 사용 중이므로 인증 접근 통일은 삭제 작업과 분리했다. QueryProvider는 main.tsx에 연결돼 있고 RobotDataProvider가 useQuery를 사용하므로 유지했다. Mock·의존성·하드웨어 코드는 변경하지 않았다.
+- 삭제 후 실행 소스·설정의 후보 참조가 없음을 확인했다. npm run build(TypeScript 포함), npm run lint, git diff --check가 통과했다. 호출되지 않는 선언 제거이므로 새 회귀 테스트나 전체 테스트 반복은 하지 않았다.
+- 현황 문서의 삭제 파일 목록만 갱신하고 과거 계획 문서는 당시 기록으로 보존했다. 이전 미커밋 변경은 보존했으며 commit·push는 하지 않았다. 새로 기록할 재현 가능한 동작 실패는 발견하지 않았다.
+
+
 ### 작업 8-3 ACK 추적 및 8-1·8-2·8-3 통합 검증 완료
 
 - 발행 후 추적 등록 때문에 빠른 ACK가 유실되는 경로를 확인했다. PREPARED 등록을 별도 트랜잭션으로 커밋한 뒤 직렬화·발행하도록 하고, 실패는 FAILED / publish-failed로 기록·전파한다. Paho 연결·발행 완료 대기는 각각 5초로 제한했다.
