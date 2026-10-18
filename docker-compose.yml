@@ -17,7 +17,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-mower}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mower}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:

@@ -849,6 +849,7 @@ Topic:
 주의:
 
 - HTTP security는 `/ws/**`를 permit하지만 STOMP inbound interceptor에서 CONNECT 인증을 수행한다.
+- `/ws`의 브라우저 Origin은 REST와 같은 `APP_ALLOWED_ORIGINS` 허용 목록으로 제한한다. 기본 주소는 localhost·127.0.0.1의 5173 포트이며 다른 포트와 배포 주소는 명시적으로 추가한다.
 - frontend의 실제 STOMP message store 반영은 추가 구현 필요.
 
 ### Control Lock
@@ -1001,6 +1002,7 @@ Backend env:
 - `SPRING_DATASOURCE_PASSWORD`
 - `JWT_SECRET`
 - `JWT_EXPIRATION`
+- `APP_ALLOWED_ORIGINS`
 - `MQTT_ENABLED`
 - `MQTT_BROKER_URL`
 - `MQTT_USERNAME`
@@ -1014,12 +1016,15 @@ Backend env:
 - JWT secret은 runtime env 필수
 - committed admin password seed 없음
 - 공개 문서의 자격 증명 예시는 `<DB_USERNAME>`, `<DB_PASSWORD>`, `<JWT_SECRET>` placeholder를 사용한다.
+- `WebOriginProperties`가 REST와 WebSocket의 명시적인 HTTP/HTTPS Origin 목록을 공유한다. 경로·자격 증명·와일드카드·빈 목록은 시작 시 거부한다. `SecurityConfig`는 `/api/**`의 GET·POST·PUT·PATCH·OPTIONS와 Authorization·Content-Type 헤더를 허용하고 JWT·RBAC 검사를 유지한다.
+- `docker-compose.yml`은 PostgreSQL의 호스트 바인딩을 `127.0.0.1`로 제한한다. 3-A에서는 설정만 준비했으며 실행 중인 컨테이너 재생성·바인딩 적용은 하지 않았다.
+- `frontend/vercel.json`은 Vercel의 SPA 직접 접속·새로고침 경로를 처리한다. 실제 Vercel 배포와 외부 동작은 확인 필요다. 환경변수와 실행 설정은 [README](../README.md#vercel-프론트와-pc-백엔드의-접속-설정)를 따른다.
 
 Production 확인 필요:
 
 - HTTPS/WSS/TLS termination
 - MQTTS/TLS
-- CORS/origin 제한
+- 실제 배포 Origin을 설정한 뒤 HTTPS/WSS 경유 CORS·Origin 제한 검증
 - real secret 관리
 - admin credential provision 절차
 
@@ -1342,10 +1347,11 @@ README와 현재 구현 기준으로 확인 가능한 local integration flow:
 
 ### production 보안 설정
 
+- 3-A 준비 완료: REST CORS와 WebSocket Origin 공통 허용 목록, 잘못된 Origin 설정 거부, DB loopback 바인딩 설정, Vercel SPA 경로 처리. 관련 백엔드 120개와 프론트 빌드·린트, Compose 정적 검사를 통과했다. 설정 파일과 테스트 결과이며 실행 중인 서비스·외부 접속의 적용 증거는 아니다.
 - 미구현/확인 필요:
   - HTTPS/WSS
   - MQTTS/TLS
-  - CORS/origin 제한
+  - 실제 배포 주소의 CORS·WebSocket Origin 및 외부 브라우저 검증
   - secret manager
   - admin credential bootstrap/provision
   - broker auth/TLS

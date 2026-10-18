@@ -45,6 +45,7 @@ app:
     timeout-ms: 5000
     max-output-bytes: 2097152
   security:
+    allowed-origins: ${APP_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
     jwt:
       secret: ${JWT_SECRET}
       expiration: ${JWT_EXPIRATION:PT8H}

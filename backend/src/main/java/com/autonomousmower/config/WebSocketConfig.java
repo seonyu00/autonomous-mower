@@ -18,16 +18,19 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final StompJwtAuthenticationInterceptor stompJwtAuthenticationInterceptor;
     private final AccountWebSocketSessions sessions;
+    private final WebOriginProperties origins;
 
-    public WebSocketConfig(StompJwtAuthenticationInterceptor stompJwtAuthenticationInterceptor, AccountWebSocketSessions sessions) {
+    public WebSocketConfig(StompJwtAuthenticationInterceptor stompJwtAuthenticationInterceptor, AccountWebSocketSessions sessions,
+                           WebOriginProperties origins) {
         this.stompJwtAuthenticationInterceptor = stompJwtAuthenticationInterceptor;
         this.sessions = sessions;
+        this.origins = origins;
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*");
+                .setAllowedOrigins(origins.allowedOrigins().toArray(String[]::new));
     }
 
     @Override
