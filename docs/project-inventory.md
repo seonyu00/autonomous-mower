@@ -1021,6 +1021,8 @@ Backend env:
 - `docker-compose.yml`은 PostgreSQL의 호스트 바인딩을 `127.0.0.1`로 제한한다. 3-A에서는 설정만 준비했으며 실행 중인 컨테이너 재생성·바인딩 적용은 하지 않았다.
 - `frontend/vercel.json`은 Vercel의 SPA 직접 접속·새로고침 경로를 처리한다. 실제 Vercel 배포와 외부 동작은 확인 필요다. 환경변수와 실행 설정은 [README](../README.md#vercel-프론트와-pc-백엔드의-접속-설정)를 따른다.
 - 3-B-1에서는 Java `MqttConfig`·Node `mqtt-tls.cjs`·Python `mqtt_edge.py`에 선택적 CA 신뢰와 TLS 1.2 이상·호스트명 검증을 준비했다. `docker-compose.mqtt-security.yml`, `docker/mosquitto/mosquitto-security-test.conf`, `tools/mqtt-security/prepare.ps1`은 인증·로봇별 ACL을 검사하는 별도 loopback 브로커 구성이다. 실제 접속·거부 검사를 PC에서 통과했으며 루트 개발용 설정 파일에는 익명 접속 기본값이 남아 있다. 실행 방법과 검증 한계는 [README](../README.md#mqtt-인증acltls의-격리-검증)를 따른다.
+- 2026-10-20의 3-B-2 PC 적용에서는 `docker-compose.pc-demo.yml`·`mosquitto-pc-demo.conf`·`tools/pc-demo/start.ps1`로 기존 DB 볼륨을 보존하면서 DB5432·API8080·MQTT TLS18883을 loopback에 제한했다. 실제 실행은 백엔드 계정만 허용하는 TLS 브로커를 사용하며, 루트 개발 Compose의 평문·익명 설정은 별도로 남아 있다. 재실행은 [README](../README.md#pc-시연-환경-재실행)를 따른다. 이후 `tools/pc-demo/funnel.ps1`로 웹 백엔드만 공개했고 실제 Stop·Start와 공개 중계 경로의 HTTPS·WSS 13개 검사를 통과했다. 외부 기기의 Vercel 브라우저와 실제 Jetson 검증은 남아 있다.
+- 2026-10-21에는 PC Chrome의 고정 Production 도메인에서 실제 로그인·등록 로봇 조회·네이버 위성지도·HTTPS/WSS 연결 표시를 확인했다. 개별 배포 도메인은 허용 Origin과 달라 CORS 사전 요청이 403으로 거부됐다. 외부 휴대폰·실제 Jetson·텔레메트리 수신과 물리 동작은 미검증이다.
 
 Production 확인 필요:
 
@@ -1351,6 +1353,7 @@ README와 현재 구현 기준으로 확인 가능한 local integration flow:
 
 - 3-A 준비 완료: REST CORS와 WebSocket Origin 공통 허용 목록, 잘못된 Origin 설정 거부, DB loopback 바인딩 설정, Vercel SPA 경로 처리. 관련 백엔드 120개와 프론트 빌드·린트, Compose 정적 검사를 통과했다. 설정 파일과 테스트 결과이며 실행 중인 서비스·외부 접속의 적용 증거는 아니다.
 - 3-B-1 준비 완료: 별도 로컬 TLS 브로커에서 Node 보안 검사 34개, Python 25개, Java 신규 9개를 확인했다. 인증·ACL·CA 검증은 격리 테스트 환경의 결과이며 아래 운영 보안 적용 항목은 남아 있다.
+- 3-B-2 PC 적용 완료: 기존 계정 로그인·CORS·실제 STOMP·MQTT TLS/ACL 20개를 통과했고 기존 DB 내용 보존과 loopback 바인딩을 확인했다. Jetson 계정·Tailscale 리스너, 외부 HTTPS/WSS와 전원 OFF 연결 표시는 확인 필요다.
 - 미구현/확인 필요:
   - HTTPS/WSS
   - MQTTS/TLS

@@ -1,0 +1,28 @@
+# PC 적용용 override이다. 개발 Compose와 함께 사용하며 기존 데이터 볼륨을 유지한다.
+# ports를 병합하면 기존 평문 포트가 남으므로 목록 전체를 교체한다(Compose 2.24.4 이상).
+services:
+  postgres:
+    ports: !override
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+  mosquitto:
+    image: eclipse-mosquitto@sha256:a908c65cc8e67ec9d292ef27c2c0360dbaaee7eb1b935cdd194e67697f15dea1
+    ports: !override
+      - "127.0.0.1:18883:8883"
+    volumes: !override
+      - ./docker/mosquitto/mosquitto-pc-demo.conf:/mosquitto/config/mosquitto.conf:ro
+      - ${MQTT_PC_SECURITY_DIR:?PC용 MQTT 인증서 폴더가 필요합니다}:/mosquitto/security:ro
+      # 과거 개발 브로커의 retained 메시지를 시연 환경에 재전달하지 않는다.
+      - mosquitto-pc-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    tmpfs:
+      - /mosquitto/private
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        cp /mosquitto/security/passwords /mosquitto/security/acl /mosquitto/security/server.crt /mosquitto/security/server.key /mosquitto/private/
+        chown -R mosquitto:mosquitto /mosquitto/private
+        chmod 0700 /mosquitto/private /mosquitto/private/*
+        exec mosquitto -c /mosquitto/config/mosquitto.conf
+
+volumes:
+  mosquitto-pc-data:
