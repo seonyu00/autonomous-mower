@@ -240,7 +240,27 @@ DB·MQTT까지 중지하려면 백엔드 종료 후 `docker stop autonomous-mowe
 
 MQTT의 컨테이너 내부 포트는 8883이지만 PC 호스트 포트는 18883이다. 적용 PC에서 8883이 Windows 예약 포트에 포함된 것을 확인해 변경했으며, 다른 PC에서도 예약 포트·실제 바인딩을 확인해야 한다. 브로커는 과거 retained 메시지가 남은 개발 볼륨 대신 별도 `mosquitto-pc-data` 볼륨을 사용한다. 기존 `mosquitto-data`와 DB 볼륨은 보존한다. `down -v`나 volume prune을 실행하지 않는다.
 
-현재 PC용 서버 인증서는 90일, CA는 365일이며 SAN에 localhost와 해당 PC의 Tailscale DNS 이름이 들어 있다. 만료일과 CA 배포를 확인한 뒤 갱신한다. 현재 포트는 loopback 전용이므로 Jetson에서는 아직 접속할 수 없다. 실제 Robot ID가 확인되면 해당 장비 계정·ACL·Tailscale 바인딩을 별도 적용하고 재검증한다.
+현재 PC용 서버 인증서는 90일, CA는 365일이며 SAN에 localhost와 해당 PC의 Tailscale DNS 이름이 들어 있다. 만료일과 CA 배포를 확인한 뒤 갱신한다. 브로커의 Docker 포트는 loopback 전용으로 유지한다. Jetson 접속은 아래 Tailscale 전용 경로를 사용한다.
+
+### Jetson의 Tailscale 전용 MQTT 접속
+
+PC와 Jetson에서 Tailscale이 연결된 상태로 PC의 TLS 브로커를 먼저 기동한다. 장비 계정·로봇별 ACL·CA와 Jetson의 실제 설정을 준비한 PC에서 다음 명령으로 내부 접속 경로를 관리한다. `mqtt.ps1` 자체가 계정이나 인증서를 발급하지는 않는다.
+
+```powershell
+./tools/pc-demo/mqtt.ps1 -Action Start
+./tools/pc-demo/mqtt.ps1 -Action Status
+# 시연 종료: MQTT 내부 접속 경로를 닫고 기존 웹·백엔드 종료를 진행한다.
+./tools/pc-demo/mqtt.ps1 -Action Stop
+./tools/pc-demo/stop.ps1
+```
+
+이 경로는 [Tailscale Serve](https://tailscale.com/docs/reference/tailscale-cli/serve)의 TCP 18883 전달로 PC 내부 `127.0.0.1:18883`에 연결한다. 브로커까지 TLS를 유지하며 같은 Tailscale 네트워크의 접근 정책이 허용하는 기기만 접속할 수 있다. 인터넷 공개용 Funnel 443은 별도로 유지하고 MQTT 포트에는 Funnel을 사용하지 않는다. 다른 서비스가 18883을 사용하거나 MQTT 포트가 Funnel 공개 상태이면 스크립트가 변경을 거부한다. `stop.ps1`만 실행하면 MQTT 경로와 브로커는 유지되므로 MQTT 경로도 닫으려면 위 Stop을 먼저 실행한다.
+
+Jetson의 접속 URL은 `mqtts://<PC_TAILSCALE_DNS>:18883`이며 인증서 SAN과 이름이 일치해야 한다. 초기 장비 계정에는 해당 `<ROBOT_ID>`의 `telemetry`·`status` 발행만 허용한다. 명령 수신·발행과 ACK·event 권한은 이 단계에 포함하지 않는다. 실제 자격 증명은 Git 제외 설정 파일에 보관하고 소유자만 읽도록 제한한다. CA 공개 인증서만 Jetson에 복사하며 CA·서버 개인키는 복사하지 않는다.
+
+2026-10-21 실제 Jetson에서 TLS 1.3·정상 계정 접속, 허용 토픽 전달과 익명·잘못된 비밀번호·CA·호스트명 거부를 확인했다. 다른 로봇 토픽·이벤트 발행은 MQTT 5 진단 PUBACK의 Not authorized(135)와 수신 측 미전달로 대조했다. 실제 클라이언트 접속은 기존 MQTT 3.1.1을 유지한다. 전송 표식에는 위치·배터리 등 상태 필드를 넣지 않았고 DB 내용 지문을 보존했다. 상시 상태 발행 프로그램·ROS·주행 노드는 실행하지 않았으므로 실제 센서와 웹 상태 수신은 별도 단계다.
+
+접속 경로의 모의 검사 7개는 `powershell -NoProfile -File tools/pc-demo/mqtt.test.ps1` 또는 `pwsh -NoProfile -File tools/pc-demo/mqtt.test.ps1`로 실행한다. 실제 Tailscale·브로커·포트를 변경하지 않는다.
 
 백엔드는 실제 배포 프론트 Origin을 `APP_ALLOWED_ORIGINS`에 포함한다. 이 단계의 HTTP·WS 검증은 PC 내부 검증이며 HTTPS·WSS의 외부 접속 검증이 아니다. Funnel을 준비·검증한 뒤 Vercel의 `VITE_API_BASE_URL`과 `VITE_WSS_URL`을 등록하고 다시 배포한다. 실제 공개 주소가 준비되기 전에는 위 loopback 주소를 Vercel에 넣지 않는다.
 
