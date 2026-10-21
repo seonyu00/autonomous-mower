@@ -1026,6 +1026,7 @@ Backend env:
 - 3-B-1에서는 Java `MqttConfig`·Node `mqtt-tls.cjs`·Python `mqtt_edge.py`에 선택적 CA 신뢰와 TLS 1.2 이상·호스트명 검증을 준비했다. `docker-compose.mqtt-security.yml`, `docker/mosquitto/mosquitto-security-test.conf`, `tools/mqtt-security/prepare.ps1`은 인증·로봇별 ACL을 검사하는 별도 loopback 브로커 구성이다. 실제 접속·거부 검사를 PC에서 통과했으며 루트 개발용 설정 파일에는 익명 접속 기본값이 남아 있다. 실행 방법과 검증 한계는 [README](../README.md#mqtt-인증acltls의-격리-검증)를 따른다.
 - 2026-10-20의 3-B-2 PC 적용에서는 `docker-compose.pc-demo.yml`·`mosquitto-pc-demo.conf`·`tools/pc-demo/start.ps1`로 기존 DB 볼륨을 보존하면서 DB5432·API8080·MQTT TLS18883을 loopback에 제한했다. 실제 실행은 백엔드 계정만 허용하는 TLS 브로커를 사용하며, 루트 개발 Compose의 평문·익명 설정은 별도로 남아 있다. 재실행은 [README](../README.md#pc-시연-환경-재실행)를 따른다. 이후 `tools/pc-demo/funnel.ps1`로 웹 백엔드만 공개했고 실제 Stop·Start와 공개 중계 경로의 HTTPS·WSS 13개 검사를 통과했다. 외부 기기의 Vercel 브라우저와 실제 Jetson 검증은 남아 있다.
 - 2026-10-21에는 PC Chrome의 고정 Production 도메인에서 실제 로그인·등록 로봇 조회·네이버 위성지도·HTTPS/WSS 연결 표시를 확인했다. 개별 배포 도메인은 허용 Origin과 달라 CORS 사전 요청이 403으로 거부됐다. 외부 휴대폰·실제 Jetson·텔레메트리 수신과 물리 동작은 미검증이다.
+- `tools/pc-demo/stop.ps1`은 Funnel 공개를 먼저 해제하고 실행 기록과 신원이 일치하는 백엔드만 종료한다. DB·MQTT는 유지하고 이미 종료된 상태의 재실행을 지원한다. `stop.test.ps1`의 모의 검사 10개가 PowerShell 5.1·7에서 각각 통과했고 실제 종료·재종료·재기동을 확인했다. 사용 순서는 [README](../README.md#pc-시연-환경-재실행)를 따른다.
 
 Production 확인 필요:
 

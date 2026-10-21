@@ -16,6 +16,10 @@ foreach ($site in $existing.Web.PSObject.Properties) {
         }
     }
 }
+if ($Action -eq 'Stop' -and -not $existing.TCP.'443') {
+    & tailscale funnel status
+    exit $LASTEXITCODE
+}
 if ($Action -eq 'Start') {
     $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
     $runtime = Get-Content -LiteralPath (Join-Path $repo '.local-docs/pc-demo/runtime.json') -Raw | ConvertFrom-Json

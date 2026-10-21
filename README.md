@@ -225,6 +225,19 @@ Invoke-RestMethod http://127.0.0.1:8080/actuator/health
 
 실행기는 비밀번호를 CLI 인자로 넘기지 않고 백엔드 프로세스 환경에 전달한다. 프로세스는 별도 창 없이 실행되며 로그와 PID는 로컬 설정의 `runDirectory`에 저장된다. 이미 8080을 사용 중이면 기존 서버를 자동 종료하지 않고 중단한다. `.env` 파일만 수정하는 것으로 실행 중인 백엔드 설정이 바뀌지는 않는다.
 
+`start.ps1`은 PC 내부의 DB·MQTT·백엔드를 켠다. 외부 웹에서 접속하려면 health가 UP인 것을 확인한 뒤 `funnel.ps1 -Action Start`로 HTTPS·WSS 공개 경로를 연다. Funnel의 백그라운드 설정이 이미 남아 있으면 백엔드 기동만으로 접속이 복구될 수 있으므로 공개 상태도 함께 확인한다.
+
+```powershell
+# 백엔드 준비 후 인터넷 접속을 연다.
+./tools/pc-demo/funnel.ps1 -Action Start
+# 시연 종료: 외부 접속을 닫고 백엔드 프로세스까지 종료한다.
+./tools/pc-demo/stop.ps1
+```
+
+`stop.ps1`은 Funnel을 먼저 닫고 실행 기록의 PID·Java 경로·JAR 인자·생성 시각이 일치하는 백엔드만 종료한다. 공개 해제에 실패하면 백엔드를 유지하고 오류를 표시한다. 기록과 프로세스가 다르면 자동 종료하지 않으며, 이미 종료된 상태에서는 완료 메시지만 표시한다. DB·MQTT 컨테이너와 데이터·실행 기록은 유지한다. 장비 제어 명령을 발행하는 스크립트는 아니다.
+
+DB·MQTT까지 중지하려면 백엔드 종료 후 `docker stop autonomous-mower-mosquitto autonomous-mower-postgres`를 별도로 실행한다. 다음 시연에는 Docker Desktop을 켜고 위 `start.ps1`을 사용한다. 종료 경계의 모의 검사는 `powershell -NoProfile -File tools/pc-demo/stop.test.ps1` 또는 `pwsh -NoProfile -File tools/pc-demo/stop.test.ps1`로 실행하며 실제 Tailscale·프로세스·포트를 변경하지 않는다.
+
 MQTT의 컨테이너 내부 포트는 8883이지만 PC 호스트 포트는 18883이다. 적용 PC에서 8883이 Windows 예약 포트에 포함된 것을 확인해 변경했으며, 다른 PC에서도 예약 포트·실제 바인딩을 확인해야 한다. 브로커는 과거 retained 메시지가 남은 개발 볼륨 대신 별도 `mosquitto-pc-data` 볼륨을 사용한다. 기존 `mosquitto-data`와 DB 볼륨은 보존한다. `down -v`나 volume prune을 실행하지 않는다.
 
 현재 PC용 서버 인증서는 90일, CA는 365일이며 SAN에 localhost와 해당 PC의 Tailscale DNS 이름이 들어 있다. 만료일과 CA 배포를 확인한 뒤 갱신한다. 현재 포트는 loopback 전용이므로 Jetson에서는 아직 접속할 수 없다. 실제 Robot ID가 확인되면 해당 장비 계정·ACL·Tailscale 바인딩을 별도 적용하고 재검증한다.
