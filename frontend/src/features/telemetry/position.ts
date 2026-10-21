@@ -1,5 +1,7 @@
-export function hasUsablePosition(latitude: number | undefined, longitude: number | undefined) {
-  if (latitude === undefined || longitude === undefined) {
+import type { Telemetry } from './types';
+
+export function hasUsablePosition(latitude: number | null | undefined, longitude: number | null | undefined) {
+  if (latitude == null || longitude == null) {
     return false;
   }
 
@@ -12,4 +14,10 @@ export function hasUsablePosition(latitude: number | undefined, longitude: numbe
     longitude <= 180 &&
     !(latitude === 0 && longitude === 0)
   );
+}
+
+export function hasUsableTelemetryPosition(
+  telemetry: Telemetry | undefined,
+): telemetry is Telemetry & { latitude: number; longitude: number } {
+  return telemetry !== undefined && hasUsablePosition(telemetry.latitude, telemetry.longitude);
 }

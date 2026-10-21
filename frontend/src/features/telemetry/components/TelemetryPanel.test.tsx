@@ -36,6 +36,35 @@ describe('TelemetryPanel compact summary', () => {
     expect(screen.getByLabelText('텔레메트리 수신 상태')).toBeInTheDocument();
   });
 
+  it('센서 미수신과 실제 0 값을 구분하고 나중에 도착한 값을 표시한다', () => {
+    const telemetry = useTelemetryStore.getState().telemetryByRobotId[TEST_ROBOT_ID];
+    const partial = { ...telemetry, latitude: null, longitude: null, batteryLevel: null,
+      speedMps: null, signalStrength: null, mode: null, workState: null };
+    act(() => useTelemetryStore.getState().upsertTelemetry(partial));
+    render(<TelemetryPanel />);
+    expect(screen.getAllByText('미수신')).toHaveLength(3);
+    expect(screen.getByText('모드 미수신')).toBeInTheDocument();
+    expect(screen.getByText('작업 상태 미수신')).toBeInTheDocument();
+    expect(screen.getByText('위치 수신 대기')).toBeInTheDocument();
+    expect(screen.queryByText('0%')).not.toBeInTheDocument();
+    expect(screen.queryByText('0.0 m/s')).not.toBeInTheDocument();
+
+    act(() => useTelemetryStore.getState().upsertTelemetry({ ...partial, batteryLevel: 0, speedMps: 0 }));
+    expect(screen.getByText('0%')).toBeInTheDocument();
+    expect(screen.getByText('0.0 m/s')).toBeInTheDocument();
+  });
+
+  it('GPS만 수신한 compact 요약은 나머지 센서를 미수신으로 표시한다', () => {
+    const telemetry = useTelemetryStore.getState().telemetryByRobotId[TEST_ROBOT_ID];
+    act(() => useTelemetryStore.getState().upsertTelemetry({ ...telemetry, batteryLevel: null,
+      speedMps: null, signalStrength: null, mode: null, workState: null }));
+    render(<TelemetryPanel compact />);
+    expect(screen.getByRole('heading', { name: '작업 상태 미수신' })).toBeInTheDocument();
+    expect(screen.getAllByText('미수신')).toHaveLength(2);
+    expect(screen.getByText('모드 미수신')).toBeInTheDocument();
+    expect(screen.getByText('GPS 수신')).toBeInTheDocument();
+  });
+
   it('미수신 안내에서 텔레메트리를 수신하면 작업 상태와 배터리 요약으로 전환한다', () => {
     const telemetry = useTelemetryStore.getState().telemetryByRobotId[TEST_ROBOT_ID];
     useTelemetryStore.setState({ telemetryByRobotId: {}, receptionByRobotId: {}, dataSource: 'real' });

@@ -19,6 +19,7 @@ from .config import EdgeConfig, load_config
 from .hardware_safety import publish_emergency_stop_outputs
 from .mqtt_edge import MqttEdgeClient
 from .topics import MowerTopics, command_type_from_topic
+from .telemetry import build_telemetry_payload
 
 
 class JetsonMowerClientNode(Node):
@@ -28,9 +29,10 @@ class JetsonMowerClientNode(Node):
         self._topics = MowerTopics(config.robot_id)
         self._mqtt = MqttEdgeClient(config, self._topics, self._handle_mqtt_message, self.get_logger().info)
         self._emergency_active = False
-        self._mode = "idle"
-        self._work_state = "idle"
+        self._mode: str | None = None
+        self._work_state: str | None = None
         self._latest_fix: NavSatFix | None = None
+        self._latest_fix_received_at: float | None = None
         self._latest_imu: Imu | None = None
         self._last_manual_command_monotonic: float | None = None
         self._recent_command_keys: OrderedDict[str, None] = OrderedDict()
@@ -55,6 +57,7 @@ class JetsonMowerClientNode(Node):
 
     def _handle_fix(self, message: NavSatFix) -> None:
         self._latest_fix = message
+        self._latest_fix_received_at = time.monotonic()
 
     def _handle_imu(self, message: Imu) -> None:
         self._latest_imu = message
@@ -225,19 +228,16 @@ class JetsonMowerClientNode(Node):
         return False
 
     def _publish_telemetry(self) -> None:
-        fix = self._latest_fix
-        payload = {
-            "robotId": self._config.robot_id,
-            "latitude": float(fix.latitude) if fix else 0.0,
-            "longitude": float(fix.longitude) if fix else 0.0,
-            "batteryLevel": self._config.telemetry.default_battery_level,
-            "mode": self._mode,
-            "workState": self._work_state,
-            "speedMps": 0.0,
-            "signalStrength": self._config.telemetry.default_signal_strength,
-            "receivedAt": utc_now(),
-            "errorState": "emergency-stop-active" if self._emergency_active else None,
-        }
+        payload = build_telemetry_payload(
+            self._config.robot_id,
+            utc_now(),
+            fix=self._latest_fix,
+            fix_age_seconds=None if self._latest_fix_received_at is None
+            else time.monotonic() - self._latest_fix_received_at,
+            mode=self._mode,
+            work_state=self._work_state,
+            error_state="emergency-stop-active" if self._emergency_active else None,
+        )
         # TODO: 속도, 배터리, 신호 세기는 실제 ROS/Jetson 소스에서 계산한다.
         # TODO: 영상 송출 구현 후 카메라/WebRTC 상태를 추가한다.
         self._mqtt.publish_json(self._topics.telemetry, payload, qos=1)
@@ -247,7 +247,7 @@ class JetsonMowerClientNode(Node):
             "robotId": self._config.robot_id,
             "connectionState": "degraded" if self._emergency_active else "online",
             "mqttState": "connected",
-            "edgeState": "emergency" if self._emergency_active else self._mode,
+            "edgeState": "emergency" if self._emergency_active else self._mode or "connected",
             "lastSeenAt": utc_now(),
             "stale": False,
         }

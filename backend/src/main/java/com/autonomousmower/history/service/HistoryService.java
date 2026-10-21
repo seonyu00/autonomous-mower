@@ -9,6 +9,7 @@ import com.autonomousmower.telemetry.repository.TelemetryLogRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.locationtech.jts.geom.Point;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,8 +37,13 @@ public class HistoryService {
 
         List<List<Double>> coordinates = logs.stream()
                 .map(TelemetryLog::getLocationPoint)
+                .filter(Objects::nonNull)
                 .map(this::toPosition)
                 .toList();
+        // 위치가 없는 수신 기록을 지도 원점이나 임의 경로로 바꾸지 않는다.
+        if (coordinates.isEmpty()) {
+            return List.of();
+        }
         GeoJsonFeatureDto route = new GeoJsonFeatureDto(
                 "Feature",
                 coordinates.size() == 1 ? new GeometryDto("Point", coordinates.getFirst()) : GeometryDto.lineString(coordinates),

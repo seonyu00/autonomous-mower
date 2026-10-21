@@ -11,12 +11,15 @@ export function applyRealtimeMessage(message: TopicMessage) {
   }
   if (message.type === 'telemetry') {
     useTelemetryStore.getState().upsertTelemetry(message.payload);
-    const emergency = message.payload.mode === 'emergency';
-    useControlStore.getState().patchControlState(message.payload.robotId, {
-      mode: message.payload.mode,
-      emergency,
-      ...(emergency ? { manualActive: false } : {}),
-    });
+    // 모드 미수신은 기존 모드나 긴급 정지를 해제하는 신호가 아니다.
+    if (message.payload.mode !== null) {
+      const emergency = message.payload.mode === 'emergency';
+      useControlStore.getState().patchControlState(message.payload.robotId, {
+        mode: message.payload.mode,
+        emergency,
+        ...(emergency ? { manualActive: false } : {}),
+      });
+    }
   }
 
   if (message.type === 'status') {

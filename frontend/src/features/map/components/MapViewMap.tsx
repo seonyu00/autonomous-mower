@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { env } from '../../../shared/config/env';
 import { useRobotStore } from '../../robots/robotStore';
-import { hasUsablePosition } from '../../telemetry/position';
+import { hasUsableTelemetryPosition } from '../../telemetry/position';
 import { useTelemetryStore } from '../../telemetry/telemetryStore';
 import type { LngLat, PolygonGeometry } from '../geojson';
 import { mockRouteByRobotId } from '../mockMapData';
@@ -51,7 +51,7 @@ export function MapViewMap() {
   const editingByRobotId = useZoneStore((state) => state.editingByRobotId);
   const addDraftVertex = useZoneStore((state) => state.addDraftVertex);
   const moveDraftVertex = useZoneStore((state) => state.moveDraftVertex);
-  const positionAvailable = hasUsablePosition(telemetry?.latitude, telemetry?.longitude);
+  const positionAvailable = hasUsableTelemetryPosition(telemetry);
   const sampleMode = dataSource === 'mock';
   const livePositionAvailable = positionAvailable && !sampleMode;
   const sampleRoute = sampleMode && selectedRobotId ? mockRouteByRobotId[selectedRobotId] : undefined;
@@ -106,7 +106,7 @@ export function MapViewMap() {
       <NaverOperationalMap
         clientId={env.naverMapClientId}
         robotId={selectedRobotId}
-        robotMode={telemetry?.mode}
+        robotMode={telemetry?.mode ?? undefined}
         livePositionAvailable={livePositionAvailable}
         markerPosition={markerPosition}
         headingDegrees={headingDegrees}

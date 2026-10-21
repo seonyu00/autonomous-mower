@@ -11,17 +11,17 @@ export type TelemetryReception = {
 
 export type Telemetry = {
   robotId: string;
-  latitude: number;
-  longitude: number;
-  batteryLevel: number;
-  mode: RobotMode;
-  workState: WorkState;
-  speedMps: number;
-  signalStrength: number;
+  latitude: number | null;
+  longitude: number | null;
+  batteryLevel: number | null;
+  mode: RobotMode | null;
+  workState: WorkState | null;
+  speedMps: number | null;
+  signalStrength: number | null;
   lastReceivedAt: string;
   edgeSampledAt?: string | null;
   serverTimestamp?: string;
-  errorState?: string;
+  errorState?: string | null;
 };
 
 export type RobotStatus = {

@@ -1,6 +1,6 @@
 import { useRobotStore } from '../../robots/robotStore';
 import { receptionLabels, useTelemetryReception } from '../useTelemetryReception';
-import { hasUsablePosition } from '../position';
+import { hasUsableTelemetryPosition } from '../position';
 import { useTelemetryStore } from '../telemetryStore';
 import type { RobotMode, WorkState } from '../types';
 
@@ -44,22 +44,26 @@ export function TelemetryPanel({ compact = false }: TelemetryPanelProps) {
       : selectedRobot?.connectionState === 'degraded'
         ? '지연'
         : '오프라인';
-  const positionAvailable = hasUsablePosition(telemetry.latitude, telemetry.longitude);
+  const positionAvailable = hasUsableTelemetryPosition(telemetry);
+  const batteryText = telemetry.batteryLevel === null ? '미수신' : `${telemetry.batteryLevel}%`;
+  const speedText = telemetry.speedMps === null ? '미수신' : `${telemetry.speedMps.toFixed(1)} m/s`;
+  const modeText = telemetry.mode === null ? '모드 미수신' : modeLabels[telemetry.mode];
+  const workText = telemetry.workState === null ? '작업 상태 미수신' : workLabels[telemetry.workState];
 
   if (compact) {
     return (
       <section className="telemetry-panel compact-telemetry" aria-label="선택 로봇 요약 텔레메트리">
         <div className="overview-state">
           <p className="overview-source">{telemetry.robotId}{dataSource === 'mock' ? ' · 샘플 텔레메트리' : ' · 현재 장비'}</p>
-          <h2>{workLabels[telemetry.workState]}</h2>
-          <p><span>{modeLabels[telemetry.mode]}</span> · <span>{connectionText}</span></p>
+          <h2>{workText}</h2>
+          <p><span>{modeText}</span> · <span>{connectionText}</span></p>
         </div>
         <div className="overview-metric">
-          <Metric label="배터리" value={`${telemetry.batteryLevel}%`} priority />
+          <Metric label="배터리" value={batteryText} priority />
           <span className="overview-note">장비 전원 상태</span>
         </div>
         <div className="overview-metric">
-          <Metric label="속도" value={`${telemetry.speedMps.toFixed(1)} m/s`} priority />
+          <Metric label="속도" value={speedText} priority />
           <span className="overview-note">GPS / RTK · <span>{positionAvailable ? dataSource === 'mock' ? '샘플 위치' : 'GPS 수신' : 'GPS 미수신'}</span></span>
         </div>
         <div className="overview-metric">
@@ -83,11 +87,11 @@ export function TelemetryPanel({ compact = false }: TelemetryPanelProps) {
       </div>
 
       <div className="metric-grid">
-        <Metric label="배터리" value={`${telemetry.batteryLevel}%`} />
-        <Metric label="모드" value={modeLabels[telemetry.mode]} />
-        <Metric label="작업" value={workLabels[telemetry.workState]} />
-        <Metric label="속도" value={`${telemetry.speedMps.toFixed(1)} m/s`} />
-        <Metric label="신호" value={`${telemetry.signalStrength}%`} />
+        <Metric label="배터리" value={batteryText} />
+        <Metric label="모드" value={modeText} />
+        <Metric label="작업" value={workText} />
+        <Metric label="속도" value={speedText} />
+        <Metric label="신호" value={telemetry.signalStrength === null ? '미수신' : `${telemetry.signalStrength}%`} />
         <Metric label="마지막 수신" value={lastReceivedText} />
       </div>
 

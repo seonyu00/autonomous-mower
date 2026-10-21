@@ -26,6 +26,36 @@ import org.mockito.Mockito;
 class MqttBridgeServiceTest {
 
     @Test
+    void partialMeasurementsKeepNullsThroughJsonAndStomp() throws Exception {
+        ObjectMapper mapper = objectMapper();
+        MqttTelemetryPayload payload = mapper.readValue("""
+                {"robotId":"PARTIAL-TEST","latitude":37.5,"batteryLevel":0,
+                 "receivedAt":"2026-10-21T00:00:00Z"}
+                """, MqttTelemetryPayload.class);
+        assertThat(payload.latitude()).isNull();
+        assertThat(payload.longitude()).isNull();
+        assertThat(payload.batteryLevel()).isZero();
+        assertThat(payload.speedMps()).isNull();
+
+        RealtimePublisher publisher = Mockito.mock(RealtimePublisher.class);
+        MqttInboundPersistenceService persistence = Mockito.mock(MqttInboundPersistenceService.class);
+        Instant serverTime = Instant.parse("2026-10-21T00:00:01Z");
+        when(persistence.persistTelemetry(payload, serverTime)).thenReturn(true);
+        MqttInboundHandler handler = new MqttInboundHandler(publisher, persistence,
+                Mockito.mock(CommandExecutionService.class), Mockito.mock(TelemetryReceptionService.class),
+                Clock.fixed(serverTime, ZoneOffset.UTC));
+        handler.handleTelemetry(payload);
+        ArgumentCaptor<TelemetryMessage> captor = ArgumentCaptor.forClass(TelemetryMessage.class);
+        verify(publisher).publishTelemetry(captor.capture());
+        var json = mapper.readTree(mapper.writeValueAsString(captor.getValue()));
+        assertThat(json.get("latitude").isNull()).isTrue();
+        assertThat(json.get("speedMps").isNull()).isTrue();
+        assertThat(json.get("mode").isNull()).isTrue();
+        assertThat(json.get("batteryLevel").intValue()).isZero();
+        assertThat(captor.getValue().lastReceivedAt()).isEqualTo(serverTime);
+    }
+
+    @Test
     void inboundTelemetryPublishesStompTelemetryMessage() {
         RealtimePublisher realtimePublisher = Mockito.mock(RealtimePublisher.class);
         MqttInboundPersistenceService persistenceService = Mockito.mock(MqttInboundPersistenceService.class);

@@ -261,7 +261,7 @@ export function NaverOperationalMap({
       icon: {
         content: createRobotMarker(
           robotId,
-          livePositionAvailable ? robotMode ?? 'idle' : 'sample',
+            livePositionAvailable ? robotMode ?? 'unknown' : 'sample',
           headingDegrees ?? 0,
         ),
         anchor: { x: 12, y: 12 },

@@ -244,6 +244,8 @@ MQTT의 컨테이너 내부 포트는 8883이지만 PC 호스트 포트는 18883
 
 ### Jetson의 Tailscale 전용 MQTT 접속
 
+센서별 미수신 지원 코드에서는 기존 `telemetry` 토픽의 1Hz 메시지에 각 측정값 또는 `null`을 보낸다. GPS만 수신하면 위치부터 표시하고 배터리·속도 등은 `미수신`으로 둔다. 실제 `0%`·`0 m/s`는 숫자로 표시한다. 이 변경을 배포하려면 백엔드의 V10 마이그레이션과 프론트·장비 코드를 함께 적용해야 하며, 아래 MQTT 접속 경로만 켜는 것으로 코드가 갱신되지는 않는다. 필드 규칙은 [MQTT 계약](docs/mqtt-topic-contract.md#telemetry-payload)과 [실시간 API 계약](docs/api-contract.md#41-topicrobotsrobotidtelemetry)을 따른다.
+
 PC와 Jetson에서 Tailscale이 연결된 상태로 PC의 TLS 브로커를 먼저 기동한다. 장비 계정·로봇별 ACL·CA와 Jetson의 실제 설정을 준비한 PC에서 다음 명령으로 내부 접속 경로를 관리한다. `mqtt.ps1` 자체가 계정이나 인증서를 발급하지는 않는다.
 
 ```powershell

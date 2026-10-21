@@ -172,7 +172,7 @@ describe('MapViewMap', () => {
     act(() => {
       useTelemetryStore.getState().upsertTelemetry({
         ...telemetry,
-        latitude: telemetry.latitude + 0.0001,
+        latitude: (telemetry.latitude as number) + 0.0001,
         lastReceivedAt: new Date().toISOString(),
       });
     });

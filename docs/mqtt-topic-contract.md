@@ -231,6 +231,8 @@ QoS: 1
 
 Publish rate: nominal 1 Hz.
 
+2026-10-21 확장: 각 메시지는 그 시점의 센서별 상태를 담는 스냅샷이다. 위치·배터리·모드·작업·속도·신호가 모두 준비될 때까지 기다리지 않는다. 미측정·미지원·더 이상 유효하지 않은 값은 `null`이며, 수신 측은 이를 이전 값이나 기본 숫자로 채우지 않는다. MQTT에서 측정 필드를 생략해도 `null`로 처리한다. 기존 숫자 메시지는 그대로 지원하며 명령·ACK 계약은 변경하지 않는다.
+
 ```json
 {
   "robotId": "<ROBOT_ID>",
@@ -248,13 +250,16 @@ Publish rate: nominal 1 Hz.
 
 Field policy:
 
-- `batteryLevel`: integer `0..100`.
-- `mode`: `idle`, `manual`, `autonomous`, `home`, or `emergency`.
-- `workState`: `idle`, `mowing`, `paused`, `returning-home`, or `error`.
-- `speedMps`: current ground speed in meters per second.
-- `signalStrength`: integer `0..100`.
+- `latitude`·`longitude`: 유효한 위치 한 쌍 또는 둘 다 `null`. 한쪽만 주어지면 위치 한 쌍을 `null`로 처리하고 다른 센서값은 유지한다.
+- `batteryLevel`: 정수 `0..100` 또는 `null`. `0`은 실제 측정값이며 미수신 표시로 사용하지 않는다.
+- `mode`: `idle`, `manual`, `autonomous`, `home`, `emergency` 또는 `null`.
+- `workState`: `idle`, `mowing`, `paused`, `returning-home`, `error` 또는 `null`.
+- `speedMps`: 지상 속도(m/s) 또는 `null`. 실제 정지 속도 `0`과 미수신을 구분한다.
+- `signalStrength`: 정수 `0..100` 또는 `null`.
 - `receivedAt`: Jetson timestamp when telemetry sample was produced.
 - `errorState`: nullable machine-readable string.
+
+현재 Jetson 클라이언트는 유효한 GPS fix가 최근 3초 미만에 도착한 경우에만 위치를 보낸다. 배터리·속도·신호의 실제 입력원은 아직 없어 `null`을 보낸다. 초기 모드·작업도 `null`이며 기존 명령 처리로 갱신되는 로컬 소프트웨어 상태를 STM32 실행 완료로 해석하지 않는다. 센서 미수신과 메시지 자체의 통신 두절은 별개다.
 
 ## Status Payload
 

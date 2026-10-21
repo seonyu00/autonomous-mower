@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { parseTopicMessage } from './topicRouter';
 
 describe('parseTopicMessage', () => {
+  it('측정값 null과 실제 0을 허용하고 숫자 문자열은 거부한다', () => {
+    const payload = { robotId: 'PARTIAL', latitude: null, longitude: null, batteryLevel: 0,
+      mode: null, workState: null, speedMps: null, signalStrength: null,
+      lastReceivedAt: '2026-10-21T00:00:00Z' };
+    const topic = '/topic/robots/PARTIAL/telemetry';
+    expect(parseTopicMessage(topic, JSON.stringify(payload))).toEqual({ type: 'telemetry', payload });
+    expect(parseTopicMessage(topic, JSON.stringify({ ...payload, batteryLevel: '0' })).type).toBe('unknown');
+  });
   it('일반 events의 서버 이벤트 이름을 허용하고 잘못된 시각·로봇·심각도는 거부한다', () => {
     const event = { id: 'event-1', robotId: 'MOWER-01', severity: 'warning', eventType: 'telemetry-delayed',
       message: '수신 지연', occurredAt: '2026-09-10T00:00:00Z', source: 'telemetry-monitor' };

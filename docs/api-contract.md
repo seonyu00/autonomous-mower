@@ -697,6 +697,10 @@ Frontend currently subscribes per selected robot. Backend should allow unsubscri
 
 SRS 기준 약 1Hz로 전송한다. 서버 마지막 수신 후 3초 이상이면 `delayed`로 판정한다. 서버는 250ms 주기로 상태 전이를 검사하고, 브라우저도 추가 메시지 없이 경과 시간을 갱신한다.
 
+2026-10-21부터 `latitude`, `longitude`, `batteryLevel`, `mode`, `workState`, `speedMps`, `signalStrength`는 각각 `null`을 허용한다. 서버는 측정 필드를 모두 포함해 보내며 `null`은 해당 시점의 미수신·미측정을 뜻한다. 위치는 두 좌표가 함께 있어야 하며 한쪽이 없으면 둘 다 `null`이다. 실제 `0%`·`0 m/s`와 구분하고, 이전 값을 자동으로 이어 붙이지 않는다. 기존의 모든 값이 있는 메시지도 유지한다.
+
+부분 수신 메시지도 서버 수신 시각과 통신 감시에 반영한다. 수신 상태의 `normal`은 메시지가 최근에 도착했다는 뜻이며 모든 센서가 정상이라는 뜻은 아니다. 웹은 값이 없는 지표에 `미수신`을 표시하고, 모드가 `null`이면 기존 제어 모드·긴급 정지 상태를 변경하지 않는다. GPS가 없는 기록은 지도 위치나 작업 이력 경로의 임의 좌표로 바꾸지 않는다.
+
 Payload:
 
 ```json

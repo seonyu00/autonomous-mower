@@ -95,6 +95,10 @@ function isNullableString(value: unknown): value is string | null {
   return value === null || isString(value);
 }
 
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isFinite(value));
+}
+
 function isControlEventStatus(value: unknown): value is ControlCommandEvent['status'] {
   return (
     value === 'accepted' ||
@@ -115,13 +119,13 @@ function isTelemetry(value: unknown): value is Telemetry {
 
   return (
     isString(value.robotId) &&
-    typeof value.latitude === 'number' &&
-    typeof value.longitude === 'number' &&
-    typeof value.batteryLevel === 'number' &&
-    isString(value.mode) &&
-    isString(value.workState) &&
-    typeof value.speedMps === 'number' &&
-    typeof value.signalStrength === 'number' &&
+    isNullableNumber(value.latitude) &&
+    isNullableNumber(value.longitude) &&
+    isNullableNumber(value.batteryLevel) &&
+    isNullableString(value.mode) &&
+    isNullableString(value.workState) &&
+    isNullableNumber(value.speedMps) &&
+    isNullableNumber(value.signalStrength) &&
     isString(value.lastReceivedAt) &&
     (value.edgeSampledAt === undefined || isNullableString(value.edgeSampledAt)) &&
     (value.serverTimestamp === undefined || isString(value.serverTimestamp))

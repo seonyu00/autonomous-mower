@@ -117,4 +117,15 @@ describe('applyRealtimeMessage', () => {
       manualActive: false,
     });
   });
+
+  it('모드 미수신은 기존 긴급 정지와 제어 모드를 바꾸지 않는다', () => {
+    useControlStore.getState().patchControlState(TEST_ROBOT_ID, { mode: 'emergency', emergency: true, manualActive: false });
+    const sample = useTelemetryStore.getState().telemetryByRobotId[TEST_ROBOT_ID];
+    applyRealtimeMessage({ type: 'telemetry', payload: { ...sample, mode: null, workState: null,
+      latitude: null, longitude: null, batteryLevel: null, speedMps: null, signalStrength: null } });
+    expect(useControlStore.getState().getControlState(TEST_ROBOT_ID)).toMatchObject({
+      mode: 'emergency', emergency: true, manualActive: false,
+    });
+    expect(useTelemetryStore.getState().telemetryByRobotId[TEST_ROBOT_ID].mode).toBeNull();
+  });
 });

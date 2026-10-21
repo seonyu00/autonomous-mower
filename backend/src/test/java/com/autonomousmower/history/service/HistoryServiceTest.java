@@ -77,6 +77,21 @@ class HistoryServiceTest {
         assertThat(new HistoryService(telemetryLogRepository, robotService).findHistory("MOWER-01", null, null)).isEmpty();
     }
 
+    @Test
+    void missingLocationsAreNotConvertedToRouteCoordinates() {
+        Robot robot = new Robot("MOWER-01", "test", LocalDateTime.now());
+        TelemetryLog missing = new TelemetryLog(robot, null, null, null, LocalDateTime.now());
+        when(telemetryLogRepository.findByRobotRobotIdOrderByRecordedAtAsc("MOWER-01"))
+                .thenReturn(List.of(missing));
+        HistoryService service = new HistoryService(telemetryLogRepository, robotService);
+        assertThat(service.findHistory("MOWER-01", null, null)).isEmpty();
+
+        when(telemetryLogRepository.findByRobotRobotIdOrderByRecordedAtAsc("MOWER-01"))
+                .thenReturn(List.of(missing, telemetryLog(robot, 127.0, 37.5, "2026-10-21T00:00:00")));
+        assertThat(service.findHistory("MOWER-01", null, null).getFirst().route().geometry().coordinates())
+                .isEqualTo(List.of(127.0, 37.5));
+    }
+
     private TelemetryLog telemetryLog(Robot robot, double longitude, double latitude, String recordedAt) {
         Point point = geometryFactory.createPoint(new Coordinate(longitude, latitude));
         point.setSRID(4326);

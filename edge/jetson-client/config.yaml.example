@@ -32,5 +32,6 @@ ros:
   max_angular_radps: 1.0
 
 telemetry:
+  # 이전 설정과의 호환용이며 실제 배터리·신호 텔레메트리에는 발행하지 않는다.
   default_battery_level: 100
   default_signal_strength: 100

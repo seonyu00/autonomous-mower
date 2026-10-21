@@ -85,6 +85,25 @@ class MqttInboundPersistenceServiceTest {
     }
 
     @Test
+    void missingMeasurementsRemainNullAndZeroBatteryRemainsMeasured() {
+        when(robotRepository.findById("MOWER-01")).thenReturn(Optional.of(robot));
+        MqttTelemetryPayload payload = new MqttTelemetryPayload(
+                "MOWER-01", null, null, 0, null, null, null, null, Instant.now(), null);
+
+        assertThat(persistenceService.persistTelemetry(payload, Instant.parse("2026-05-31T01:00:00Z"))).isTrue();
+        ArgumentCaptor<TelemetryLog> captor = ArgumentCaptor.forClass(TelemetryLog.class);
+        verify(telemetryLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getLocationPoint()).isNull();
+        assertThat(captor.getValue().getRobotState()).isNull();
+        assertThat(captor.getValue().getBatteryLevel()).isZero();
+        assertThat(captor.getValue().isBatteryCritical()).isTrue();
+
+        TelemetryLog missing = new TelemetryLog(robot, null, null, null, LocalDateTime.now());
+        assertThat(missing.isBatteryCritical()).isFalse();
+        assertThat(missing.isErrorState()).isFalse();
+    }
+
+    @Test
     void eventPayloadIsStoredAsRobotEvent() {
         MqttEventPayload payload = new MqttEventPayload(
                 "event-001",

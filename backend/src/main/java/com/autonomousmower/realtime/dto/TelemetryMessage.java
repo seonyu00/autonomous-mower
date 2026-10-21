@@ -4,13 +4,13 @@ import java.time.Instant;
 
 public record TelemetryMessage(
         String robotId,
-        double latitude,
-        double longitude,
-        int batteryLevel,
+        Double latitude,
+        Double longitude,
+        Integer batteryLevel,
         String mode,
         String workState,
-        double speedMps,
-        int signalStrength,
+        Double speedMps,
+        Integer signalStrength,
         Instant lastReceivedAt,
         String errorState,
         Instant edgeSampledAt,

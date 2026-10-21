@@ -29,13 +29,13 @@ public class TelemetryLog {
     @JoinColumn(name = "robot_id", nullable = false)
     private Robot robot;
 
-    @Column(name = "location_point", nullable = false, columnDefinition = "geometry(Point, 4326)")
+    @Column(name = "location_point", columnDefinition = "geometry(Point, 4326)")
     private Point locationPoint;
 
-    @Column(name = "battery_level", nullable = false)
-    private int batteryLevel;
+    @Column(name = "battery_level")
+    private Integer batteryLevel;
 
-    @Column(name = "robot_state", length = 20, nullable = false)
+    @Column(name = "robot_state", length = 20)
     private String robotState;
 
     @Column(name = "recorded_at", nullable = false)
@@ -44,16 +44,16 @@ public class TelemetryLog {
     protected TelemetryLog() {
     }
 
-    public TelemetryLog(Robot robot, Point locationPoint, int batteryLevel, String robotState, LocalDateTime recordedAt) {
+    public TelemetryLog(Robot robot, Point locationPoint, Integer batteryLevel, String robotState, LocalDateTime recordedAt) {
         this.robot = Objects.requireNonNull(robot, "robot must not be null");
-        this.locationPoint = Objects.requireNonNull(locationPoint, "locationPoint must not be null");
+        this.locationPoint = locationPoint;
         this.batteryLevel = batteryLevel;
-        this.robotState = Objects.requireNonNull(robotState, "robotState must not be null");
+        this.robotState = robotState;
         this.recordedAt = Objects.requireNonNull(recordedAt, "recordedAt must not be null");
     }
 
     public boolean isBatteryCritical() {
-        return batteryLevel <= BATTERY_CRITICAL_THRESHOLD;
+        return batteryLevel != null && batteryLevel <= BATTERY_CRITICAL_THRESHOLD;
     }
 
     public boolean isErrorState() {
@@ -72,7 +72,7 @@ public class TelemetryLog {
         return locationPoint;
     }
 
-    public int getBatteryLevel() {
+    public Integer getBatteryLevel() {
         return batteryLevel;
     }
 

@@ -58,8 +58,11 @@ public class MqttInboundPersistenceService {
             return false;
         }
 
-        Point point = geometryFactory.createPoint(new Coordinate(payload.longitude(), payload.latitude()));
-        point.setSRID(WGS84_SRID);
+        Point point = null;
+        if (payload.latitude() != null && payload.longitude() != null) {
+            point = geometryFactory.createPoint(new Coordinate(payload.longitude(), payload.latitude()));
+            point.setSRID(WGS84_SRID);
+        }
         telemetryLogRepository.save(new TelemetryLog(
                 robot.get(),
                 point,
@@ -130,9 +133,10 @@ public class MqttInboundPersistenceService {
         if (payload.errorState() != null && !payload.errorState().isBlank()) {
             return "ERROR";
         }
-        return payload.workState() == null || payload.workState().isBlank()
-                ? payload.mode().toUpperCase()
-                : payload.workState().toUpperCase();
+        if (payload.workState() != null && !payload.workState().isBlank()) {
+            return payload.workState().toUpperCase();
+        }
+        return payload.mode() == null || payload.mode().isBlank() ? null : payload.mode().toUpperCase();
     }
 
     private LocalDateTime serverNow() {
