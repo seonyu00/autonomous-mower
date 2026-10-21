@@ -212,6 +212,7 @@ React VideoPanel
 - 개발 환경에서 `VITE_ENABLE_MOCK_AUTH=true`를 명시한 경우에만 Mock 관리자 초기 세션과 `Mock Admin Login`을 허용한다. 운영 빌드에서는 Mock 세션을 자동 생성하거나 저장소에서 복원하지 않는다.
 - 로그아웃 시 로봇·텔레메트리·제어·작업 구역·영상 store와 React Query 캐시를 비우고 이전 세션의 늦은 응답을 무시한다.
 - 현재 로그인 폼 기본 admin/password 값은 비워져 있다.
+- 로그인 화면은 `light-theme.css`의 흰색 패널·진한 글자색과 세로 입력 배치를 사용한다. 입력 높이는 48px이며 아이디 아래에 비밀번호가 표시된다.
 
 주의:
 
@@ -265,6 +266,8 @@ React VideoPanel
 - right status area:
   - `TelemetryPanel`
   - `VideoPanel`
+
+- 상단 장비 요약의 `TelemetryPanel`은 미수신 상태에서 내용 너비의 안내와 수신 상태를 표시한다. 텔레메트리 수신 후에는 기존 작업 상태·배터리·속도·마지막 수신 요약을 표시한다.
 
 인증:
 

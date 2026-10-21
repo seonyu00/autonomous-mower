@@ -30,6 +30,15 @@
 }
 
 body { min-width: 0; }
+.login-panel { background: var(--surface-panel); padding: 32px; }
+.login-panel h1 { color: var(--text-primary); font-size: 26px; line-height: 1.35; }
+.login-panel > .eyebrow { color: var(--accent); margin-bottom: 12px; }
+.login-panel > .muted { color: var(--text-secondary); font-size: 14px; line-height: 1.65; margin: 12px 0 24px; }
+.login-form { display: grid; gap: 20px; }
+.login-form label { display: grid; gap: 8px; color: var(--text-primary); font-size: 14px; font-weight: 600; }
+.login-form input { width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid var(--border-default); border-radius: 6px; font: inherit; font-size: 16px; font-weight: 400; }
+.login-form .primary-button { width: 100%; min-height: 48px; font-size: 16px; }
+.login-form .warning-line { margin: 0; overflow-wrap: anywhere; }
 body:has(.map-console-page) { overflow: auto; }
 .app-shell, .app-shell:has(.map-console-page) {
   grid-template-columns: 184px minmax(0, 1fr) 320px;
@@ -56,6 +65,12 @@ body:has(.map-console-page) { overflow: auto; }
 .fleet-overview-heading p { color: var(--text-secondary); font-size: 13px; margin: 0; font-weight: 600; }
 .fleet-overview-heading p span { color: var(--text-muted); font-weight: 400; }
 .fleet-overview .compact-telemetry { display: grid; grid-template-columns: 1.3fr repeat(3, minmax(0, 1fr)); gap: 0; padding: 0; overflow: hidden; }
+.telemetry-panel.telemetry-empty { display: flex; align-items: center; gap: 20px; }
+.fleet-overview .compact-telemetry.telemetry-empty { display: flex; width: fit-content; max-width: 100%; padding: 16px 20px; gap: 20px; }
+.telemetry-empty-copy { min-width: 0; }
+.telemetry-empty h2 { font-size: 16px; line-height: 1.5; }
+.telemetry-empty .muted { margin: 4px 0 0; font-size: 13px; line-height: 1.6; }
+.telemetry-empty .status-pill { flex-shrink: 0; align-self: center; margin: 0; font-size: 12px; padding: 4px 10px; }
 .overview-state, .overview-metric { min-width: 0; padding: 12px 20px; }
 .overview-state { background: transparent; }
 .overview-state p { color: var(--text-secondary); font-size: 12px; margin: 0; }

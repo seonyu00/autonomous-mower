@@ -36,6 +36,22 @@ describe('TelemetryPanel compact summary', () => {
     expect(screen.getByLabelText('텔레메트리 수신 상태')).toBeInTheDocument();
   });
 
+  it('미수신 안내에서 텔레메트리를 수신하면 작업 상태와 배터리 요약으로 전환한다', () => {
+    const telemetry = useTelemetryStore.getState().telemetryByRobotId[TEST_ROBOT_ID];
+    useTelemetryStore.setState({ telemetryByRobotId: {}, receptionByRobotId: {}, dataSource: 'real' });
+    render(<TelemetryPanel compact />);
+
+    expect(screen.getByRole('heading', { name: '텔레메트리 수신 대기' })).toBeInTheDocument();
+    expect(screen.getByLabelText('텔레메트리 수신 상태')).toHaveTextContent('미수신');
+    expect(screen.queryByText('배터리')).not.toBeInTheDocument();
+
+    act(() => useTelemetryStore.getState().upsertTelemetry(telemetry));
+
+    expect(screen.queryByRole('heading', { name: '텔레메트리 수신 대기' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '예초 중' })).toBeInTheDocument();
+    expect(screen.getByText('82%')).toBeInTheDocument();
+  });
+
   it('0,0 좌표는 GPS 미수신 상태로 표시한다', () => {
     const telemetry = useTelemetryStore.getState().telemetryByRobotId[TEST_ROBOT_ID];
     useTelemetryStore.setState({

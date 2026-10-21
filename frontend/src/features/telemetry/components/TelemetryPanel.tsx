@@ -27,9 +27,11 @@ export function TelemetryPanel({ compact = false }: TelemetryPanelProps) {
 
   if (!telemetry) {
     return (
-      <section className={compact ? 'telemetry-panel compact-telemetry' : 'telemetry-panel'}>
-        <p className="eyebrow">텔레메트리(Telemetry)</p>
-        <h2>{selectedRobotId ? '텔레메트리 수신 대기' : '선택된 로봇 없음'}</h2>
+      <section className={`telemetry-panel telemetry-empty${compact ? ' compact-telemetry' : ''}`}>
+        <div className="telemetry-empty-copy">
+          <h2>{selectedRobotId ? '텔레메트리 수신 대기' : '선택된 로봇 없음'}</h2>
+          <p className="muted">{selectedRobotId ? '장비가 연결되면 작업 상태와 배터리가 표시됩니다.' : '로봇을 선택하면 상태를 확인할 수 있습니다.'}</p>
+        </div>
         {selectedRobotId ? <span className={stale ? 'status-pill degraded' : 'status-pill'} aria-label="텔레메트리 수신 상태">{receptionText}</span> : null}
       </section>
     );
