@@ -85,6 +85,37 @@ $env:MQTT_PASSWORD="mower"
 npm start
 ```
 
+사설 CA를 사용하는 보안 브로커는 `MQTT_BROKER_URL=mqtts://...`와 `MQTT_CA_CERT_PATH=<CA_PEM_PATH>`를 함께 지정한다. CA 파일은 이 애플리케이션 연결에만 적용한다. TLS 1.2 이상과 인증서·호스트명 검증을 유지하며, CA 경로를 지정하고 `mqtt://`를 사용하면 연결 전에 실패한다. CA 경로가 없는 기존 평문 개발 실행은 그대로 사용할 수 있고, `mqtts://`에서 CA를 생략하면 Node의 기본 신뢰 저장소를 사용한다. 실제 비밀번호와 인증서 개인키는 Git에 넣지 않는다.
+
+## 격리된 MQTT 보안 검증
+
+`npm test`는 CA 옵션과 검증 도구의 입력 제한을 네트워크 없이 확인한다. `npm run verify:mqtt-security`는 별도로 준비한 TLS Mosquitto 브로커에서 MQTT 3.1.1 통신을 확인한다. Docker를 생성하거나 설정을 변경하지 않고 지정 컨테이너의 로그만 읽는다. 기존 `verify:control`과 별개이며 Java·Python 클라이언트, Jetson·STM32, 운영 배포의 검증을 대신하지 않는다.
+
+먼저 [로드맵의 3-B-1](../../docs/learning/12-development-roadmap.md#3-b-1-보안-설정-준비와-격리된-pc-검증)에 따라 전용 브로커와 테스트 CA를 준비한다. 브로커는 `mqtts://localhost:18886` 또는 `mqtts://127.0.0.1:18886`만 허용하며 서버 인증서 SAN은 `localhost`로 준비한다. 정상 통신은 SAN에 맞는 `localhost`로 실행한다. `127.0.0.1` 연결은 호스트명 불일치 거부 검증에 사용한다. 컨테이너 이름은 `mower-mqtt-security-`로 시작해야 하고, 로봇은 `SECURITY-TEST-01`, `SECURITY-TEST-02`만 사용한다. 상세 broker 로그에 client ID·토픽이 포함된 거부 기록이 필요하다.
+
+Git 제외 경로 `.local-docs/mqtt-security/<RUN_ID>/credentials.json`에 다음 필드를 준비한다. 비밀번호·전체 설정 JSON을 stdout에 출력하지 않는다.
+
+| 필드 | 값 |
+|---|---|
+| `brokerUrl` | `mqtts://localhost:18886` |
+| `caCertPath`, `wrongCaCertPath` | 정상 CA와 다른 테스트 CA의 PEM 절대 경로 |
+| `containerName` | 전용 Mosquitto 컨테이너 이름 |
+| `robotIds` | `["SECURITY-TEST-01", "SECURITY-TEST-02"]` |
+| `accounts.backend`, `accounts.edge1`, `accounts.edge2`, `accounts.observer` | 각각 `username`, `password`를 가진 객체 |
+
+observer는 `mowers/#` 읽기만 허용하고 쓰기는 차단한다. backend는 각 로봇의 다섯 명령만 쓰고 telemetry·status·events·ACK만 읽는다. 각 edge는 자기 로봇의 다섯 명령만 읽고 자기 telemetry·status·events·ACK만 쓴다.
+
+```powershell
+$env:MQTT_SECURITY_CONFIG = '<ABSOLUTE_PATH_TO_CREDENTIALS_JSON>'
+npm run verify:mqtt-security
+```
+
+설정이 없거나 주소·로봇·컨테이너 조건이 다르면 네트워크 호출 전에 실패한다. 정상 계정 네 개 접속과 익명·잘못된 비밀번호·잘못된 CA·호스트명 불일치 거부를 검사한다. 각 로봇의 backend→edge 다섯 명령은 수동 QoS 0, 나머지 QoS 1로, edge→backend 네 토픽은 QoS 1로 실제 수신을 확인한다.
+
+다른 로봇 명령 전달·상태 발행, edge의 명령 발행, backend의 telemetry·ACK 발행과 observer 쓰기는 차단해야 한다. 발행 거부 검사는 같은 연결의 정상 통신을 앞뒤로 확인하고, 고유 marker 미수신과 해당 client ID·토픽의 `Denied PUBLISH` 브로커 로그를 함께 요구한다.
+
+Mosquitto `acl_file`의 읽기 ACL은 MQTT 3.1.1 SUBACK 이후 실제 전달 시점에 적용될 수 있다. 이 경우 `Denied SUBSCRIBE`가 없어도 다른 로봇 명령은 전달되지 않는다. 검증 도구는 이를 **구독 요청 거부가 아닌 명령 전달 차단**으로 보고한다. 해당 연결의 정상 명령 전후 수신, 정상 로봇과 observer의 같은 marker 수신, 비인가 연결의 미수신, 브로커 구독 감사 로그와 비인가 연결로의 송신 로그 부재를 함께 확인한다. 명시적인 SUBACK 거부 로그는 확보하지 못한 것으로 출력한다. MQTT 3.1.1의 발행 callback이나 구독 grant만으로 허용을 판정하지 않는다. 어떤 검사든 실패하면 종료 코드는 1이며 실제 통과한 항목만 `PASS`로 출력한다.
+
 ## 명령 전달 확인
 
 Mosquitto CLI로 수동 명령을 publish합니다.

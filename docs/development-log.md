@@ -4,6 +4,35 @@
 
 ## 2026-10-19
 
+### 3-B-1 MQTT 인증·ACL·TLS 준비와 격리 검증
+
+사용자가 3-B-1을 승인해 기존 서비스와 분리된 테스트 브로커에서 MQTT 보안을 준비했다. SRS F-01·N-14와 `mqtt-command-v1`의 토픽·QoS·retained 계약을 확인했다. 이번에는 기존 username/password 기반 접속을 계정별로 분리했으며 토큰 발급·회전이나 실제 장비 인증 체계를 완성한 것으로 해석하지 않는다.
+
+`docker-compose.mqtt-security.yml`은 Mosquitto 2.1.2의 이미지 digest를 고정하고 호스트 `127.0.0.1:18886`에만 연결한다. TLS 1.2 이상·익명 거부·계정별 ACL을 적용했다. 백엔드에는 개별 명령 5개 쓰기와 상태·ACK 읽기만, Edge 두 계정에는 각자의 명령 읽기와 상태·ACK 쓰기만 허용했다. 별도 읽기 전용 observer로 미전달 검사의 수신 경로를 확인했다. 실제 로봇 대신 `SECURITY-TEST-01/02`만 사용했다.
+
+준비 스크립트는 Git 제외 폴더에 무작위 비밀번호와 해시·2일짜리 테스트 CA·localhost SAN 서버 인증서를 생성한다. 비밀번호를 CLI 인자로 넘기지 않았다. Windows bind mount의 Linux 소유자·모드 경고를 재현한 뒤 필요한 브로커 파일만 tmpfs로 복사해 소유자와 0700 권한을 적용했고 경고가 사라졌다. CA·개인키·credentials JSON은 Git 대상에 포함하지 않았다.
+
+Java·Node에는 `MQTT_CA_CERT_PATH`, Python YAML에는 `mqtt.ca_cert_path`를 추가했다. 지정 CA와 호스트명을 검증하고 읽기·파싱 실패 시 기본 신뢰로 우회하지 않는다. CA와 평문 URL 조합도 거부한다. 시스템 전체 신뢰 저장소는 변경하지 않았으며 기존 평문 로컬 기본값은 유지했다. Java 설정 검사의 변경 전 2개 실패, Python의 5개 실패와 Node의 6개 실패를 확인한 뒤 구현했다.
+
+| 검증 | 이번 실행 결과 |
+|---|---|
+| Node 단위 검사 | 9개 통과. 발행 거부 로그와 정확한 client/topic 경계 회귀 검사를 포함함 |
+| Node 실제 브로커 | 34개 통과: 정상 계정 4개의 TLS 연결, 익명·오류 비밀번호·잘못된 CA·호스트명 불일치 거부, 두 로봇의 명령 5종과 상태·ACK 4종의 QoS 수신, 권한 위반 11개 검사 |
+| Java 설정·실제 Paho | 신규 9개 통과. 설정 4개와 실제 TLS 명령·ACK 왕복·잘못된 CA·호스트명·비밀번호·익명 접속 거부 5개. 실제 `MqttConfig`와 `PahoMqttTransport`를 사용함 |
+| 백엔드 전체 | 총 257개 중 240개 통과, 실패·오류 0, 기존 17개 skip. skip은 전용 DB 미설정 16개와 CPP 실행 파일 미설정 1개이며 신규 MQTT 9개는 skip 없음 |
+| Python 전체 | PC Python 3.13·paho-mqtt 2.1.0에서 25개 통과, skip 0. 실제 `MqttEdgeClient`로 두 테스트 계정의 정상 CA 연결과 잘못된 CA·호스트명 거부를 포함함 |
+| 실제 Node Mock | 선택적 CA를 지정해 `src/index.js`의 TLS 연결과 명령 5개 구독을 확인한 뒤 종료함 |
+
+Mosquitto는 다른 로봇의 SUBSCRIBE에 SUBACK을 보냈지만 read ACL로 전달을 차단했다. 첫 Node 검사는 `Denied SUBSCRIBE` 로그를 기대해 실패했으므로 실제 정책 적용 방식과 검사 문구를 바로잡았다. 고유 marker가 정상 Edge와 observer에는 전달되고 금지된 Edge에는 전달되지 않으며 같은 연결의 전후 정상 통신과 브로커 구독 감사·미송신 로그가 남는지 확인했다. 발행 거부 9개는 고유 메시지 미전달과 `Denied PUBLISH` 로그를 필수로 확인했다. 토픽·QoS 검사의 문자열 marker는 실제 명령 payload나 ACK lifecycle·물리 실행의 검증이 아니다.
+
+읽기 전용 리뷰에서는 발행 거부 로그 판별이 다른 종류의 거부 문구까지 인정할 수 있다는 Low 지적을 받았다. 정확한 `Denied PUBLISH` 형식을 파싱하고 client ID·토픽을 완전히 일치시키도록 보완했다. 다른 거부 종류·유사 client/topic을 배제하는 회귀 검사의 변경 전 실패를 확인했고, 보완 뒤 Node 단위 9개와 실제 브로커 34개가 다시 통과했다.
+
+Python 음성 TLS 검사에서는 paho-mqtt 2.1.0이 handshake 예외 시 소켓을 정리하지 않아 ResourceWarning이 발생했다. 설치된 라이브러리 소스로 원인을 확인했고 인증서 검증을 완화하거나 라이브러리 내부를 고치지 않았다. 기존 callback API 폐기 예정 경고도 남아 있다. 재사용 가능한 실패 원인과 대응은 Git 제외 실패 학습 문서에 기록했다.
+
+검증 후 전용 컨테이너와 전용 네트워크만 종료했다. 기존 MQTT·DB의 컨테이너 ID·시작 시각·포트 매핑·실행 상태가 작업 전후 동일함을 확인했다. `bootJar`, Compose 정적 검사, diff 공백 검사와 변경 파일 24개의 실제 테스트 secret·개인키·JWT 형식 검사도 통과했다. 준비 스크립트는 권한 처리 보완 후 다시 실행해 인증서·해시·설정 생성을 확인했다. 실행 로그와 비밀값 없는 결과 요약은 Git 제외 테스트 폴더에 보존했다. 읽기 전용 리뷰의 Low 지적도 재검토에서 해결됨을 확인했다.
+
+기존 브로커·DB·Jetson 설정, 운영 계정·인증서, API·DB·STOMP 전체 흐름과 외부 HTTPS/WSS는 이번 적용 범위가 아니다. 실행한 테스트는 PC 소프트웨어 검증이며 실제 Jetson·ROS·STM32·물리 동작 결과로 사용하지 않는다. commit·push와 다음 단계의 서비스 전환은 수행하지 않았다.
+
 ### 3-A 웹 접속·배포 준비와 로컬 검증
 
 - 사용자가 로컬 로그인·조회를 재확인한 뒤 3-A를 승인했다. 배포 준비 전 기준점 `1401294`에서 REST와 WebSocket이 `APP_ALLOWED_ORIGINS`를 공유하도록 구성했다. 기본 주소는 localhost·127.0.0.1의 5173 포트이며 실제 Vercel 주소나 다른 로컬 포트는 환경변수로 추가한다.

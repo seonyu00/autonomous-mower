@@ -55,6 +55,7 @@ app:
     username: ${MQTT_USERNAME:}
     password: ${MQTT_PASSWORD:}
     client-id: ${MQTT_CLIENT_ID:autonomous-mower-backend}
+    ca-cert-path: ${MQTT_CA_CERT_PATH:}
   snapshot:
     storage-path: ${SNAPSHOT_STORAGE_PATH:./data/snapshots}
     max-bytes: ${SNAPSHOT_MAX_BYTES:5242880}

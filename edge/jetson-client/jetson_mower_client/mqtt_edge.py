@@ -26,7 +26,11 @@ class MqttEdgeClient:
         if config.mqtt.username:
             self._client.username_pw_set(config.mqtt.username, config.mqtt.password)
         if config.mqtt.use_tls:
-            self._client.tls_set(cert_reqs=ssl.CERT_REQUIRED)
+            tls_context = ssl.create_default_context(cafile=config.mqtt.ca_cert_path)
+            tls_context.minimum_version = ssl.TLSVersion.TLSv1_2
+            tls_context.verify_mode = ssl.CERT_REQUIRED
+            tls_context.check_hostname = True
+            self._client.tls_set_context(tls_context)
         self._client.reconnect_delay_set(
             min_delay=config.mqtt.reconnect_delay_seconds,
             max_delay=max(config.mqtt.reconnect_delay_seconds, 30),

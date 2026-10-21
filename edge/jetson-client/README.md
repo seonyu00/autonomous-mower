@@ -70,6 +70,7 @@ cp config.yaml.example config.yaml
 
 - `robot_id`: MQTT topic의 `{robotId}`와 payload `robotId`
 - `mqtt.broker_url`: MQTT broker URL
+- `mqtt.ca_cert_path`: `mqtts://`에서 사용할 신뢰 CA PEM 파일 경로. 절대 경로를 권장하며, 상대 경로는 실행 디렉터리를 기준으로 한다. 비워 두면 시스템 기본 CA를 사용한다. CA 경로와 `mqtt://`를 함께 지정하면 시작을 거부한다. TLS는 1.2 이상으로 제한하고 서버 인증서와 호스트명을 검증한다.
 - `ros.cmd_vel_topic`: 주행 명령 publish topic. 기본값은 `/cmd_vel`
 - `ros.cmd_vel_qos_depth`: `/cmd_vel` publisher의 `keep_last` depth. 기본값은 `10`
 - `ros.cmd_vel_qos_durability`: `/cmd_vel` publisher durability. 기본값은 `volatile`

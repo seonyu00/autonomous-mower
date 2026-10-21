@@ -1,4 +1,5 @@
 const mqtt = require("mqtt");
+const { mqttTlsOptions } = require("./mqtt-tls.cjs");
 
 const config = {
   brokerUrl: env("MQTT_BROKER_URL", "mqtt://localhost:1883"),
@@ -28,6 +29,7 @@ let lastMode = "idle";
 let emergency = false;
 
 const client = mqtt.connect(config.brokerUrl, {
+  ...mqttTlsOptions(config.brokerUrl, process.env.MQTT_CA_CERT_PATH),
   clientId: config.clientId,
   username: config.username || undefined,
   password: config.password || undefined,

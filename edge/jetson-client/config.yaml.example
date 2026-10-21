@@ -5,6 +5,9 @@ mqtt:
   broker_url: mqtt://localhost:1883
   username:
   password:
+  # mqtts://에서 사용할 신뢰 CA PEM 파일 경로. 비워 두면 시스템 기본 CA를 사용한다.
+  # CA 경로를 지정하면서 mqtt://를 사용하면 시작을 거부한다.
+  ca_cert_path:
   client_id: jetson-MOWER-01
   keepalive_seconds: 30
   reconnect_delay_seconds: 2

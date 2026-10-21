@@ -6,7 +6,9 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "verify:control": "node src/verify-control.cjs"
+    "verify:control": "node src/verify-control.cjs",
+    "test": "node --test src/*.test.cjs",
+    "verify:mqtt-security": "node src/verify-mqtt-security.cjs"
   },
   "dependencies": {
     "mqtt": "^5.10.4",

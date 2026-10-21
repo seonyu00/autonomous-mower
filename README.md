@@ -137,7 +137,70 @@ VITE_WSS_URL=wss://<BACKEND_HOST>/ws
 
 Compose의 PostgreSQL 호스트 포트는 `127.0.0.1`에 바인딩한다. 백엔드는 같은 PC의 로컬 포트로 접속하고 다른 기기의 직접 DB 접속은 제한한다. 이 설정은 컨테이너 재생성 시 적용되므로 파일 수정만으로 실행 중인 DB의 바인딩이 바뀌지는 않는다. 기존 데이터 볼륨을 유지하며 적용 전 별도 확인이 필요하다.
 
-2026-10-19의 3-A 작업은 위 코드·설정과 로컬 검증까지다. 실행 중인 서비스 재구성, MQTT 인증·ACL·TLS, Funnel 활성화, Vercel 배포와 실제 외부 HTTPS/WSS·WebRTC 검증은 남아 있다. 상세 검증 결과는 [개발 로그](docs/development-log.md)의 같은 날짜 항목을 참고한다.
+2026-10-19의 3-A에서는 웹 접속 코드·설정을 준비했고, 3-B-1에서는 아래 격리 브로커로 MQTT 인증·ACL·TLS를 검증했다. 기존 시연 서비스의 보안 전환·Funnel 공개·외부 브라우저 검증은 후속 적용 대상이다. 상세 결과는 [개발 로그](docs/development-log.md)의 같은 날짜 항목을 참고한다.
+
+## MQTT 인증·ACL·TLS의 격리 검증
+
+`docker-compose.mqtt-security.yml`은 기존 개발 Compose와 별도 프로젝트로 동작한다. 호스트의 `127.0.0.1:18886`에서만 TLS를 받고 익명 접속을 거부한다. 기존 `1883` 브로커·DB·실제 로봇에는 연결하지 않는다. 이 구성은 테스트 전용이며 기존 개발 브로커의 익명 접속 설정을 바꾸지 않는다. 기존 개발 구성을 그대로 외부에 공개하면 안 된다.
+
+PowerShell 7, Docker Desktop, Java 21, OpenSSL과 Node·Python 의존성이 필요하다. 저장소 루트에서 다음과 같이 준비한다. OpenSSL 위치가 다르면 `prepare.ps1 -OpenSslPath '<OPENSSL_PATH>'`로 지정한다.
+
+```powershell
+$configPath = & ./tools/mqtt-security/prepare.ps1
+$testConfig = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+$env:MQTT_SECURITY_CONFIG = $configPath
+$env:MQTT_SECURITY_DIR = Split-Path $configPath
+$env:MQTT_SECURITY_CONTAINER = $testConfig.containerName
+docker compose -f docker-compose.mqtt-security.yml up -d
+```
+
+스크립트는 `.local-docs/mqtt-security/<실행 ID>/`에 무작위 비밀번호, 해시 파일, CA·서버 인증서와 개인키를 만든다. 해당 폴더는 Git 제외 여부를 검사하고 Windows에서 현재 사용자와 SYSTEM만 접근하도록 설정한다. 비밀번호를 명령행 인자로 넘기거나 화면에 출력하지 않는다. Windows bind mount의 Linux 권한 경고를 피하도록 브로커는 필요한 파일만 컨테이너 tmpfs에 복사해 소유자와 권한을 제한한다.
+
+인증서는 2일짜리 테스트용이며 서버 SAN은 `localhost`뿐이다. 테스트 클라이언트는 `localhost`로 연결하고 `127.0.0.1`은 호스트명 불일치 거부 검사에만 쓴다. 만료되면 준비 스크립트로 다시 생성한다. 운영 호스트 인증서와 실제 로봇 계정은 별도로 준비해야 한다.
+
+ACL은 다음 방향만 허용한다. `commands/#` 전체의 쓰기를 허용하면 ACK까지 위조할 수 있으므로 명령 5개를 개별 지정한다.
+
+| 계정 | 읽기 | 쓰기 |
+|---|---|---|
+| 테스트 백엔드 | 두 테스트 로봇의 telemetry·status·events·commands/ack | 두 로봇의 manual·stop·estop·mode·attachment 명령 |
+| 테스트 Edge 1·2 | 자기 로봇의 명령 5개 | 자기 telemetry·status·events·commands/ack |
+| 테스트 observer | 테스트 브로커의 `mowers/#` | 없음 |
+
+준비한 같은 PowerShell에서 각 검사를 실행한다. Python 전용 가상환경은 최초 한 번 생성한다. `MQTT_SECURITY_CONFIG`가 없으면 Java·Python의 실브로커 검사는 skip되고 Node 보안 검사는 실행을 거부한다.
+
+```powershell
+npm --prefix tools/edge-mock-client test
+npm --prefix tools/edge-mock-client run verify:mqtt-security
+
+Push-Location backend
+./gradlew.bat test --tests 'com.autonomousmower.config.MqttTls*Test'
+Pop-Location
+
+python -m venv .local-docs/mqtt-security-venv
+& ./.local-docs/mqtt-security-venv/Scripts/python.exe -m pip install -r edge/jetson-client/requirements.txt
+Push-Location edge/jetson-client
+& ../../.local-docs/mqtt-security-venv/Scripts/python.exe -m unittest discover -s tests -v
+Pop-Location
+```
+
+Node 검사는 인증·TLS 거부와 토픽/QoS·ACL을, Java는 실제 백엔드 연결 옵션과 전송 계층의 명령·ACK 왕복을, Python은 실제 `MqttEdgeClient`의 CA·호스트명 검증을 확인한다. Mosquitto의 읽기 ACL은 SUBACK 뒤 메시지 전달 시점에 적용될 수 있다. 다른 로봇 접근 차단은 동일 연결의 전후 정상 통신, 고유 메시지의 미수신, 정상 수신자의 수신과 브로커 감사 로그로 확인하며 SUBACK 거부로 표현하지 않는다. 발행 차단은 `Denied PUBLISH` 로그도 확인한다. MQTT 3.1.1의 발행 성공 응답만으로 권한을 판정하지 않는다.
+
+검사 후 전용 서비스만 종료한다. 다른 Compose 파일이나 `--remove-orphans`, `down -v`를 사용하지 않는다. 생성한 비밀 파일은 Git 제외 폴더에 남는다.
+
+```powershell
+docker compose -f docker-compose.mqtt-security.yml down
+Remove-Item Env:MQTT_SECURITY_CONFIG, Env:MQTT_SECURITY_DIR, Env:MQTT_SECURITY_CONTAINER
+```
+
+클라이언트의 선택적 CA 설정은 다음과 같다. CA를 지정하고 평문 URL을 사용하면 실패하며, 잘못되거나 읽을 수 없는 CA를 기본 신뢰로 우회하지 않는다. TLS에서는 인증서·호스트명을 검증하고 TLS 1.2 이상을 사용한다. CA를 생략한 TLS 연결은 시스템 신뢰 저장소를 사용하고, 기존 평문 로컬 개발 기본값은 유지한다.
+
+| 클라이언트 | TLS URL | CA 파일 설정 |
+|---|---|---|
+| Java 백엔드 | `MQTT_BROKER_URL=ssl://<BROKER_HOST>:8883` | `MQTT_CA_CERT_PATH=<ABSOLUTE_CA_PEM_PATH>` |
+| Node Edge Mock | `MQTT_BROKER_URL=mqtts://<BROKER_HOST>:8883` | `MQTT_CA_CERT_PATH=<ABSOLUTE_CA_PEM_PATH>` |
+| Python Jetson | YAML `mqtt.broker_url: mqtts://<BROKER_HOST>:8883` | YAML `mqtt.ca_cert_path: <ABSOLUTE_CA_PEM_PATH>` |
+
+이 검사는 PC의 소프트웨어 통신 검증이다. REST→DB→STOMP 전체 흐름, 팀원 장비의 실제 설정, Jetson·STM32·물리 동작, 시연 브로커 전환과 외부 통신 암호화를 검증한 결과는 아니다. `verify:control`의 익명 loopback 전제를 풀어 운영 브로커에 사용하지 않는다.
 
 ## 통합 Smoke Flow
 

@@ -8,6 +8,7 @@ public record MqttBridgeProperties(
         String brokerUrl,
         String username,
         String password,
-        String clientId
+        String clientId,
+        String caCertPath
 ) {
 }

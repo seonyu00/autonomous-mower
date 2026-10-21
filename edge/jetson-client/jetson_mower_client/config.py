@@ -19,6 +19,11 @@ class MqttConfig:
     keepalive_seconds: int
     reconnect_delay_seconds: float
     recent_command_cache_size: int
+    ca_cert_path: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.ca_cert_path and not self.use_tls:
+            raise ValueError("mqtt.ca_cert_path 설정에는 mqtts:// broker_url이 필요합니다.")
 
     @property
     def host(self) -> str:
@@ -93,6 +98,7 @@ def _mqtt_config(raw: dict[str, Any], robot_id: str) -> MqttConfig:
         keepalive_seconds=int(raw.get("keepalive_seconds", 30)),
         reconnect_delay_seconds=float(raw.get("reconnect_delay_seconds", 2)),
         recent_command_cache_size=int(raw.get("recent_command_cache_size", 256)),
+        ca_cert_path=_optional_string(raw.get("ca_cert_path")),
     )
 
 

@@ -1008,6 +1008,7 @@ Backend env:
 - `MQTT_USERNAME`
 - `MQTT_PASSWORD`
 - `MQTT_CLIENT_ID`
+- `MQTT_CA_CERT_PATH`
 - `VIDEO_WHEP_BASE_URL`
 
 보안 상태:
@@ -1019,6 +1020,7 @@ Backend env:
 - `WebOriginProperties`가 REST와 WebSocket의 명시적인 HTTP/HTTPS Origin 목록을 공유한다. 경로·자격 증명·와일드카드·빈 목록은 시작 시 거부한다. `SecurityConfig`는 `/api/**`의 GET·POST·PUT·PATCH·OPTIONS와 Authorization·Content-Type 헤더를 허용하고 JWT·RBAC 검사를 유지한다.
 - `docker-compose.yml`은 PostgreSQL의 호스트 바인딩을 `127.0.0.1`로 제한한다. 3-A에서는 설정만 준비했으며 실행 중인 컨테이너 재생성·바인딩 적용은 하지 않았다.
 - `frontend/vercel.json`은 Vercel의 SPA 직접 접속·새로고침 경로를 처리한다. 실제 Vercel 배포와 외부 동작은 확인 필요다. 환경변수와 실행 설정은 [README](../README.md#vercel-프론트와-pc-백엔드의-접속-설정)를 따른다.
+- 3-B-1에서는 Java `MqttConfig`·Node `mqtt-tls.cjs`·Python `mqtt_edge.py`에 선택적 CA 신뢰와 TLS 1.2 이상·호스트명 검증을 준비했다. `docker-compose.mqtt-security.yml`, `docker/mosquitto/mosquitto-security-test.conf`, `tools/mqtt-security/prepare.ps1`은 인증·로봇별 ACL을 검사하는 별도 loopback 브로커 구성이다. 실제 접속·거부 검사를 PC에서 통과했으며 루트 개발용 설정 파일에는 익명 접속 기본값이 남아 있다. 실행 방법과 검증 한계는 [README](../README.md#mqtt-인증acltls의-격리-검증)를 따른다.
 
 Production 확인 필요:
 
@@ -1348,6 +1350,7 @@ README와 현재 구현 기준으로 확인 가능한 local integration flow:
 ### production 보안 설정
 
 - 3-A 준비 완료: REST CORS와 WebSocket Origin 공통 허용 목록, 잘못된 Origin 설정 거부, DB loopback 바인딩 설정, Vercel SPA 경로 처리. 관련 백엔드 120개와 프론트 빌드·린트, Compose 정적 검사를 통과했다. 설정 파일과 테스트 결과이며 실행 중인 서비스·외부 접속의 적용 증거는 아니다.
+- 3-B-1 준비 완료: 별도 로컬 TLS 브로커에서 Node 보안 검사 34개, Python 25개, Java 신규 9개를 확인했다. 인증·ACL·CA 검증은 격리 테스트 환경의 결과이며 아래 운영 보안 적용 항목은 남아 있다.
 - 미구현/확인 필요:
   - HTTPS/WSS
   - MQTTS/TLS
