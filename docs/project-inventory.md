@@ -159,10 +159,13 @@ React VideoPanel
   - MediaMTX에서 H.264 Baseline 트랙 온라인 확인
   - Chrome WHEP 연결 상태 `connected` 확인
   - 8초 동안 119프레임, 629,869바이트 수신 확인
+  - 2026-10-22: 실제 D455 원본 640×480 약 15fps와 Tailscale HTTPS/WHEP의 H.264 재생을 확인했다. 배포 관제 웹에서도 `프레임 수신 중`, 영상 요소 640×480·readyState 4와 재생 시간 증가를 확인했다.
+  - 같은 날 웹 중지 후 MediaMTX의 reader·WebRTC 세션·RTSP source와 Jetson 송출 프로세스가 모두 없어지는 것을 확인했다. 카메라 원본과 MediaMTX는 대기 상태로 유지한다.
 - 제한:
-  - 백엔드 stop은 세션 상태와 브라우저 WHEP 연결을 종료하지만 Jetson 인코더와 RTSP publisher 프로세스까지 중단하지는 않는다.
-  - Jetson 카메라, MediaMTX와 영상 송출기는 `run-video-demo.sh` 한 명령으로 실행할 수 있지만 재부팅 후 자동 복구되지는 않는다.
-  - HTTPS/WSS, MediaMTX TLS, TURN과 외부 인터넷 공개는 아직 적용하지 않았다.
+  - 수동 `run-video-demo.sh` 방식은 인코더를 계속 실행한다. 2026-10-22 적용한 전용 설정은 마지막 시청자가 종료하면 인코더·RTSP publisher를 중단한다.
+  - 카메라·MediaMTX 사용자 서비스의 자동 시작과 Linger를 등록했지만 실제 전원 재인가 후 복구는 아직 확인하지 않았다.
+  - 영상 전용 카메라 실행기는 IMU를 끈다. 팀 인계 자료의 주행 구성은 같은 D455의 IMU를 사용하므로 주행·비전과 함께 기동하기 전에 카메라 단일 노드 공유와 토픽 설정을 통합해야 한다. 현재 검증은 카메라 단독 시연이다.
+  - 영상 HTTPS 8443과 미디어 8189는 Tailscale 내부 전용이며 현재 허용된 시청 PC만 읽을 수 있다. 비 Tailscale 기기·TURN·영상 인터넷 공개는 미적용이다. 실행·종료·설정 위치는 [영상 README](../edge/jetson-video/README.md#tailscale-https와-전원-on-자동-실행)를 따른다.
   - 수동 스냅샷은 WebRTC 영상이 연결된 상태에서만 캡처할 수 있다.
   - 2026년 6월 15일 검증에서는 원격 MediaMTX `100.92.7.56:8889`가 응답하지 않아 실제 프레임 캡처 통합 확인은 차단됐다.
 
@@ -603,7 +606,7 @@ Backend:
 
 제한:
 
-- Jetson 송출 프로세스는 영상 시청 여부와 무관하게 계속 실행된다.
+- 수동 송출은 계속 실행되며, Tailscale 전용 온디맨드 구성에서는 마지막 시청자의 종료 후 Jetson 인코더·RTSP publisher도 종료한다. 카메라 ROS 원본 발행은 유지한다.
 - 영상 품질 정책 값은 세션 상태에 표시되지만 네트워크 상태에 따른 자동 품질 조정은 구현되지 않았다.
 - ICE는 MediaMTX의 WHEP 구현을 사용하며 별도 trickle ICE API는 제공하지 않는다.
 - 원격 MediaMTX가 연결되지 않으면 영상 프레임이 없어 스냅샷 버튼이 비활성화된다.
@@ -1343,11 +1346,11 @@ README와 현재 구현 기준으로 확인 가능한 local integration flow:
 
 - 실제 media source, MediaMTX WHEP와 NVENC H.264 송출은 구현 및 장비 검증을 완료했다.
 - 후속 구현:
-  - 마지막 시청자가 중지하면 Jetson 인코더와 RTSP publisher도 실제 종료
-  - 카메라, MediaMTX와 영상 송출기 systemd 자동 시작 및 장애 재시작
+  - 2026-10-22 적용한 마지막 시청자 종료·온디맨드 재기동의 장시간 안정성 확인
+  - 등록된 카메라·MediaMTX systemd 서비스의 실제 전원 재인가 후 복구 확인
   - 실제 fps, bitrate, 해상도와 오류 상태 수집
   - 네트워크 상태별 해상도, fps와 bitrate 자동 조정
-  - HTTPS/WSS, MediaMTX TLS와 필요 시 TURN 적용
+  - 적용된 Tailscale HTTPS 외에 비 Tailscale 시청이 필요할 때 별도 인증·중계·TURN 경로 검토
   - Jetson 오류 이벤트의 자동 Snapshot 업로드와 보관 정책
 
 ### 실제 센서/GPS/IMU

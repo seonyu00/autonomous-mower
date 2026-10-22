@@ -1,0 +1,15 @@
+[Unit]
+Description=예초기 RealSense 원본 영상
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/bin/bash %h/autonomous-mower/edge/jetson-camera/scripts/run-realsense-camera.sh
+Restart=always
+RestartSec=10
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

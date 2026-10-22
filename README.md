@@ -141,7 +141,7 @@ VITE_WSS_URL=wss://<BACKEND_HOST>/ws
 
 Compose의 PostgreSQL 호스트 포트는 `127.0.0.1`에 바인딩한다. 백엔드는 같은 PC의 로컬 포트로 접속하고 다른 기기의 직접 DB 접속은 제한한다. 이 설정은 컨테이너 재생성 시 적용되므로 파일 수정만으로 실행 중인 DB의 바인딩이 바뀌지는 않는다. 기존 데이터 볼륨을 유지하며 적용 전 별도 확인이 필요하다.
 
-2026-10-19의 3-A에서는 위 코드·설정을 준비했고, 3-B-1에서는 아래 격리 브로커로 MQTT 보안을 검증했다. 2026-10-20에는 PC 서비스 보안 설정과 Funnel 공개를 적용하고 공개 중계 서버를 거친 HTTPS·WSS 검사를 통과했다. 2026-10-21에는 Vercel 빌드의 환경변수 반영과 PC Chrome의 고정 도메인 로그인·지도 표시를 확인했다. Tailscale을 사용하지 않는 외부 기기의 브라우저·실제 Jetson·WebRTC 검증은 남아 있다. 상세 결과는 [개발 로그](docs/development-log.md)의 해당 날짜 항목을 참고한다.
+2026-10-19의 3-A에서는 위 코드·설정을 준비했고, 3-B-1에서는 아래 격리 브로커로 MQTT 보안을 검증했다. 2026-10-20에는 PC 서비스 보안 설정과 Funnel 공개를 적용하고 공개 중계 서버를 거친 HTTPS·WSS 검사를 통과했다. 2026-10-21에는 Vercel 빌드의 환경변수 반영과 PC Chrome의 고정 도메인 로그인·지도 표시, 실제 Jetson의 상태 전송을 확인했다. 2026-10-22에는 Tailscale에 연결된 PC의 배포 관제 웹에서 실제 카메라 WebRTC 재생을 확인했다. Tailscale을 사용하지 않는 외부 기기의 영상 시청은 별도 범위다. 상세 결과는 [개발 로그](docs/development-log.md)의 해당 날짜 항목을 참고한다.
 
 ## MQTT 인증·ACL·TLS의 격리 검증
 
@@ -291,6 +291,8 @@ VITE_WSS_URL=wss://<BACKEND_HOST>/ws
 ```
 
 `VITE_NAVER_MAP_CLIENT_ID`에는 기존 지도용 Client ID를 별도로 등록한다. 프론트 배포 주소의 네이버 지도 Web 서비스 URL 등록과 브라우저의 실제 지도 표시도 확인한다. PC에서 공개 호스트 이름으로 접속한 결과와 Tailscale을 사용하지 않는 외부 휴대폰·브라우저 결과는 구분해서 기록한다. 영상의 WebRTC 미디어 경로와 실제 Jetson의 Tailscale/MQTT 연결은 이 웹 공개 설정과 별도 검증 대상이다.
+
+실제 카메라의 Tailscale HTTPS·전원 ON 자동 시작은 [Jetson 영상 실행 안내](edge/jetson-video/README.md#tailscale-https와-전원-on-자동-실행)를 따른다. PC 백엔드의 `VIDEO_WHEP_BASE_URL`은 `https://<JETSON_TAILSCALE_HOST>:8443`을 사용한다. 이 서버 설정만 바꿀 때는 백엔드를 재시작하고 Funnel을 다시 열면 되며 프론트 코드가 같다면 Vercel 재배포는 필요 없다. Jetson에서는 카메라·MediaMTX가 자동 대기하고 웹의 `스트림 시작`·`스트림 중지`로 인코딩·전송을 시작·종료한다. 현재 시청 PC도 Tailscale에 연결되어야 한다.
 
 2026-10-20에는 Start·Stop과 공개 중계 경로의 HTTPS·WSS 13개 검사를 통과했다. 같은 PC에서는 DNS가 내부 Tailscale 주소를 반환할 수 있어 공개 DNS-over-HTTPS 응답의 중계 주소로 연결하고 원래 호스트명·SNI·인증서 검증을 유지했다. 외부 기기의 Vercel 브라우저 검증은 별도로 진행한다.
 

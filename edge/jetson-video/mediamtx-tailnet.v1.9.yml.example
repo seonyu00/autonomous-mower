@@ -1,0 +1,42 @@
+# MediaMTX v1.9 전용이다. placeholder는 실제 장비·시청 PC 값으로 교체한다.
+logLevel: info
+rtsp: yes
+rtspAddress: 127.0.0.1:8554
+protocols: [tcp]
+rtmp: no
+hls: no
+srt: no
+playback: no
+api: yes
+apiAddress: 127.0.0.1:9997
+
+authMethod: internal
+authInternalUsers:
+  - user: any
+    ips: [127.0.0.1]
+    permissions:
+      - action: publish
+        path: mowers/<ROBOT_ID>
+      - action: api
+  - user: any
+    ips: [<VIEWER_TAILSCALE_IP>/32]
+    permissions:
+      - action: read
+        path: mowers/<ROBOT_ID>
+
+webrtc: yes
+webrtcAddress: 127.0.0.1:8889
+webrtcAllowOrigin: https://<FRONTEND_HOST>
+webrtcTrustedProxies: [127.0.0.1]
+webrtcLocalUDPAddress: <JETSON_TAILSCALE_IP>:8189
+webrtcLocalTCPAddress: <JETSON_TAILSCALE_IP>:8189
+webrtcIPsFromInterfaces: no
+webrtcAdditionalHosts: [<JETSON_TAILSCALE_IP>]
+
+paths:
+  mowers/<ROBOT_ID>:
+    source: publisher
+    # 시청 요청이 있을 때만 인코더·RTSP publisher를 실행한다.
+    runOnDemand: /bin/bash <JETSON_HOME>/autonomous-mower/edge/jetson-video/scripts/run-video-streamer.sh <JETSON_HOME>/.local/share/autonomous-mower/video-demo/stream.yaml
+    runOnDemandStartTimeout: 10s
+    runOnDemandCloseAfter: 0s

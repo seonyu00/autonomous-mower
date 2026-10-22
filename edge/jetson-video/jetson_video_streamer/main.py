@@ -24,6 +24,7 @@ def main() -> None:
     gi.require_version("Gst", "1.0")
     from gi.repository import Gst
     import rclpy
+    from rclpy.executors import ExternalShutdownException
     from rclpy.node import Node
     from sensor_msgs.msg import Image
 
@@ -80,13 +81,14 @@ def main() -> None:
 
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         appsrc.emit("end-of-stream")
         pipeline.set_state(Gst.State.NULL)
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

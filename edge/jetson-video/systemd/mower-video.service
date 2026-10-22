@@ -1,0 +1,20 @@
+[Unit]
+Description=예초기 Tailscale 전용 온디맨드 영상
+Wants=mower-camera.service
+After=mower-camera.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=%h/autonomous-mower/edge/jetson-video
+Environment=MEDIAMTX_BIN=%h/mower_ws/src/autonomous-mower/edge/jetson-video/bin/mediamtx
+Environment=MEDIAMTX_CONFIG=%h/.local/share/autonomous-mower/video-demo/mediamtx.yml
+ExecStart=/bin/bash %h/autonomous-mower/edge/jetson-video/scripts/run-mediamtx.sh
+Restart=always
+RestartSec=10
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
