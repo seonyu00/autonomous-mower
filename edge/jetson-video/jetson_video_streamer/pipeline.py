@@ -21,7 +21,8 @@ def build_gstreamer_pipeline(config: VideoStreamConfig) -> str:
             (
                 "! nvv4l2h264enc "
                 f"bitrate={bitrate} control-rate=1 "
-                f"iframeinterval={config.fps} insert-sps-pps=true"
+                f"iframeinterval={config.fps} idrinterval={config.fps} "
+                "insert-sps-pps=true"
             ),
             "! video/x-h264,profile=baseline",
             "! h264parse config-interval=1",

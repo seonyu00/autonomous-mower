@@ -42,6 +42,17 @@ class VideoConfigTest(unittest.TestCase):
 
         self.assertIn("webrtcLocalTCPAddress: :8189", config)
 
+    def test_new_viewer_idr_wait_is_bounded_by_one_second(self) -> None:
+        for fps in (15, 30):
+            with self.subTest(fps=fps):
+                pipeline = build_gstreamer_pipeline(VideoStreamConfig(fps=fps))
+                encoder = pipeline.split("nvv4l2h264enc ", 1)[1].split("!", 1)[0]
+                properties = dict(item.split("=", 1) for item in encoder.split())
+                self.assertIn("idrinterval", properties)
+                self.assertGreater(int(properties["idrinterval"]), 0)
+                self.assertLessEqual(int(properties["idrinterval"]) / fps, 1)
+                self.assertEqual(properties["insert-sps-pps"], "true")
+
 
 if __name__ == "__main__":
     unittest.main()

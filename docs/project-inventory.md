@@ -154,6 +154,7 @@ React VideoPanel
   - ROS 2 raw image를 NVENC H.264로 인코딩
   - RTSP로 MediaMTX에 발행
   - MediaMTX WHEP로 브라우저에 전달
+  - 새 시청자의 복호화 대기를 줄이도록 I 프레임·IDR 간격을 각각 약 1초로 지정하고 IDR에 SPS/PPS를 포함한다. 전체 연결 시간과 구분한다.
 - 실제 검증:
   - RealSense 컬러 원본 640x480, 약 15fps 발행 확인
   - MediaMTX에서 H.264 Baseline 트랙 온라인 확인
@@ -161,6 +162,7 @@ React VideoPanel
   - 8초 동안 119프레임, 629,869바이트 수신 확인
   - 2026-10-22: 실제 D455 원본 640×480 약 15fps와 Tailscale HTTPS/WHEP의 H.264 재생을 확인했다. 배포 관제 웹에서도 `프레임 수신 중`, 영상 요소 640×480·readyState 4와 재생 시간 증가를 확인했다.
   - 같은 날 웹 중지 후 MediaMTX의 reader·WebRTC 세션·RTSP source와 Jetson 송출 프로세스가 모두 없어지는 것을 확인했다. 카메라 원본과 MediaMTX는 대기 상태로 유지한다.
+  - 같은 날 IDR 간격을 약 1초로 지정한 뒤 실제 배포 웹에서 시작 요청부터 프레임 수신 표시까지 3.614초·3.387초·3.332초를 확인했다. 각 측정 사이에 송출을 종료했으며 측정 환경 외의 시작 시간을 보장하지 않는다.
 - 제한:
   - 수동 `run-video-demo.sh` 방식은 인코더를 계속 실행한다. 2026-10-22 적용한 전용 설정은 마지막 시청자가 종료하면 인코더·RTSP publisher를 중단한다.
   - 카메라·MediaMTX 사용자 서비스의 자동 시작과 Linger를 등록했지만 실제 전원 재인가 후 복구는 아직 확인하지 않았다.
