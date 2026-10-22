@@ -41,8 +41,9 @@ setsid env LD_PRELOAD="$REALSENSE_LIBRARY${LD_PRELOAD:+:$LD_PRELOAD}" \
 ros2 launch realsense2_camera rs_launch.py \
   align_depth.enable:=true \
   pointcloud.enable:=false \
-  enable_gyro:=false \
-  enable_accel:=false \
+  enable_gyro:=true \
+  enable_accel:=true \
+  unite_imu_method:=2 \
   initial_reset:=true \
   rgb_camera.color_profile:=640,480,15 \
   depth_module.depth_profile:=640,480,15 &

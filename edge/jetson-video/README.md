@@ -50,7 +50,7 @@ edge/jetson-video/scripts/run-video-streamer.sh
 
 2026-10-22 적용한 구성은 카메라 원본과 MediaMTX를 사용자 systemd 서비스로 상시 대기시키고, 시청 요청이 있을 때만 NVENC 인코더·RTSP publisher를 실행한다. 마지막 시청자가 종료하면 `runOnDemandCloseAfter: 0s`에 따라 송출 프로세스도 종료한다. 카메라의 ROS 원본 발행은 계속되므로 영상 중지는 USB 카메라 전원 끄기를 뜻하지 않는다.
 
-현재 영상 전용 카메라 실행기는 `enable_gyro:=false`, `enable_accel:=false`로 IMU를 끈다. 팀 인계 자료의 주행 구성은 같은 D455의 IMU를 사용하므로 이 구성을 주행 통합용으로 취급하지 않는다. 주행·비전 launch와 카메라 서비스를 동시에 기동하기 전에, D455를 여는 노드를 하나로 정하고 IMU·컬러·필요한 깊이 토픽을 함께 발행하도록 통합해야 한다. 이번 검증은 카메라 단독 시연이며 주행과의 공존 검증은 수행하지 않았다.
+현재 카메라 실행기는 `enable_gyro:=true`, `enable_accel:=true`, `unite_imu_method:=2`로 원본 영상과 IMU를 함께 발행한다. 사용자의 선택에 따라 주행과 분리한 영상 송출 구성은 유지한다. 웹 영상 중지는 인코더·전송을 종료하며 카메라 서비스의 원본·IMU 발행은 유지한다. IMU 활성화만으로 팀원 주행·비전과의 카메라 공유가 완료된 것은 아니므로 같은 D455를 여는 launch와 카메라 서비스를 동시에 기동하지 않는다. 주행과의 공존 검증은 수행하지 않았다.
 
 현재 장비의 MediaMTX는 v1.9.0이다. `mediamtx-tailnet.v1.9.yml.example`은 해당 버전의 `protocols`, `webrtcAllowOrigin` 키를 사용한다. 다른 버전 설정을 그대로 섞지 않는다. 실제 설정은 Git 밖의 `~/.local/share/autonomous-mower/video-demo/`에 두며 디렉터리는 700, 파일은 600으로 제한한다.
 
