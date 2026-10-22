@@ -38,10 +38,9 @@ export function LogViewerPage() {
 
   return (
     <div className="logs-page">
-      <section className="workspace-panel">
+      <section className="workspace-panel logs-search-panel" aria-label="로그 검색">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">2단계</p>
             <h2>로그 뷰어</h2>
           </div>
           <span className="status-pill connected">{env.enableMockLogs ? '샘플 로그' : '실제 로그'}</span>
@@ -92,36 +91,46 @@ export function LogViewerPage() {
         {searchError && <p role="alert">{searchError}</p>}
       </section>
 
-      <section className="workspace-panel logs-timeline-panel">
-        <div className="panel-heading compact">
-          <div>
-            <p className="eyebrow">타임라인</p>
-            <h2>이벤트</h2>
+      <div className="logs-results">
+        <section className="workspace-panel logs-timeline-panel" aria-labelledby="logs-timeline-title">
+          <div className="panel-heading compact">
+            <div>
+              <h2 id="logs-timeline-title">이벤트 타임라인</h2>
+            </div>
+            <span className="status-pill connected">{logs.length}건</span>
           </div>
-          <span className="status-pill connected">{logs.length}건</span>
-        </div>
-        <LogTimeline logs={logs} selectedLogId={selectedLog?.id ?? null} onSelectLog={setSelectedLogId} />
-      </section>
+          <div className="logs-column-headings" aria-hidden="true">
+            <span>시간</span><span>심각도</span><span>이벤트 · 메시지</span>
+          </div>
+          <div className="logs-list-scroll" role="region" aria-label="이벤트 목록" tabIndex={0}>
+            <LogTimeline logs={logs} selectedLogId={selectedLog?.id ?? null} onSelectLog={setSelectedLogId} />
+          </div>
+        </section>
 
-      <section className="workspace-panel">
-        <div className="panel-heading compact">
-          <div>
-            <p className="eyebrow">스냅샷</p>
-            <h2>스냅샷 뷰어</h2>
+        <section className="workspace-panel logs-detail-panel" id="log-detail" aria-labelledby="log-detail-title">
+          <div className="panel-heading compact">
+            <h2 id="log-detail-title">선택한 로그 상세</h2>
           </div>
-        </div>
-        <SnapshotViewer log={selectedLog} />
-      </section>
-
-      <section className="workspace-panel">
-        <div className="panel-heading compact">
-          <div>
-            <p className="eyebrow">상세</p>
-            <h2>로그 메타데이터</h2>
-          </div>
-        </div>
-        <pre className="payload-preview">{selectedLog ? JSON.stringify(selectedLog, null, 2) : '선택된 로그가 없습니다.'}</pre>
-      </section>
+          {selectedLog ? (
+            <>
+              <strong className="logs-detail-event">{selectedLog.eventType}</strong>
+              <p className="logs-detail-message">{selectedLog.message}</p>
+              <dl className="logs-detail-fields">
+                <div><dt>발생 시간</dt><dd>{new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date(selectedLog.occurredAt))}</dd></div>
+                <div><dt>로봇</dt><dd>{selectedLog.robotId}</dd></div>
+                <div><dt>심각도</dt><dd>{{ info: '정보', warning: '경고', critical: '치명' }[selectedLog.severity]}</dd></div>
+                <div><dt>발생 출처</dt><dd>{selectedLog.source}</dd></div>
+              </dl>
+              <h3>스냅샷</h3>
+              <SnapshotViewer log={selectedLog} />
+              <details className="logs-metadata" key={selectedLog.id}>
+                <summary>로그 메타데이터 · 원본 JSON</summary>
+                <pre className="payload-preview">{JSON.stringify(selectedLog, null, 2)}</pre>
+              </details>
+            </>
+          ) : <p className="muted">목록에서 로그를 선택하면 상세 내용을 확인할 수 있습니다.</p>}
+        </section>
+      </div>
     </div>
   );
 }

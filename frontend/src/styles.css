@@ -334,7 +334,7 @@ button {
 .logs-page {
   display: grid;
   gap: 18px;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  align-items: start;
 }
 
 .map-panel {
@@ -750,10 +750,6 @@ button {
 
 .history-map-panel {
   grid-row: span 2;
-}
-
-.logs-timeline-panel {
-  grid-row: span 3;
 }
 
 .history-result-list,
