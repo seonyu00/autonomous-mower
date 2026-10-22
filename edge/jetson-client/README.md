@@ -84,6 +84,41 @@ cp config.yaml.example config.yaml
 
 ## 실행
 
+### 상태 전송 전용 실행과 전원 ON 자동 시작
+
+웹 연결만 확인할 때는 `jetson_mower_client.monitor`를 사용한다. 이 프로그램은 `/fix`만 구독하고 MQTT의 자기 로봇 `telemetry`·`status`만 발행한다. MQTT 명령 구독·처리와 ROS 주행·모드·엔진 출력, 시리얼 장치 접근은 하지 않는다. ROS 자체의 `/parameter_events` publisher는 존재할 수 있지만 제어 출력은 아니다. `온라인`은 상태 전송 프로그램의 연결을 의미하며 센서·STM32·예초 작업 정상 여부를 보증하지 않는다.
+
+실제 TLS 계정·CA가 준비된 `config.yaml`을 유지하고 상태 전용 실행기를 사용한다. 이 실행기는 현재 터미널의 위치와 관계없이 자신의 소스 경로와 설정을 사용하므로 다른 ROS 작업공간 설치본을 잘못 실행하지 않는다.
+
+```bash
+bash "$HOME/autonomous-mower/edge/jetson-client/scripts/run-telemetry-monitor.sh"
+```
+
+전원 ON 자동 실행은 사용자 systemd 서비스로 등록한다. 아래 unit은 저장소가 `$HOME/autonomous-mower`에 있는 경우를 기준으로 한다. 다른 위치라면 unit의 두 경로를 실제 위치에 맞춘다. 기존 서비스가 있으면 먼저 내용을 확인하고 덮어쓰지 않는다.
+
+```bash
+mkdir -p "$HOME/.config/systemd/user"
+cp "$HOME/autonomous-mower/edge/jetson-client/systemd/mower-telemetry.service" "$HOME/.config/systemd/user/"
+systemctl --user daemon-reload
+loginctl enable-linger "$USER"
+systemctl --user enable --now mower-telemetry.service
+```
+
+`enable-linger`는 로그인 전에도 사용자 서비스를 시작하고 SSH 연결 종료 후 유지하도록 한다. 서비스는 PC·Tailscale이 늦게 준비되거나 프로그램이 종료되면 10초 간격으로 재시도한다. 네트워크가 끊긴 동안 새 측정 메시지를 계속 쌓지 않으며 GPS가 3초 이상 갱신되지 않으면 위치를 null로 보낸다. 실제 재부팅·전원 ON 검증은 서비스 등록·현재 실행 확인과 구분한다.
+
+```bash
+systemctl --user status mower-telemetry.service --no-pager
+systemctl --user restart mower-telemetry.service
+# 이번 실행만 중지: 다음 부팅의 자동 실행 등록은 유지한다.
+systemctl --user stop mower-telemetry.service
+# 자동 실행도 해제하고 현재 실행을 중지한다.
+systemctl --user disable --now mower-telemetry.service
+```
+
+PC의 `stop.ps1`은 이 Jetson 서비스를 종료하지 않는다. PC가 꺼져 있으면 상태 전송 연결은 재시도하고 웹 백엔드도 응답하지 않는다. 상태 모니터와 기존 제어 클라이언트는 같은 MQTT client ID를 사용하므로 동시에 실행하지 않는다. 제어 통합 시험으로 전환할 때는 먼저 모니터의 자동 실행을 해제하고 장비 계정 권한·안전 조건을 별도로 확인한다.
+
+### 기존 제어 클라이언트 실행
+
 colcon으로 빌드한 경우:
 
 ```bash

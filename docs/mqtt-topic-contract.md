@@ -284,7 +284,7 @@ Field policy:
 
 - `connectionState`: `online`, `degraded`, or `offline`.
 - `mqttState`: `connected`, `reconnecting`, or `disconnected`.
-- `edgeState`: `connected`, `manual`, `autonomous`, `emergency`, or `fault`.
+- `edgeState`: `connected`, `monitoring`, `manual`, `autonomous`, `emergency`, or `fault`. `monitoring`은 명령 구독·ROS 제어 출력 없이 상태만 전송하는 프로그램이며 센서·STM32·예초 작업의 정상 동작을 의미하지 않는다.
 - `stale`: true when Jetson considers upstream telemetry/control state stale.
 
 ## Event Payload

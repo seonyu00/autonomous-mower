@@ -16,11 +16,13 @@ LogHandler = Callable[[str], None]
 
 
 class MqttEdgeClient:
-    def __init__(self, config: EdgeConfig, topics: MowerTopics, on_message: MessageHandler, log: LogHandler) -> None:
+    def __init__(self, config: EdgeConfig, topics: MowerTopics, on_message: MessageHandler, log: LogHandler,
+                 *, subscribe_commands: bool = True) -> None:
         self._config = config
         self._topics = topics
         self._on_message = on_message
         self._log = log
+        self._subscribe_commands = subscribe_commands
         self._client = mqtt.Client(client_id=config.mqtt.client_id, clean_session=True)
 
         if config.mqtt.username:
@@ -55,20 +57,26 @@ class MqttEdgeClient:
     def publish_json(self, topic: str, payload: dict[str, Any], qos: int) -> None:
         self._client.publish(topic, json.dumps(payload, separators=(",", ":")), qos=qos, retain=False)
 
+    def is_connected(self) -> bool:
+        return self._client.is_connected()
+
     def _handle_connect(self, client: mqtt.Client, _userdata: Any, _flags: dict[str, Any], rc: int) -> None:
         if rc != 0:
             self._log(f"mqtt connect failed rc={rc}")
             return
 
         self._log(f"mqtt connected broker={self._config.mqtt.broker_url}")
-        for topic, qos in self._topics.command_subscriptions():
-            client.subscribe(topic, qos=qos)
-            self._log(f"mqtt subscribed topic={topic} qos={qos}")
+        if self._subscribe_commands:
+            for topic, qos in self._topics.command_subscriptions():
+                client.subscribe(topic, qos=qos)
+                self._log(f"mqtt subscribed topic={topic} qos={qos}")
 
     def _handle_disconnect(self, _client: mqtt.Client, _userdata: Any, rc: int) -> None:
         self._log(f"mqtt disconnected rc={rc}")
 
     def _handle_message(self, _client: mqtt.Client, _userdata: Any, message: mqtt.MQTTMessage) -> None:
+        if not self._subscribe_commands:
+            return
         parsed: dict[str, Any] | None = None
         try:
             decoded = message.payload.decode("utf-8")

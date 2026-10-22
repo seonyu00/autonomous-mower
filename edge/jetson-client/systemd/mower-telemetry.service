@@ -1,0 +1,16 @@
+[Unit]
+Description=예초기 상태 전송 전용 MQTT 모니터
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=%h/autonomous-mower/edge/jetson-client
+ExecStart=/bin/bash %h/autonomous-mower/edge/jetson-client/scripts/run-telemetry-monitor.sh
+Restart=always
+RestartSec=10
+TimeoutStopSec=10
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

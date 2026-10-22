@@ -264,6 +264,8 @@ Jetson의 접속 URL은 `mqtts://<PC_TAILSCALE_DNS>:18883`이며 인증서 SAN�
 
 접속 경로의 모의 검사 7개는 `powershell -NoProfile -File tools/pc-demo/mqtt.test.ps1` 또는 `pwsh -NoProfile -File tools/pc-demo/mqtt.test.ps1`로 실행한다. 실제 Tailscale·브로커·포트를 변경하지 않는다.
 
+이후 상태 전송 전용 `jetson_mower_client.monitor`와 사용자 서비스 `mower-telemetry.service`를 적용해 실제 Jetson → MQTT TLS → DB → WSS → 배포 웹의 최근 수신을 확인했다. 이 프로그램은 명령을 구독하거나 ROS 제어 출력을 만들지 않으며 센서값이 없으면 `null`을 보낸다. Jetson 전원 ON 자동 실행을 등록했으므로 PC 서비스·MQTT 내부 경로·웹 Funnel이 준비되면 연결을 시도한다. 등록 상태 확인·수동 중지·자동 실행 해제와 기존 제어 클라이언트와의 중복 실행 제한은 [Jetson 상태 전용 실행 안내](edge/jetson-client/README.md#상태-전송-전용-실행과-전원-on-자동-시작)를 따른다. 실제 전원 재인가와 센서 측정값 검증은 별도다.
+
 백엔드는 실제 배포 프론트 Origin을 `APP_ALLOWED_ORIGINS`에 포함한다. 이 단계의 HTTP·WS 검증은 PC 내부 검증이며 HTTPS·WSS의 외부 접속 검증이 아니다. Funnel을 준비·검증한 뒤 Vercel의 `VITE_API_BASE_URL`과 `VITE_WSS_URL`을 등록하고 다시 배포한다. 실제 공개 주소가 준비되기 전에는 위 loopback 주소를 Vercel에 넣지 않는다.
 
 ## Funnel로 웹 API 공개
