@@ -47,7 +47,8 @@ body:has(.map-console-page) { overflow: auto; }
   min-height: 100vh;
 }
 .app-header { grid-column: 1 / -1; min-height: 88px; padding: 10px 20px; gap: 20px; position: sticky; top: 0; z-index: 10; }
-.brand-mark { background: transparent; color: var(--accent); border-radius: 0; width: auto; font-size: 28px; letter-spacing: -0.03em; }
+.brand-mark { background: transparent; border-radius: 0; width: 32px; height: 32px; flex-shrink: 0; }
+.brand-mark svg { display: block; width: 100%; height: 100%; }
 .app-header h1 { font-size: 17px; white-space: nowrap; }
 .header-operations { flex-wrap: wrap; }
 .eyebrow { letter-spacing: 0; font-size: 11px; }
@@ -174,6 +175,11 @@ button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visibl
 .video-panel .video-status-overlay span { font-size: 11px; }
 .video-panel .video-actions { padding: 12px; gap: 8px; }
 .video-panel .video-actions button { min-height: 44px; }
+.app-shell:has(.map-console-page) .video-panel { container: video-controls / inline-size; }
+.app-shell:has(.map-console-page) .video-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@container video-controls (min-width: 400px) {
+  .app-shell:has(.map-console-page) .video-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
 .video-panel > :is(.warning-line, .muted) { margin: 0; padding: 0 12px 12px; overflow-wrap: anywhere; }
 .video-details { border-top: 1px solid var(--border-subtle); padding: 0 12px; }
 .video-details > summary { padding: 14px 0; min-height: 44px; cursor: pointer; font-size: 12px; color: var(--text-secondary); }
@@ -278,7 +284,7 @@ input, textarea { caret-color: var(--accent); }
 /* 지도와 제어를 나란히 보여 주고 영상과 이벤트는 지도 아래에 둔다. */
 @media (min-width: 1051px) {
   .app-shell:has(.map-console-page) .map-console-controls { grid-column: 3; grid-row: 3 / 5; margin: 16px 20px 24px 0; align-self: start; }
-  .app-shell:has(.map-console-page) .app-status { grid-column: 2; grid-row: 4; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 16px 20px 24px; }
+  .app-shell:has(.map-console-page) .app-status { grid-column: 2; grid-row: 4; display: grid; grid-template-columns: minmax(0, min(520px, 50%)) minmax(0, 1fr); padding: 16px 20px 16px; }
   .app-shell:has(.map-console-page) .compact-control-panel { grid-template-columns: minmax(0, 1fr); }
   .app-shell:has(.map-console-page) .control-lock-group,
   .app-shell:has(.map-console-page) .general-control-commands.compact,
@@ -317,7 +323,6 @@ input, textarea { caret-color: var(--accent); }
 @media (max-width: 720px) {
   .app-shell, .app-shell:has(.map-console-page) { display: flex; flex-direction: column; }
   .app-header { display: grid; grid-template-columns: minmax(0, 1fr) 138px; min-height: 0; padding: 10px 14px; gap: 6px 12px; }
-  .brand-mark { font-size: 24px; }
   .app-header h1 { font-size: 15px; }
   .header-operations { grid-column: 1; grid-row: 2; margin: 0; gap: 0; }
   .profile-block { display: none; }
@@ -377,6 +382,5 @@ input, textarea { caret-color: var(--accent); }
 
 @media (max-width: 360px) {
   .brand-block { gap: 6px; }
-  .brand-mark { font-size: 22px; }
   .app-header h1 { font-size: 14px; }
 }

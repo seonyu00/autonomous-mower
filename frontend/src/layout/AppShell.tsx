@@ -29,7 +29,14 @@ export function AppShell() {
     <div className="app-shell">
       <header className="app-header">
         <div className="brand-block">
-          <span className="brand-mark" aria-hidden="true">AM</span>
+          <span className="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none">
+              <rect x="1" y="1" width="30" height="30" rx="5" fill="var(--accent)" />
+              <path d="M7 27V7h6v20M19 27V7h6v20" stroke="white" strokeWidth="1.5" strokeDasharray="3 2" />
+              <rect x="18" y="12" width="9" height="11" rx="2" fill="var(--danger)" stroke="white" strokeWidth="1.2" />
+              <path d="M17 14v7m11-7v7" stroke="var(--text-primary)" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </span>
           <h1>예초기 관제</h1>
         </div>
         {sampleMode ? <p className="environment-notice">개발 환경 · 샘플 모드 포함</p> : null}
