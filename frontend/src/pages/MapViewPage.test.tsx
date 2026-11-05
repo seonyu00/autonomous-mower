@@ -10,6 +10,10 @@ vi.mock('../features/map/components/WorkZoneEditor', () => ({
   WorkZoneEditor: () => <div>작업 구역 편집기</div>,
 }));
 
+vi.mock('../features/telemetry/components/TelemetryPanel', () => ({
+  TelemetryPanel: () => <div>선택 장비 요약 텔레메트리</div>,
+}));
+
 afterEach(cleanup);
 
 describe('MapViewPage', () => {
@@ -18,6 +22,7 @@ describe('MapViewPage', () => {
 
     expect(screen.getByRole('region', { name: '실시간 작업 지도' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '작업 지도' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: '선택 장비 텔레메트리' })).toHaveTextContent('선택 장비 요약 텔레메트리');
   });
 
   it('작업 구역 편집기는 지도 내부의 접이식 패널로 시작한다', () => {

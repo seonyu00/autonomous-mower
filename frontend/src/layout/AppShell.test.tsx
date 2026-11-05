@@ -37,7 +37,7 @@ vi.mock('../features/logs/components/RecentEventsPanel', () => ({
 afterEach(cleanup);
 
 describe('AppShell status placement', () => {
-  it('상단에 장비 요약을 배치하고 탐색과 영상 영역을 분리한다', () => {
+  it('지도 화면의 제목, 탐색, 영상과 제어 영역을 표시한다', () => {
     render(
       <MemoryRouter initialEntries={['/map']}>
         <AuthProvider>
@@ -49,8 +49,8 @@ describe('AppShell status placement', () => {
     const sidebar = screen.getByRole('complementary', { name: '장비 탐색 및 요약' });
     const statusPanel = screen.getByRole('complementary', { name: '영상 및 이벤트 상태' });
 
-    const overview = screen.getByRole('region', { name: '선택 장비 상태 요약' });
-    expect(within(overview).getByText('compact 텔레메트리')).toBeInTheDocument();
+    const overview = screen.getByRole('region', { name: '현재 작업 화면' });
+    expect(within(overview).queryByText('compact 텔레메트리')).not.toBeInTheDocument();
     expect(within(sidebar).queryByText('compact 텔레메트리')).not.toBeInTheDocument();
     expect(within(sidebar).getByText('로봇 목록 컴포넌트')).toBeInTheDocument();
     expect(within(statusPanel).queryByText('일반 텔레메트리')).not.toBeInTheDocument();
@@ -64,6 +64,7 @@ describe('AppShell status placement', () => {
   it('이력 화면에는 지도 전용 제어 바를 표시하지 않는다', () => {
     render(<MemoryRouter initialEntries={['/history']}><AuthProvider><AppShell /></AuthProvider></MemoryRouter>);
     expect(screen.queryByRole('region', { name: '운용 제어' })).not.toBeInTheDocument();
+    expect(screen.getByText('compact 텔레메트리')).toBeInTheDocument();
     expect(within(screen.getByRole('banner')).getByRole('button', { name: '긴급 정지' })).toBeInTheDocument();
   });
 

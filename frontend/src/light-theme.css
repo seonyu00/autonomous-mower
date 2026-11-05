@@ -87,7 +87,10 @@ body:has(.map-console-page) { overflow: auto; }
 .app-main:has(.map-console-page) { padding-bottom: 0; }
 .app-status, .app-status:has(.recent-events-panel) { grid-column: 3; grid-row: 3; align-self: start; padding: 16px 20px 0 0; background: transparent; border: 0; overflow: visible; gap: 16px; }
 .workspace-panel { padding: 18px; }
-.map-console-page { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: visible; }
+.map-console-page { display: flex; flex-direction: column; gap: 16px; height: 100%; min-height: 0; overflow: visible; }
+.map-telemetry { min-width: 0; }
+.map-telemetry .compact-telemetry { display: grid; grid-template-columns: 1.3fr repeat(3, minmax(0, 1fr)); gap: 0; padding: 0; overflow: hidden; }
+.map-telemetry .compact-telemetry.telemetry-empty { display: flex; padding: 16px 20px; }
 .map-console-map { flex: 1; position: relative; overflow: visible; min-height: 0; padding: 0; }
 .map-console-map > .panel-heading { padding: 16px; margin: 0; min-height: 54px; }
 .map-console-stage { flex: 1; min-height: 420px; display: flex; }
@@ -283,14 +286,25 @@ input, textarea { caret-color: var(--accent); }
 
 /* 지도와 제어를 나란히 보여 주고 영상과 이벤트는 지도 아래에 둔다. */
 @media (min-width: 1051px) {
+  .app-shell:has(.map-console-page) { grid-template-rows: auto auto auto auto; }
   .app-shell:has(.map-console-page) .map-console-controls { grid-column: 3; grid-row: 3 / 5; margin: 16px 20px 24px 0; align-self: start; }
-  .app-shell:has(.map-console-page) .app-status { grid-column: 2; grid-row: 4; display: grid; grid-template-columns: minmax(0, min(520px, 50%)) minmax(0, 1fr); padding: 16px 20px 16px; }
+  .app-shell:has(.map-console-page) .app-status { grid-column: 2; grid-row: 4; display: grid; grid-template-columns: minmax(0, min(680px, 50%)) minmax(0, 900px); padding: 16px 20px 16px; }
   .app-shell:has(.map-console-page) .compact-control-panel { grid-template-columns: minmax(0, 1fr); }
   .app-shell:has(.map-console-page) .control-lock-group,
   .app-shell:has(.map-console-page) .general-control-commands.compact,
   .app-shell:has(.map-console-page) .manual-joystick.compact { grid-column: 1; grid-row: auto; }
   .app-shell:has(.map-console-page) .general-control-commands.compact { grid-template-columns: minmax(0, 1fr); }
   .app-shell:has(.map-console-page) .attachment-control { grid-column: auto; }
+}
+
+@media (min-width: 1400px) {
+  .map-console-page { display: grid; grid-template-columns: minmax(0, 1fr) 240px; grid-template-rows: auto; grid-template-areas: 'map telemetry'; align-items: start; }
+  .map-console-map { grid-area: map; }
+  .map-telemetry { grid-area: telemetry; }
+  .map-telemetry .compact-telemetry { grid-template-columns: minmax(0, 1fr); }
+  .map-telemetry .overview-metric { border-left: 0; border-top: 1px solid var(--border-subtle); }
+  .map-telemetry .compact-telemetry.telemetry-empty { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .map-telemetry .telemetry-empty .status-pill { align-self: flex-start; }
 }
 
 @media (max-width: 1200px) {
@@ -343,6 +357,9 @@ input, textarea { caret-color: var(--accent); }
   .fleet-overview-heading h2 { font-size: 20px; }
   .fleet-overview-heading p { font-size: 12px; }
   .fleet-overview .compact-telemetry { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .map-telemetry .compact-telemetry { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .map-telemetry .overview-metric:nth-child(3) { border-left: 0; }
+  .map-telemetry .overview-metric:nth-child(n+3) { border-top: 1px solid var(--border-subtle); }
   .overview-state, .overview-metric { padding: 10px 12px; }
   .overview-metric:nth-child(3) { border-left: 0; }
   .overview-metric:nth-child(n+3) { border-top: 1px solid var(--border-subtle); }

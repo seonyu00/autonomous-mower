@@ -66,12 +66,12 @@ export function AppShell() {
         <RobotList />
       </aside>
 
-      <section className="fleet-overview" aria-label="선택 장비 상태 요약">
+      <section className="fleet-overview" aria-label={routePath === '/map' ? '현재 작업 화면' : '선택 장비 상태 요약'}>
         <div className="fleet-overview-heading">
           <h2>{title}</h2>
           <p>{selectedRobotId ?? '장비 선택 대기'} <span>/ 선택 장비</span></p>
         </div>
-        <TelemetryPanel compact />
+        {routePath !== '/map' ? <TelemetryPanel compact /> : null}
       </section>
 
       <main className="app-main">

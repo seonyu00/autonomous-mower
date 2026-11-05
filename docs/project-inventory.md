@@ -192,7 +192,7 @@ React VideoPanel
   - `frontend/src/shared/ui/PhasePlaceholder.tsx`
 - 스타일:
   - `frontend/src/styles.css`
-  - `frontend/src/light-theme.css`: 밝은 바탕·녹색 강조색, 상단 장비 요약, 지도·제어 패널 및 작은 화면 배치를 적용한다.
+  - `frontend/src/light-theme.css`: 밝은 바탕·녹색 강조색, 장비 요약, 지도·제어 패널 및 작은 화면 배치를 적용한다.
 
 ### 인증/Login
 
@@ -272,7 +272,7 @@ React VideoPanel
   - `TelemetryPanel`
   - `VideoPanel`
 
-- 상단 장비 요약의 `TelemetryPanel`은 미수신 상태에서 내용 너비의 안내와 수신 상태를 표시한다. 텔레메트리 수신 후에는 기존 작업 상태·배터리·속도·마지막 수신 요약을 표시한다.
+- `TelemetryPanel`은 지도 화면의 넓은 화면에서는 지도 옆, 좁은 화면에서는 지도 위에 표시하고 다른 화면에서는 상단에 표시한다. 미수신 상태에서는 안내와 수신 상태를, 수신 후에는 작업 상태·배터리·속도·마지막 수신 요약을 표시한다.
 
 인증:
 
