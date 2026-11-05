@@ -71,17 +71,17 @@ export function AppShell() {
         <Outlet />
       </main>
 
-      <aside className="app-status" aria-label="영상 및 이벤트 상태">
-        <VideoPanel />
-        <RecentEventsPanel />
-      </aside>
-
       {routePath === '/map' ? (
-        <section className="workspace-panel map-console-controls" aria-label="하단 운용 제어">
+        <section className="workspace-panel map-console-controls" aria-label="운용 제어">
           <div className="panel-heading compact"><h2>작업 제어</h2></div>
           <div className="map-control-content"><ControlPanel compact /></div>
         </section>
       ) : null}
+
+      <aside className="app-status" aria-label="영상 및 이벤트 상태">
+        <VideoPanel />
+        <RecentEventsPanel />
+      </aside>
     </div>
   );
 }
