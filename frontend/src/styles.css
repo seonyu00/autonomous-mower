@@ -328,7 +328,7 @@ button {
 .history-page {
   display: grid;
   gap: 18px;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .logs-page {
@@ -364,6 +364,7 @@ button {
   background: #0d151b;
   border: 1px solid #273641;
   border-radius: 8px;
+  height: 480px;
   min-height: 480px;
   overflow: hidden;
   position: relative;
@@ -746,10 +747,6 @@ button {
   color: #eef4f8;
   min-height: 38px;
   padding: 8px 10px;
-}
-
-.history-map-panel {
-  grid-row: span 2;
 }
 
 .history-result-list,
@@ -2561,6 +2558,10 @@ body:has(.map-console-page) {
   .maplibre-shell,
   .history-map-shell {
     min-height: 320px;
+  }
+
+  .history-map-shell {
+    height: 320px;
   }
 
   .map-console-page {
