@@ -7,8 +7,8 @@ export async function getHistory(query: HistoryQuery): Promise<HistoryEntry[]> {
   if (!isUtcDate(query.from) || !isUtcDate(query.to) || query.from > query.to) {
     throw new Error('시작일과 종료일을 올바른 순서로 입력해 주세요.');
   }
-  const fromIso = `${query.from}T00:00:00.000Z`;
-  const toIso = `${query.to}T23:59:59.999999999Z`;
+  const fromIso = new Date(`${query.from}T00:00:00+09:00`).toISOString();
+  const toIso = new Date(`${query.to}T23:59:59+09:00`).toISOString().replace('.000Z', '.999999999Z');
   if (env.enableMockHistory) {
     const from = new Date(fromIso).getTime();
     const to = new Date(toIso).getTime();

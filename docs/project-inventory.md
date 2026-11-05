@@ -391,7 +391,7 @@ Backend 주요 파일:
 
 - Frontend:
   - 개발 환경에서 `VITE_ENABLE_MOCK_HISTORY=true`일 때만 샘플 이력을 사용하고, 그 외에는 빈 결과로 시작한다.
-  - 실제 로봇 store를 사용하고 `/api/history?robotId=&from=&to=`에 UTC 날짜 전체를 ISO Instant 범위로 전달한다. 실제·샘플 표시와 로딩·오류·빈 결과를 구분하며 이전 검색·필터·세션의 늦은 응답을 무시한다.
+  - 실제 로봇 store를 사용하고 한국 시간 날짜 전체를 UTC ISO Instant 범위로 변환해 `/api/history?robotId=&from=&to=`에 전달한다. 결과 시각도 한국 시간으로 표시한다. 실제·샘플 표시와 로딩·오류·빈 결과를 구분하며 이전 검색·필터·세션의 늦은 응답을 무시한다.
   - timeline과 map 표시 component 존재
 - Backend:
   - `history:read` 권한 필요

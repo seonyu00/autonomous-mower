@@ -14,8 +14,8 @@ export function HistoryPage() {
   const sessionVersion = useAuthStore((state) => state.sessionVersion);
   const [requestedRobotId, setRobotId] = useState('');
   const robotId = robots.some((robot) => robot.id === requestedRobotId) ? requestedRobotId : robots[0]?.id ?? '';
-  const [from, setFrom] = useState(() => env.enableMockHistory ? '2026-05-28' : new Date().toISOString().slice(0, 10));
-  const [to, setTo] = useState(() => env.enableMockHistory ? '2026-05-29' : new Date().toISOString().slice(0, 10));
+  const [from, setFrom] = useState(() => env.enableMockHistory ? '2026-05-28' : koreaDate());
+  const [to, setTo] = useState(() => env.enableMockHistory ? '2026-05-29' : koreaDate());
   const [entries, setEntries] = useState<HistoryEntry[]>(() =>
     env.enableMockHistory ? mockHistoryEntries.filter((entry) => entry.robotId === (robots[0]?.id ?? '')) : [],
   );
@@ -83,12 +83,12 @@ export function HistoryPage() {
           </label>
 
           <label>
-            시작일 (UTC)
+            시작일 (한국 시간)
             <input type="date" value={from} onChange={(event) => changeFilter(() => setFrom(event.target.value))} />
           </label>
 
           <label>
-            종료일 (UTC)
+            종료일 (한국 시간)
             <input type="date" value={to} onChange={(event) => changeFilter(() => setTo(event.target.value))} />
           </label>
 
@@ -147,11 +147,15 @@ export function HistoryPage() {
   );
 }
 
+function koreaDate() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 function formatRange(startedAt: string, endedAt?: string) {
   const formatter = new Intl.DateTimeFormat('ko-KR', {
     dateStyle: 'short',
     timeStyle: 'short',
-    timeZone: 'UTC',
+    timeZone: 'Asia/Seoul',
   });
 
   return `${formatter.format(new Date(startedAt))} - ${endedAt ? formatter.format(new Date(endedAt)) : '진행 중'}`;

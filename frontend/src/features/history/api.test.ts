@@ -7,12 +7,12 @@ import { mockHistoryEntries } from './mockHistory';
 vi.mock('../../shared/api/httpClient', () => ({ httpClient: { get: vi.fn() } }));
 beforeEach(() => { env.enableMockHistory = false; vi.mocked(httpClient.get).mockReset().mockResolvedValue([]); });
 
-it('개발 환경에서도 실제 API에 UTC 날짜 전체를 Instant 범위로 보낸다', async () => {
+it('한국 날짜 전체를 UTC Instant 범위로 보낸다', async () => {
   await getHistory({ robotId: 'actual', from: '2026-09-10', to: '2026-09-11' });
   const params = new URL(vi.mocked(httpClient.get).mock.calls[0][0], 'http://localhost').searchParams;
   expect(params.get('robotId')).toBe('actual');
-  expect(params.get('from')).toBe('2026-09-10T00:00:00.000Z');
-  expect(params.get('to')).toBe('2026-09-11T23:59:59.999999999Z');
+  expect(params.get('from')).toBe('2026-09-09T15:00:00.000Z');
+  expect(params.get('to')).toBe('2026-09-11T14:59:59.999999999Z');
 });
 
 it.each([['', '2026-09-10'], ['2026-09-11', '2026-09-10'], ['2026-02-30', '2026-03-01']])(

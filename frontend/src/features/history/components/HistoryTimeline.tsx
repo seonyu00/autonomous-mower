@@ -17,7 +17,7 @@ export function HistoryTimeline({ entry }: HistoryTimelineProps) {
     <div className="history-timeline">
       {entry.events.map((event) => (
         <article key={event.id} className={`timeline-event ${event.severity}`}>
-          <span>{new Intl.DateTimeFormat('ko-KR', { timeStyle: 'medium' }).format(new Date(event.occurredAt))}</span>
+          <span>{new Intl.DateTimeFormat('ko-KR', { timeStyle: 'medium', timeZone: 'Asia/Seoul' }).format(new Date(event.occurredAt))}</span>
           <strong>{event.type}</strong>
           <p>{event.message}</p>
         </article>

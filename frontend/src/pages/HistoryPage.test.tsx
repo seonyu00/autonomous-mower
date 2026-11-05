@@ -17,14 +17,14 @@ vi.mock('../features/history/components/HistoryTimeline', () => ({ HistoryTimeli
 beforeEach(() => { resetStores(); env.enableMockHistory = false; vi.mocked(getHistory).mockReset().mockResolvedValue([]); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
-it('실제 조회 기본 날짜는 현재 UTC 날짜를 사용한다', async () => {
+it('실제 조회 기본 날짜는 한국 날짜를 사용한다', async () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-10-04T23:30:00Z'));
   render(<HistoryPage />);
-  expect(screen.getByLabelText('시작일 (UTC)')).toHaveValue('2026-10-04');
-  expect(screen.getByLabelText('종료일 (UTC)')).toHaveValue('2026-10-04');
+  expect(screen.getByLabelText('시작일 (한국 시간)')).toHaveValue('2026-10-05');
+  expect(screen.getByLabelText('종료일 (한국 시간)')).toHaveValue('2026-10-05');
   await act(async () => fireEvent.click(screen.getByRole('button', { name: '검색' })));
-  expect(getHistory).toHaveBeenCalledWith(expect.objectContaining({ from: '2026-10-04', to: '2026-10-04' }));
+  expect(getHistory).toHaveBeenCalledWith(expect.objectContaining({ from: '2026-10-05', to: '2026-10-05' }));
 });
 
 it('실제 이력은 조회 전 샘플 결과가 없고 로봇 선택은 현재 목록을 따른다', () => {
@@ -42,8 +42,8 @@ it('명시적인 개발 이력 Mock은 기존 샘플을 표시한다', () => {
   env.enableMockHistory = true;
   render(<HistoryPage />);
   expect(screen.getByText('샘플 데이터')).toBeInTheDocument();
-  expect(screen.getByLabelText('시작일 (UTC)')).toHaveValue('2026-05-28');
-  expect(screen.getByLabelText('종료일 (UTC)')).toHaveValue('2026-05-29');
+  expect(screen.getByLabelText('시작일 (한국 시간)')).toHaveValue('2026-05-28');
+  expect(screen.getByLabelText('종료일 (한국 시간)')).toHaveValue('2026-05-29');
   expect(screen.queryByText('0건')).not.toBeInTheDocument();
 });
 
@@ -96,7 +96,7 @@ it.each(['robot', 'date', 'logout'])('%s 변경 뒤 이전 응답은 표시하�
   render(<HistoryPage />);
   fireEvent.click(screen.getByRole('button', { name: '검색' }));
   if (change === 'robot') fireEvent.change(screen.getByRole('combobox'), { target: { value: 'MOWER-02' } });
-  if (change === 'date') fireEvent.change(screen.getByLabelText('시작일 (UTC)'), { target: { value: '2026-09-10' } });
+  if (change === 'date') fireEvent.change(screen.getByLabelText('시작일 (한국 시간)'), { target: { value: '2026-09-10' } });
   if (change === 'logout') act(() => useAuthStore.getState().clearSession());
   await act(async () => pending.resolve([{ ...mockHistoryEntries[0], distanceMeters: 9999 }]));
   expect(screen.queryByText(/9999 m/)).not.toBeInTheDocument();
