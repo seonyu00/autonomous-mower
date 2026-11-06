@@ -402,8 +402,9 @@ Backend 주요 파일:
 Mock/Skeleton:
 
 - coverage 계산 미구현
-- route distance 계산 미구현
+- 작업별 route distance 집계와 실제 이력 연결은 미구현이다. `GpsDistanceCalculator`에는 GPS 측정 시각이 확인된 샘플을 대상으로 3초 끊김·거리 계산을 시험하는 독립 코드만 있으며 실제 수신·조회 경로에서는 호출하지 않는다.
 - history event aggregation 미구현
+- 자율주행 프로그램별 작업 구분, 종료 확인 불가 판정, GPS 끊김을 제외한 거리 집계와 실제 예초 면적 커버리지도 미구현이다. 합의한 기준과 미확정 사항, 후속 순서는 Git에서 제외된 로컬 문서 `docs/learning/12-development-roadmap.md`의 2026-11-07 계획을 따른다.
 
 ### Logs/Snapshot
 
