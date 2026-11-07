@@ -1534,12 +1534,13 @@ npm start
 
 - `edge/mower-navigation/src/mower_map`: 받은 GPS 경계 기반 C++ 경로 생성 소스와 테스트를 반입했다. 웹 미리보기는 아래 구현으로 연결했으며 ROS 주행·STM32 연결은 없다.
 - `edge/mower-navigation/scripts/verify_offline.py`: 장비 없이 g++로 빌드하고 두 C++ 테스트 및 CLI 정밀도 테스트를 실행한다.
-- 경로점 사이의 경계 이탈, 기체 폭과 장애물 우회는 보장하지 않으므로 실기체 주행용 완성 경로로 취급하지 않는다.
+- 2026-11-07 다각형 연결 보완: 오목한 외곽과 내부 제외 고리를 유지하고 경계를 가로지르지 않는 인접 격자로 연결한다. 연결 불가능한 영역은 실패로 처리한다. 사용자 제공 HD-7000W 길이 1.150m·폭 1.030m와 예초 폭 0.650m를 적용했으며 높이 0.600m도 제원에 보존한다. 장착 오프셋·추가 안전 여유·실제 회전·위치 오차와 실제 장애물 대응은 미검증이므로 실기체 주행용 완성 경로로 취급하지 않는다.
 - 실행 방법은 모듈 README, 후속 순서와 차단 조건은 `docs/learning/12-development-roadmap.md`의 2026-09-23 절을 참고한다.
 
 ## 2026-09-23 CPP 예정 경로 웹 미리보기
 
 - 서버: `workzone/controller/CppPreviewController`, `service/CppPreviewService`, `service/CppProcessRunner`, `dto/CppPreview*`. 기존 저장 구역 조회와 버전을 활용해 제한된 C++ 프로세스를 실행한다.
 - 웹: `frontend/src/features/map/cppPreview.ts`, `components/CppPreviewControls.tsx`, 기존 `MapViewMap`·`NaverOperationalMap`. 명시적 생성, 시작·끝·순서·방향, 대체 좌표 도식 및 오래된 응답 제거를 구현했다.
-- 미구현/미검증: 결과 영속화, 다른 사용자의 구역 변경 실시간 통지, 실제 주행, 경로 연결 안전성 및 실기체 커버리지 보장. 실제 DB와 네이버 실 SDK를 포함한 전체 연결 검증은 별도다.
+- C++가 차체 외접원 반경 약 0.772m로 연속 경로 여유를 검사하고 예초 줄 간격을 0.65m 이하로 계산한다. 웹 기본 격자는 0.2m, 웹·API 허용 범위는 0.2~0.65m다. 서버가 CLI 결과의 경로선 전체를 저장 다각형으로 재검사해 이탈·경계 접촉을 거부한다. 외곽과 내부 고리의 닫는 점 제외 총 500점 제한을 적용한다.
+- 미구현/미검증: 결과 영속화, 다른 사용자의 구역 변경 실시간 통지, 실제 주행, 실기체의 경로 추종 안전성과 커버리지 보장. 실제 DB와 네이버 실 SDK를 포함한 전체 연결 검증은 별도다.
 - 실행·제약·검증 범위는 [작업 구역 흐름](learning/07-work-zone-postgis.md#cpp-예정-경로-미리보기), 계약은 [API 문서](api-contract.md)를 따른다.

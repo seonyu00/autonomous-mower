@@ -2,6 +2,7 @@
 #include <cmath>
 
 #include "mower_map/grid_map.hpp"
+#include "mower_map/hd7000w_spec.hpp"
 
 using mower_map::CellIndex;
 using mower_map::CellState;
@@ -9,10 +10,15 @@ using mower_map::GpsCoordinate;
 using mower_map::GridMap;
 
 int main() {
-  GridMap map(7, 7, 0.20, {37.0, 127.0});
-  assert(map.canPlaceMower({3, 3}));
-  assert(map.placeMower({3, 3}));
-  assert(map.render() == "0000000\n0000000\n0011100\n0011100\n0011100\n0000000\n0000000\n");
+  GridMap map(9, 9, 0.20, {37.0, 127.0});
+  assert(map.canPlaceMower({4, 4}));
+  assert(!map.canPlaceMower({3, 3}));
+  assert(map.placeMower({4, 4}));
+  assert(map.at({4, 4}) == CellState::Cut);
+  assert(map.at({4, 5}) == CellState::Cut);
+  assert(map.at({5, 5}) == CellState::Allocated);
+  assert(map.render().find('?') == std::string::npos);
+  assert(std::abs(mower_map::mowerEnvelopeRadiusM() - 0.772) < 0.001);
 
   GridMap blocked(9, 9, 0.20, {37.0, 127.0});
   blocked.setObstacle({3, 3});
@@ -34,6 +40,18 @@ int main() {
   assert(!path.empty());
   for (const auto position : path) {
     assert(route_map.canPlaceMower(position));
+  }
+  // 격자를 바꿔도 왕복 줄 간격은 실제 예초 폭보다 커지지 않아야 한다.
+  for (double size : {0.2, 0.3, 0.5, 0.65}) {
+    GridMap scaled(30, 30, size, {37.0, 127.0});
+    const auto scaled_path = scaled.coveragePath();
+    assert(!scaled_path.empty());
+    for (std::size_t i = 1; i < scaled_path.size(); ++i) {
+      const auto previous = scaled_path[i - 1], current = scaled_path[i];
+      if (current.row != previous.row) {
+        assert((current.row - previous.row) * size <= 0.650000001);
+      }
+    }
   }
   return 0;
 }

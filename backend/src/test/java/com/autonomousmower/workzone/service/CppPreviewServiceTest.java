@@ -35,7 +35,7 @@ class CppPreviewServiceTest {
     }
 
     @Test void convertsLongitudeLatitudeAndPreservesOutputPrecision() throws Exception {
-        var result = service.preview("R1", new CppPreviewRequest(2, 1.0));
+        var result = service.preview("R1", new CppPreviewRequest(2, 0.5));
         var input = org.mockito.ArgumentCaptor.forClass(byte[].class);
         verify(runner).run(input.capture());
         var parsed = json.readTree(input.getValue());
@@ -47,41 +47,83 @@ class CppPreviewServiceTest {
     }
 
     @Test void rejectsStaleVersionBeforeExecution() {
-        assertCode(ErrorCode.WORK_ZONE_CONFLICT, () -> service.preview("R1", new CppPreviewRequest(1, 1.0)));
+        assertCode(ErrorCode.WORK_ZONE_CONFLICT, () -> service.preview("R1", new CppPreviewRequest(1, 0.5)));
         verifyNoInteractions(runner);
     }
 
     @Test void rejectsChangeWhileRunning() {
         when(zones.getWorkZone("R1")).thenReturn(zone(2, List.of(ring)), zone(3, List.of(ring)));
-        assertCode(ErrorCode.WORK_ZONE_CONFLICT, () -> service.preview("R1", new CppPreviewRequest(2, 1.0)));
+        assertCode(ErrorCode.WORK_ZONE_CONFLICT, () -> service.preview("R1", new CppPreviewRequest(2, 0.5)));
     }
 
-    @Test void rejectsHolesExcessiveVerticesNonFiniteAndLargeBounds() {
+    @Test void rejectsInvalidHolesExcessiveVerticesNonFiniteAndLargeBounds() {
         for (var rings : List.of(List.of(ring, ring), List.of(java.util.Collections.nCopies(502, ring.getFirst())),
                 List.of(List.of(List.of(Double.NaN, 37.0), ring.get(1), ring.get(2), ring.get(0))),
                 List.of(List.of(List.of(127.0, 37.0), List.of(128.0, 37.0), List.of(128.0, 38.0), List.of(127.0, 37.0))))) {
             when(zones.getWorkZone("R1")).thenReturn(zone(2, rings));
-            assertCode(ErrorCode.CPP_INPUT_INVALID, () -> service.preview("R1", new CppPreviewRequest(2, 1.0)));
+            assertCode(ErrorCode.CPP_INPUT_INVALID, () -> service.preview("R1", new CppPreviewRequest(2, 0.5)));
         }
         verifyNoInteractions(runner);
     }
 
+    @Test void preservesConcaveBoundaryAndInteriorRings() throws Exception {
+        var concave = List.of(ring.get(0), ring.get(1), ring.get(2), List.of(127.0001, 37.0001),
+                ring.get(3), ring.get(0));
+        var hole = List.of(List.of(127.00003, 37.00003), List.of(127.00007, 37.00003),
+                List.of(127.00007, 37.00007), List.of(127.00003, 37.00007), List.of(127.00003, 37.00003));
+        when(zones.getWorkZone("R1")).thenReturn(zone(2, List.of(concave, hole)));
+        when(runner.run(any())).thenReturn(output("[]"));
+        service.preview("R1", new CppPreviewRequest(2, 0.2));
+        var input = org.mockito.ArgumentCaptor.forClass(byte[].class);
+        verify(runner).run(input.capture());
+        var parsed = json.readTree(input.getValue());
+        assertThat(parsed.path("polygon").size()).isEqualTo(5);
+        assertThat(parsed.path("polygon").get(3).path("lon").doubleValue()).isEqualTo(127.0001);
+        assertThat(parsed.path("holes").size()).isEqualTo(1);
+        assertThat(parsed.path("holes").get(0).size()).isEqualTo(4);
+        assertThat(parsed.path("holes").get(0).get(1).path("lat").doubleValue()).isEqualTo(37.00003);
+    }
+
+    @Test void rejectsSegmentsCrossingConcavityEvenWhenEndpointsAreInside() {
+        var uShape = List.of(ring.get(0), ring.get(1), ring.get(2), List.of(127.00014, 37.0002),
+                List.of(127.00014, 37.00006), List.of(127.00006, 37.00006),
+                List.of(127.00006, 37.0002), ring.get(3), ring.get(0));
+        when(zones.getWorkZone("R1")).thenReturn(zone(2, List.of(uShape)));
+        when(runner.run(any())).thenReturn(output("[{\"lat\":37.00015,\"lon\":127.00003},{\"lat\":37.00015,\"lon\":127.00017}]"));
+        assertCode(ErrorCode.CPP_OUTPUT_INVALID, () -> service.preview("R1", new CppPreviewRequest(2, 0.2)));
+    }
+
+    @Test void rejectsHoleCrossingOutsidePointsAndBoundaryContact() {
+        var hole = List.of(List.of(127.00008, 37.00008), List.of(127.00012, 37.00008),
+                List.of(127.00012, 37.00012), List.of(127.00008, 37.00012), List.of(127.00008, 37.00008));
+        when(zones.getWorkZone("R1")).thenReturn(zone(2, List.of(ring, hole)));
+        for (String path : List.of(
+                "[{\"lat\":37.0001,\"lon\":127.00003},{\"lat\":37.0001,\"lon\":127.00017}]",
+                "[{\"lat\":37.0001,\"lon\":127.0001}]",
+                "[{\"lat\":37.1,\"lon\":127.1}]",
+                "[{\"lat\":37,\"lon\":127.0001}]",
+                "[{\"lat\":37.00008,\"lon\":127.00003},{\"lat\":37.00008,\"lon\":127.00017}]")) {
+            when(runner.run(any())).thenReturn(output(path));
+            assertCode(ErrorCode.CPP_OUTPUT_INVALID, () -> service.preview("R1", new CppPreviewRequest(2, 0.2)));
+        }
+    }
+
     @Test void rejectsInvalidCellSizes() {
-        for (double size : new double[]{0, -1, Double.NaN, Double.POSITIVE_INFINITY, 6}) {
+        for (double size : new double[]{0, -1, Double.NaN, Double.POSITIVE_INFINITY, 0.66, 1, 6}) {
             assertCode(ErrorCode.CPP_INPUT_INVALID, () -> service.preview("R1", new CppPreviewRequest(2, size)));
         }
         verifyNoInteractions(runner);
     }
 
     @Test void rejectsGridLargerThanEitherDimensionBeforeRunningCpp() {
-        // 약 1m 구역뿐 아니라, 위도 보정 전에는 충분해 보이는 동서 폭도 거부한다.
-        for (double[] bounds : List.of(new double[]{37, .00001, .00001},
-                new double[]{37, .0001, .00001}, new double[]{60, .00006, .0001})) {
+        // 0.65m보다 작은 구역뿐 아니라 위도 보정 후 폭이 부족한 경우도 거부한다.
+        for (double[] bounds : List.of(new double[]{37, .000001, .000001},
+                new double[]{37, .0001, .000005}, new double[]{60, .00001, .00006})) {
             double lat = bounds[0], width = bounds[1], height = bounds[2];
             var small = List.of(List.of(127.0, lat), List.of(127.0 + width, lat),
                     List.of(127.0 + width, lat + height), List.of(127.0, lat + height), List.of(127.0, lat));
             when(zones.getWorkZone("R1")).thenReturn(zone(2, List.of(small)));
-            assertCode(ErrorCode.CPP_GRID_TOO_LARGE, () -> service.preview("R1", new CppPreviewRequest(2, 5.0)));
+            assertCode(ErrorCode.CPP_GRID_TOO_LARGE, () -> service.preview("R1", new CppPreviewRequest(2, 0.65)));
         }
         verifyNoInteractions(runner);
     }
@@ -97,10 +139,10 @@ class CppPreviewServiceTest {
 
     @Test void acceptsEmptyResultAndRejectsMalformedOutput() {
         when(runner.run(any())).thenReturn(output("[]"));
-        assertThat(service.preview("R1", new CppPreviewRequest(2, 1.0)).path()).isEmpty();
+        assertThat(service.preview("R1", new CppPreviewRequest(2, 0.5)).path()).isEmpty();
         for (String invalid : List.of("{}", "not json", "null", new String(output("[{\"lat\":91,\"lon\":127}]"), StandardCharsets.UTF_8))) {
             when(runner.run(any())).thenReturn(invalid.getBytes(StandardCharsets.UTF_8));
-            assertCode(ErrorCode.CPP_OUTPUT_INVALID, () -> service.preview("R1", new CppPreviewRequest(2, 1.0)));
+            assertCode(ErrorCode.CPP_OUTPUT_INVALID, () -> service.preview("R1", new CppPreviewRequest(2, 0.5)));
         }
     }
 

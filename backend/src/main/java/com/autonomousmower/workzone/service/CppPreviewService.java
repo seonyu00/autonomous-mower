@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
+import org.locationtech.jts.geom.Coordinate;
 
 @Service
 public class CppPreviewService {
@@ -30,14 +31,15 @@ public class CppPreviewService {
 
     public CppPreviewResponse preview(String robotId, CppPreviewRequest request) {
         if (request.expectedVersion() == null || request.cellSizeM() == null
-                || !Double.isFinite(request.cellSizeM()) || request.cellSizeM() < 0.2 || request.cellSizeM() > 5) {
+                || !Double.isFinite(request.cellSizeM()) || request.cellSizeM() < 0.2 || request.cellSizeM() > 0.65) {
             throw new BusinessException(ErrorCode.CPP_INPUT_INVALID);
         }
         WorkZoneResponse zone = zones.getWorkZone(robotId);
         if (zone.version() != request.expectedVersion()) throw new BusinessException(ErrorCode.WORK_ZONE_CONFLICT);
-        List<Point> polygon = validatePolygon(zone.zone(), request.cellSizeM());
+        List<List<Point>> rings = validatePolygon(zone.zone(), request.cellSizeM());
         try {
-            byte[] input = json.writeValueAsBytes(Map.of("polygon", polygon, "cell_size_m", request.cellSizeM()));
+            byte[] input = json.writeValueAsBytes(Map.of("polygon", rings.getFirst(),
+                    "holes", rings.subList(1, rings.size()), "cell_size_m", request.cellSizeM()));
             JsonNode output = json.reader().with(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
                     .readTree(runner.run(input));
             if (output == null || !output.path("rows").canConvertToInt() || !output.path("rows").isIntegralNumber()
@@ -49,6 +51,18 @@ public class CppPreviewService {
             Point origin = readPoint(output.path("origin"));
             List<Point> path = new ArrayList<>();
             for (JsonNode point : output.path("path")) path.add(readPoint(point));
+            // CLI 결과도 저장 다각형으로 재확인해 점 사이의 경계 횡단을 막는다.
+            var polygon = polygons.toPolygon(zone.zone());
+            var factory = polygon.getFactory();
+            if (path.size() == 1 && !polygon.contains(factory.createPoint(new Coordinate(path.getFirst().lon(), path.getFirst().lat())))) {
+                throw new BusinessException(ErrorCode.CPP_OUTPUT_INVALID);
+            }
+            if (path.size() > 1) {
+                var line = factory.createLineString(path.stream().map(p -> new Coordinate(p.lon(), p.lat())).toArray(Coordinate[]::new));
+                if (!polygon.contains(line) || polygon.getBoundary().intersects(line)) {
+                    throw new BusinessException(ErrorCode.CPP_OUTPUT_INVALID);
+                }
+            }
             // 실행 중 다른 사용자가 저장한 경우 최신 구역의 경로로 반환하지 않는다.
             WorkZoneResponse latest = zones.getWorkZone(robotId);
             if (!latest.zoneId().equals(zone.zoneId()) || latest.version() != zone.version()) {
@@ -61,20 +75,31 @@ public class CppPreviewService {
         }
     }
 
-    private List<Point> validatePolygon(WorkZonePayload payload, double cellSize) {
+    private List<List<Point>> validatePolygon(WorkZonePayload payload, double cellSize) {
         if (payload == null || payload.geometry() == null || payload.geometry().coordinates() == null
-                || payload.geometry().coordinates().size() != 1) throw new BusinessException(ErrorCode.CPP_INPUT_INVALID);
-        var ring = payload.geometry().coordinates().getFirst();
-        if (ring == null || ring.size() < 4 || ring.size() > 501) throw new BusinessException(ErrorCode.CPP_INPUT_INVALID);
-        List<Point> points = new ArrayList<>();
-        for (var coordinate : ring) {
-            if (coordinate == null || coordinate.size() != 2 || coordinate.get(0) == null || coordinate.get(1) == null
-                    || !validPoint(coordinate.get(1), coordinate.get(0)) || Math.abs(coordinate.get(1)) > 85) {
-                throw new BusinessException(ErrorCode.CPP_INPUT_INVALID);
+                || payload.geometry().coordinates().isEmpty()) throw new BusinessException(ErrorCode.CPP_INPUT_INVALID);
+        List<List<Point>> rings = new ArrayList<>();
+        int vertices = 0;
+        for (var ring : payload.geometry().coordinates()) {
+            if (ring == null || ring.size() < 4) throw new BusinessException(ErrorCode.CPP_INPUT_INVALID);
+            vertices += ring.size() - 1;
+            if (vertices > 500) throw new BusinessException(ErrorCode.CPP_INPUT_INVALID);
+            List<Point> points = new ArrayList<>();
+            for (var coordinate : ring) {
+                if (coordinate == null || coordinate.size() != 2 || coordinate.get(0) == null || coordinate.get(1) == null
+                        || !validPoint(coordinate.get(1), coordinate.get(0)) || Math.abs(coordinate.get(1)) > 85) {
+                    throw new BusinessException(ErrorCode.CPP_INPUT_INVALID);
+                }
+                points.add(new Point(coordinate.get(1), coordinate.get(0)));
             }
-            points.add(new Point(coordinate.get(1), coordinate.get(0)));
+            rings.add(points.subList(0, points.size() - 1));
         }
-        var polygon = polygons.toPolygon(payload);
+        org.locationtech.jts.geom.Polygon polygon;
+        try {
+            polygon = polygons.toPolygon(payload);
+        } catch (BusinessException exception) {
+            throw new BusinessException(ErrorCode.CPP_INPUT_INVALID);
+        }
         var bounds = polygon.getEnvelopeInternal();
         // 격자 할당 전 보수적인 상한으로 메모리와 계산량을 제한한다. 경로 알고리즘은 C++만 사용한다.
         double rows = Math.ceil(Math.toRadians(bounds.getHeight()) * 6378137 / cellSize);
@@ -89,7 +114,7 @@ public class CppPreviewService {
         if (heightM < cellSize || widthM < cellSize) {
             throw new BusinessException(ErrorCode.CPP_GRID_TOO_LARGE);
         }
-        return points.subList(0, points.size() - 1);
+        return rings;
     }
 
     private Point readPoint(JsonNode node) {

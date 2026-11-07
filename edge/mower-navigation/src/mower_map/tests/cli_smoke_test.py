@@ -46,6 +46,20 @@ def main():
 
     print(f"OK: {len(path)} waypoints, lon_span={lon_span:.8f}, lat_span={lat_span:.8f}")
 
+    # 내부 고리 입력도 실제 JSON CLI를 통과해야 한다.
+    with_hole = {**REQUEST, "holes": [[
+        {"lat": 36.62604, "lon": 127.45320}, {"lat": 36.62604, "lon": 127.45324},
+        {"lat": 36.62608, "lon": 127.45324}, {"lat": 36.62608, "lon": 127.45320},
+    ]]}
+    reply = subprocess.run([binary], input=json.dumps(with_hole), capture_output=True, text=True, check=True)
+    assert json.loads(reply.stdout)["path"]
+    for invalid in ({**REQUEST, "holes": [[{"lat": 38, "lon": 128}] * 3]},
+                    {**REQUEST, "cell_size_m": -1},
+                    {**REQUEST, "cell_size_m": 0.66},
+                    {**REQUEST, "polygon": [{"lat": 37}] * 3}):
+        failed = subprocess.run([binary], input=json.dumps(invalid), capture_output=True, text=True)
+        assert failed.returncode != 0 and not failed.stdout
+
 
 if __name__ == "__main__":
     main()

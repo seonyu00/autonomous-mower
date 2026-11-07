@@ -4,7 +4,7 @@
 //
 // Request  (stdin):  {"cell_size_m": 0.2, "polygon": [{"lat":..,"lon":..}, ...],
 //                      "obstacles": [{"lat":..,"lon":..}, ...]}
-//   "cell_size_m" and "obstacles" are optional.
+//   "cell_size_m", "obstacles", "holes"은 선택 사항이며 holes는 내부 고리 목록이다.
 // Response (stdout): {"rows":.., "columns":.., "origin":{"lat":..,"lon":..},
 //                      "path": [{"lat":..,"lon":..}, ...]}
 //
@@ -33,6 +33,7 @@ class JsonReader {
     double cell_size_m = 0.20;
     std::vector<mower_map::GpsCoordinate> polygon;
     std::vector<mower_map::GpsCoordinate> obstacles;
+    std::vector<std::vector<mower_map::GpsCoordinate>> holes;
   };
 
   Request parseRequest() {
@@ -54,6 +55,16 @@ class JsonReader {
         request.polygon = parseGpsArray();
       } else if (key == "obstacles") {
         request.obstacles = parseGpsArray();
+      } else if (key == "holes") {
+        expect('[');
+        if (peek() != ']') {
+          while (true) {
+            request.holes.push_back(parseGpsArray());
+            if (peek() != ',') break;
+            ++pos_;
+          }
+        }
+        expect(']');
       } else {
         throw std::runtime_error("unexpected key '" + key + "' in request");
       }
@@ -120,6 +131,7 @@ class JsonReader {
   // Parses {"lat": <num>, "lon": <num>} in any key order.
   mower_map::GpsCoordinate parseGpsCoordinate() {
     mower_map::GpsCoordinate coordinate;
+    bool has_lat = false, has_lon = false;
     expect('{');
     while (true) {
       skipWhitespace();
@@ -129,8 +141,10 @@ class JsonReader {
       const double value = parseNumber();
       if (key == "lat") {
         coordinate.latitude = value;
+        has_lat = true;
       } else if (key == "lon") {
         coordinate.longitude = value;
+        has_lon = true;
       } else {
         throw std::runtime_error("unexpected key '" + key +
                                  "' in GPS coordinate");
@@ -143,6 +157,7 @@ class JsonReader {
       break;
     }
     expect('}');
+    if (!has_lat || !has_lon) throw std::runtime_error("GPS coordinate needs lat and lon");
     return coordinate;
   }
 
@@ -199,7 +214,7 @@ int main() {
   mower_map::CoveragePlanResult result;
   try {
     result = mower_map::planCoverage(request.polygon, request.obstacles,
-                                     request.cell_size_m);
+                                     request.cell_size_m, request.holes);
   } catch (const std::exception& error) {
     std::cerr << "coverage planning failed: " << error.what() << '\n';
     return 1;

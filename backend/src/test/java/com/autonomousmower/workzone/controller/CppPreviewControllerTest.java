@@ -26,7 +26,7 @@ class CppPreviewControllerTest {
     @MockBean CppPreviewService service;
     @MockBean JwtTokenProvider jwt;
     static final String URL = "/api/robots/R1/work-zone/cpp-preview";
-    static final String INPUT = "{\"expectedVersion\":2,\"cellSizeM\":1}";
+    static final String INPUT = "{\"expectedVersion\":2,\"cellSizeM\":0.5}";
 
     @Test void requiresAuthentication() throws Exception {
         mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(INPUT)).andExpect(status().isUnauthorized());
@@ -37,7 +37,7 @@ class CppPreviewControllerTest {
         verifyNoInteractions(service);
     }
     @Test @WithMockUser(authorities = "robots:read") void returnsPreviewWithoutControlPermission() throws Exception {
-        when(service.preview(eq("R1"), any())).thenReturn(new CppPreviewResponse("R1", 1L, 2, 1,
+        when(service.preview(eq("R1"), any())).thenReturn(new CppPreviewResponse("R1", 1L, 2, 0.5,
                 10, 10, new CppPreviewResponse.Point(37, 127), List.of(new CppPreviewResponse.Point(37.0001, 127.0001))));
         mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(INPUT)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.path[0].lat").value(37.0001))
@@ -45,7 +45,7 @@ class CppPreviewControllerTest {
     }
     @Test @WithMockUser(authorities = "robots:read") void validatesRequestBeforeInvokingCpp() throws Exception {
         for (String input : List.of("{}", "{\"expectedVersion\":2,\"cellSizeM\":0}",
-                "{\"expectedVersion\":-1,\"cellSizeM\":1}", "{\"expectedVersion\":2,\"cellSizeM\":6}")) {
+                "{\"expectedVersion\":-1,\"cellSizeM\":0.5}", "{\"expectedVersion\":2,\"cellSizeM\":0.66}")) {
             mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(input)).andExpect(status().isBadRequest());
         }
         verifyNoInteractions(service);

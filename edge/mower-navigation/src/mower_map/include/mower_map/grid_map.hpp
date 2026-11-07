@@ -46,14 +46,13 @@ class GridMap {
   void setFree(CellIndex cell);
   void setObstacle(CellIndex cell);
 
-  // mower_center is the GPS position of the mower's geometric center.
-  // The 7x7 footprint is allocated; the centered 3x3 area is marked cut.
+  // 차체 중심 기준으로 HD-7000W 외접원을 감싸는 보수적인 격자 영역을 검사한다.
+  // placeMower의 Cut 표시는 날 중심도 같다고 가정한 도형 시뮬레이션이며 실측 이력이 아니다.
   bool canPlaceMower(CellIndex mower_center) const;
   bool placeMower(CellIndex mower_center);
 
-  // Simple CPP baseline (lawn-mower/boustrophedon route): centers are spaced
-  // by the 3x3 cutter width and traversed in alternating directions.
-  // Obstacle-overlapping mower positions are skipped.
+  // 예초 폭 0.65m를 넘지 않는 격자 간격으로 왕복한다.
+  // 점 사이의 연속 경로와 실제 경계 여유는 planCoverage에서 검사한다.
   std::vector<CellIndex> coveragePath() const;
 
   std::string render() const;

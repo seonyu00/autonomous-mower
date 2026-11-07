@@ -19,6 +19,7 @@ export type CppPreview = {
 };
 
 export const CPP_PREVIEW_TIMEOUT_MS = 15000;
+export const CPP_MAX_CELL_SIZE_M = 0.65;
 
 const emptyPath: LngLat[] = [];
 
@@ -60,7 +61,7 @@ export function useCppPreview() {
 
   const available = Boolean(robotId && zone && version != null && !editing && !isMockWorkZoneEnabled());
   const generate = async (cellSizeM: number) => {
-    if (!available || !Number.isFinite(cellSizeM) || cellSizeM < 0.2 || cellSizeM > 5) return;
+    if (!available || !Number.isFinite(cellSizeM) || cellSizeM < 0.2 || cellSizeM > CPP_MAX_CELL_SIZE_M) return;
     controller.current?.abort();
     const abort = new AbortController();
     controller.current = abort;
@@ -96,7 +97,7 @@ export function useCppPreview() {
           : error.status === 422 ? '구역 크기에 비해 격자가 큽니다. 격자 간격을 줄이세요.'
           : error.status === 409 ? '작업 구역이 변경되었습니다. 최신 구역을 다시 불러오세요.'
           : error.status === 504 ? '경로 생성 제한 시간을 초과했습니다. 구역 크기와 격자 간격을 확인하세요.'
-          : error.status === 400 ? '지원하지 않는 구역 또는 입력 크기입니다. 구멍 없는 구역과 격자 간격(0.2~5m)을 확인하세요.'
+          : error.status === 400 ? '지원하지 않는 구역 또는 입력 크기입니다. 저장 구역과 격자 간격(0.2~0.65m)을 확인하세요.'
           : error.status === 503 ? 'CPP 서버가 준비되지 않았거나 다른 경로를 생성 중입니다. 잠시 후 다시 시도하세요.'
           : 'CPP 경로 생성에 실패했습니다. 서버 실행 환경과 연결 상태를 확인하세요.'  : '경로 생성에 실패했습니다. 연결 상태와 저장 구역을 확인하세요.' });
     } finally {

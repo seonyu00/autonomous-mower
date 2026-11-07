@@ -1,13 +1,13 @@
 #include "mower_map/grid_map.hpp"
+#include "mower_map/hd7000w_spec.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
 namespace mower_map {
 namespace {
 constexpr double kEarthRadiusMeters = 6378137.0;
-constexpr int kFootprintRadius = 3;
-constexpr int kCutRadius = 1;
 constexpr double kPi = 3.14159265358979323846;
 
 double degreesToRadians(double degrees) { return degrees * kPi / 180.0; }
@@ -95,10 +95,11 @@ bool GridMap::inBounds(int row, int column) const noexcept {
 
 bool GridMap::canPlaceMower(CellIndex center) const {
   if (center.row >= rows_ || center.column >= columns_) return false;
-  for (int row = static_cast<int>(center.row) - kFootprintRadius;
-       row <= static_cast<int>(center.row) + kFootprintRadius; ++row) {
-    for (int column = static_cast<int>(center.column) - kFootprintRadius;
-         column <= static_cast<int>(center.column) + kFootprintRadius; ++column) {
+  const int radius = static_cast<int>(std::ceil(mowerEnvelopeRadiusM() / cell_size_m_));
+  for (int row = static_cast<int>(center.row) - radius;
+       row <= static_cast<int>(center.row) + radius; ++row) {
+    for (int column = static_cast<int>(center.column) - radius;
+         column <= static_cast<int>(center.column) + radius; ++column) {
       if (!inBounds(row, column) ||
           at({static_cast<std::size_t>(row), static_cast<std::size_t>(column)}) ==
               CellState::Obstacle) {
@@ -111,13 +112,16 @@ bool GridMap::canPlaceMower(CellIndex center) const {
 
 bool GridMap::placeMower(CellIndex center) {
   if (!canPlaceMower(center)) return false;
-  for (int row = static_cast<int>(center.row) - kFootprintRadius;
-       row <= static_cast<int>(center.row) + kFootprintRadius; ++row) {
-    for (int column = static_cast<int>(center.column) - kFootprintRadius;
-         column <= static_cast<int>(center.column) + kFootprintRadius; ++column) {
+  const int radius = static_cast<int>(std::ceil(mowerEnvelopeRadiusM() / cell_size_m_));
+  for (int row = static_cast<int>(center.row) - radius;
+       row <= static_cast<int>(center.row) + radius; ++row) {
+    for (int column = static_cast<int>(center.column) - radius;
+         column <= static_cast<int>(center.column) + radius; ++column) {
+      // 날 중심이 차체 중심인 단순 모델에서 격자 전체가 날 원 안에 있을 때만 표시한다.
+      const double far_x = (std::abs(column - static_cast<int>(center.column)) + 0.5) * cell_size_m_;
+      const double far_y = (std::abs(row - static_cast<int>(center.row)) + 0.5) * cell_size_m_;
       cells_[offset({static_cast<std::size_t>(row), static_cast<std::size_t>(column)})] =
-          (std::abs(row - static_cast<int>(center.row)) <= kCutRadius &&
-           std::abs(column - static_cast<int>(center.column)) <= kCutRadius)
+          std::hypot(far_x, far_y) <= kCuttingWidthM / 2
               ? CellState::Cut
               : CellState::Allocated;
     }
@@ -127,18 +131,22 @@ bool GridMap::placeMower(CellIndex center) {
 
 std::vector<CellIndex> GridMap::coveragePath() const {
   std::vector<CellIndex> path;
-  constexpr int kCenterStep = 2 * kCutRadius + 1;
-  if (rows_ <= 2 * kFootprintRadius || columns_ <= 2 * kFootprintRadius) {
+  if (cell_size_m_ > kCuttingWidthM) {
+    throw std::invalid_argument("cell size exceeds HD-7000W cutting width");
+  }
+  const int radius = static_cast<int>(std::ceil(mowerEnvelopeRadiusM() / cell_size_m_));
+  const int center_step = std::max(1, static_cast<int>(std::floor(kCuttingWidthM / cell_size_m_ + 1e-9)));
+  if (rows_ <= 2 * static_cast<std::size_t>(radius) || columns_ <= 2 * static_cast<std::size_t>(radius)) {
     return path;
   }
 
   bool left_to_right = true;
-  for (int row = kFootprintRadius;
-       row < static_cast<int>(rows_) - kFootprintRadius; row += kCenterStep) {
+  for (int row = radius;
+       row < static_cast<int>(rows_) - radius; row += center_step) {
     if (left_to_right) {
-      for (int column = kFootprintRadius;
-           column < static_cast<int>(columns_) - kFootprintRadius;
-           column += kCenterStep) {
+      for (int column = radius;
+           column < static_cast<int>(columns_) - radius;
+           column += center_step) {
         if (canPlaceMower({static_cast<std::size_t>(row),
                            static_cast<std::size_t>(column)})) {
           path.push_back({static_cast<std::size_t>(row),
@@ -146,8 +154,8 @@ std::vector<CellIndex> GridMap::coveragePath() const {
         }
       }
     } else {
-      for (int column = static_cast<int>(columns_) - kFootprintRadius - 1;
-           column >= kFootprintRadius; column -= kCenterStep) {
+      for (int column = static_cast<int>(columns_) - radius - 1;
+           column >= radius; column -= center_step) {
         if (canPlaceMower({static_cast<std::size_t>(row),
                            static_cast<std::size_t>(column)})) {
           path.push_back({static_cast<std::size_t>(row),
