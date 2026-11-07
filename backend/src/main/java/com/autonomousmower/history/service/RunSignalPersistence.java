@@ -35,6 +35,24 @@ public class RunSignalPersistence {
         }
         var stored=signals.save(new StoredRunSignal(input.id(), input.runId(), input.robotId(), observedAt,
                 mapper.writeValueAsString(input)));
+        var current = runs.findById(input.runId());
+        if (current.isPresent() && current.get().getEndedAt() == null
+                && (input.kind().equals("gps") || input.kind().equals("state"))) {
+            var active = current.get();
+            if (!active.getRobotId().equals(input.robotId()) || input.signalAt().isBefore(active.getStartedAt())
+                    || signals.existsByRunIdAndConflictTrue(input.runId())
+                    || signals.existsByRunIdAndRobotIdNot(input.runId(), input.robotId())
+                    || (input.kind().equals("state") && input.signalAt().isAfter(observedAt))) {
+                stored.markConflict(); return false;
+            }
+            // 정상 수신은 기존 원본 전체를 다시 읽지 않고 새 입력만 반영한다.
+            if (input.kind().equals("gps")) {
+                var sample = new GpsDistanceCalculator.Sample(input.signalAt(), input.latitude(), input.longitude());
+                if (active.positionConflicts(sample)) { stored.markConflict(); return false; }
+                active.addPosition(sample);
+            } else active.observe(input.signalAt(), observedAt, false);
+            return true;
+        }
         var records=signals.findByRunIdOrderByObservedAtAsc(input.runId());
         List<RunSignal> values=new ArrayList<>();
         Map<UUID, Instant> observed=new HashMap<>();

@@ -8,7 +8,7 @@ import jakarta.persistence.Version;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OrderBy;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Embeddable;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -37,7 +37,7 @@ public class AutonomousRun {
     private long version;
     @ElementCollection
     @CollectionTable(name = "autonomous_run_position", joinColumns = @JoinColumn(name = "run_id"))
-    @OrderBy("measuredAt ASC")
+    @OrderColumn(name = "position_index", nullable = false)
     private List<Position> positions = new ArrayList<>();
 
     protected AutonomousRun() {}
@@ -82,6 +82,12 @@ public class AutonomousRun {
             }
         }
         positions.add(new Position(sample));
+    }
+
+    public boolean positionConflicts(Sample sample) {
+        Instant measuredAt = sample.measuredAt().truncatedTo(ChronoUnit.MICROS);
+        return positions.stream().anyMatch(p -> p.measuredAt.equals(measuredAt)
+                && (!Objects.equals(p.latitude, sample.latitude()) || !Objects.equals(p.longitude, sample.longitude())));
     }
 
     public UUID getId() { return id; }

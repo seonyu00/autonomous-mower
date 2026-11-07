@@ -97,6 +97,68 @@ class AutonomousRunDatabaseTest {
         when(clock.instant()).thenReturn(now);
         return now;
     }
+
+    private boolean persistAndReload(com.autonomousmower.history.dto.RunSignal input, Instant observedAt) throws Exception {
+        boolean accepted=signalPersistence.persist(input,observedAt);
+        em.flush(); em.clear();
+        return accepted;
+    }
+
+    @Test void incrementalGpsRetainsOrderGapsDuplicatesAndStateObservation() throws Exception {
+        var now=prepareSignals(); var id=UUID.randomUUID();
+        assertThat(persistAndReload(signal(id,"start",now),now)).isTrue();
+        for(int second:new int[]{1,0,4,5}) {
+            var gps=new com.autonomousmower.history.dto.RunSignal(UUID.randomUUID(),id,"signal-test","gps",
+                    now.plusSeconds(second),0.0,second<2?second*0.001:0.010+(second-4)*0.001);
+            assertThat(persistAndReload(gps,now.plusSeconds(6))).isTrue();
+            assertThat(persistAndReload(gps,now.plusSeconds(100))).isTrue();
+        }
+        assertThat(persistAndReload(signal(id,"state",now.plusSeconds(8)),now.plusSeconds(8))).isTrue();
+        assertThat(persistAndReload(signal(id,"state",now.plusSeconds(7)),now.plusSeconds(100))).isTrue();
+        var result=service.find("signal-test",null,null).getFirst();
+        assertThat(result.lastObservedAt()).isEqualTo(now.plusSeconds(8));
+        assertThat(result.routeSegments()).hasSize(2);
+        assertThat(result.hasGpsGap()).isTrue();
+        assertThat(result.distancePartial()).isTrue();
+        assertThat(result.distanceMeters()).isBetween(222.0,223.0);
+        assertThat(persistAndReload(signal(id,"end",now.plusSeconds(8)),now.plusSeconds(8))).isTrue();
+        assertThat(service.find("signal-test",null,null).getFirst().distanceMeters()).isEqualTo(result.distanceMeters());
+    }
+
+    @Test void incrementalConflictsNeverMutateExistingPositionsOrObservation() throws Exception {
+        var now=prepareSignals();
+        robots.saveAndFlush(new Robot("other-signal-test","test",LocalDateTime.now()));
+        for(int scenario=0;scenario<4;scenario++) {
+            var id=UUID.randomUUID();
+            persistAndReload(signal(id,"start",now),now);
+            persistAndReload(new com.autonomousmower.history.dto.RunSignal(UUID.randomUUID(),id,"signal-test","gps",
+                    now.plusSeconds(1),0.0,0.0),now.plusSeconds(1));
+            var invalid=switch(scenario) {
+                case 0 -> new com.autonomousmower.history.dto.RunSignal(UUID.randomUUID(),id,"signal-test","gps",now.minusSeconds(1),0.0,0.0);
+                case 1 -> new com.autonomousmower.history.dto.RunSignal(UUID.randomUUID(),id,"signal-test","gps",now.plusSeconds(1),1.0,1.0);
+                case 2 -> signal(id,"state",now.plusSeconds(20));
+                default -> new com.autonomousmower.history.dto.RunSignal(UUID.randomUUID(),id,"other-signal-test","state",now.plusSeconds(2),null,null);
+            };
+            assertThat(persistAndReload(invalid,now.plusSeconds(10))).isFalse();
+            assertThat(persistAndReload(signal(id,"state",now.plusSeconds(3)),now.plusSeconds(10))).isFalse();
+            var unchanged=runs.findById(id).orElseThrow();
+            assertThat(unchanged.samples()).containsExactly(new Sample(now.plusSeconds(1),0.0,0.0));
+            assertThat(unchanged.getLastObservedAt()).isEqualTo(now);
+        }
+    }
+
+    @Test void stalePositionCollectionCannotOverwriteConcurrentPosition() {
+        var now=prepareSignals(); var id=UUID.randomUUID();
+        service.start("signal-test",id,now,now);
+        em.flush(); em.clear();
+        var stale=runs.findById(id).orElseThrow();
+        stale.samples(); em.detach(stale);
+        service.addPosition("signal-test",id,new Sample(now.plusSeconds(2),0.0,0.002));
+        em.flush(); em.clear();
+        stale.addPosition(new Sample(now.plusSeconds(1),0.0,0.001));
+        assertThatThrownBy(() -> runs.saveAndFlush(stale))
+                .isInstanceOf(org.springframework.dao.OptimisticLockingFailureException.class);
+    }
     @Test void endBeforeStartSurvivesReloadExpiresAndReconcilesAfter24Hours() throws Exception {
         var now=prepareSignals(); var id=UUID.randomUUID();
         var end=signal(id,"end",now);
