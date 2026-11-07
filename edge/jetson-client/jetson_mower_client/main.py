@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import time
 from uuid import uuid4
 from collections import OrderedDict
@@ -15,6 +16,7 @@ from sensor_msgs.msg import Imu, NavSatFix
 from std_msgs.msg import Bool, Int8
 
 from .command_ack import publish_command_ack
+from .autonomy import AutonomyExecution
 from .command_mapping import TwistCommand, is_stale_client_command, manual_to_twist
 from .config import EdgeConfig, load_config
 from .hardware_safety import publish_emergency_stop_outputs
@@ -38,6 +40,9 @@ class JetsonMowerClientNode(Node):
         self._latest_imu: Imu | None = None
         self._last_manual_command_monotonic: float | None = None
         self._recent_command_keys: OrderedDict[str, None] = OrderedDict()
+        self._autonomy = AutonomyExecution(config.autonomy_command)
+        # GPS·주행 준비 확인 어댑터가 연결되기 전에는 실행을 허용하지 않는다.
+        self._autonomy_ready: bool | None = None
 
         self._cmd_vel_publisher = self.create_publisher(Twist, config.ros.cmd_vel_topic, _cmd_vel_qos(config))
         self._mower_set_mode_publisher = self.create_publisher(Int8, config.ros.mower_set_mode_topic, 10)
@@ -48,6 +53,7 @@ class JetsonMowerClientNode(Node):
         self.create_timer(config.ros.telemetry_publish_period_seconds, self._publish_telemetry)
         self.create_timer(config.ros.status_publish_period_seconds, self._publish_status)
         self.create_timer(0.1, self._check_manual_timeout)
+        self.create_timer(0.1, self._autonomy.poll)
 
     def start(self) -> None:
         self._mqtt.connect()
@@ -55,7 +61,10 @@ class JetsonMowerClientNode(Node):
 
     def stop(self) -> None:
         self._publish_zero_twist()
-        self._mqtt.disconnect()
+        try:
+            self._autonomy.stop()
+        finally:
+            self._mqtt.disconnect()
 
     def _handle_fix(self, message: NavSatFix) -> None:
         self._latest_fix = message
@@ -110,6 +119,7 @@ class JetsonMowerClientNode(Node):
             return
 
         parameters = _parameters(command)
+        self._stop_autonomy()
         twist = manual_to_twist(
             parameters,
             max_linear_mps=self._config.ros.max_linear_mps,
@@ -123,6 +133,7 @@ class JetsonMowerClientNode(Node):
 
     def _handle_stop(self, command: dict[str, Any], received_at: str) -> None:
         self._publish_zero_twist()
+        self._stop_autonomy()
         if not self._emergency_active:
             self._mode = "idle"
             self._work_state = "idle"
@@ -136,6 +147,7 @@ class JetsonMowerClientNode(Node):
         self._mode = "emergency"
         self._work_state = "error"
         self._last_manual_command_monotonic = None
+        self._stop_autonomy()
         self._publish_ack(command, "emergency-stop", "accepted", None, received_at)
         self._publish_status()
 
@@ -146,6 +158,13 @@ class JetsonMowerClientNode(Node):
         mode = str(_parameters(command).get("mode", "idle"))
         if mode not in {"idle", "manual", "autonomous", "home"}:
             raise ValueError("invalid-mode")
+        if mode == "autonomous":
+            reason = self._autonomy.request_start(self._autonomy_ready)
+            # 프로세스 생성은 실제 주행 시작 확인이나 완료 응답이 아니다.
+            self._publish_ack(command, "change-mode", "accepted" if reason == "autonomy-process-started" else "rejected", reason, received_at)
+            self._publish_status()
+            return
+        self._stop_autonomy()
         self._mode = mode
         self._work_state = "returning-home" if mode == "home" else "idle"
         self._publish_ack(command, "change-mode", "accepted", None, received_at)
@@ -161,6 +180,13 @@ class JetsonMowerClientNode(Node):
         # TODO: 작업 장치 명령은 이후 별도 ROS 인터페이스로 연결한다.
         self._publish_ack(command, "mower-attachment", "accepted", None, received_at)
         self._publish_status()
+
+    def _stop_autonomy(self) -> None:
+        try:
+            self._autonomy.stop()
+        except (OSError, subprocess.TimeoutExpired) as error:
+            self._autonomy.state = "stop-unconfirmed"
+            raise ValueError("autonomy-stop-unconfirmed") from error
 
     def _check_manual_timeout(self) -> None:
         if self._last_manual_command_monotonic is None:
@@ -246,11 +272,13 @@ class JetsonMowerClientNode(Node):
         self._mqtt.publish_json(self._topics.telemetry, payload, qos=1)
 
     def _publish_status(self) -> None:
+        self._autonomy.poll()
         payload = {
             "robotId": self._config.robot_id,
             "connectionState": "degraded" if self._emergency_active else "online",
             "mqttState": "connected",
-            "edgeState": "emergency" if self._emergency_active else self._mode or "connected",
+            "edgeState": "emergency" if self._emergency_active else (
+                "autonomy-" + self._autonomy.state if self._autonomy.run_id is not None else self._mode or "connected"),
             "lastSeenAt": utc_now(),
             "stale": False,
         }

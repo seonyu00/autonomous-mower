@@ -1,6 +1,10 @@
 robot_id: MOWER-01
 edge_node_id: jetson-MOWER-01
 
+# 실제 실행 경로·준비 확인·정지 계약이 확정될 때까지 비워 둔다.
+autonomy:
+  command: []
+
 mqtt:
   broker_url: mqtt://localhost:1883
   username:

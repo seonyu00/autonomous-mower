@@ -424,3 +424,8 @@ STM32 safety rules:
 - `tools/edge-mock-client/src/index.js`: 로컬 통합 테스트용 publish/subscribe topic과 QoS
 
 topic 계약을 변경할 때는 이 문서와 영향을 받는 구현을 같은 변경 단위에서 갱신한다.
+## AUTO 실행 요청의 PC 준비 상태
+
+Jetson 제어 클라이언트의 기존 `mowers/{robotId}/commands/mode` 입력에서 `parameters.mode=autonomous`는 설정된 실행 관리자에 요청한다. 새 토픽이나 임의 셸 명령 입력은 추가하지 않았다. 현재 명령 미설정과 준비 확인 미연결이 기본이므로 `rejected`를 반환한다. `autonomy-not-configured`, `autonomy-readiness-unknown`, `autonomy-not-ready`, `autonomy-already-running`, `autonomy-end-unconfirmed`, `autonomy-launch-failed`, `autonomy-stop-unconfirmed`는 실행 거부·확인 불가 사유다. 향후 어댑터 연결 후 프로세스 생성에 성공하면 `accepted`와 `autonomy-process-started`로 응답하며 실제 주행 시작이나 작업 완료를 뜻하지 않는다.
+
+기존 status의 `edgeState`에는 관리 중인 실행의 `autonomy-awaiting-start`, `autonomy-running`, `autonomy-end-unconfirmed`, `autonomy-stop-unconfirmed` 등이 표시될 수 있다. 여기서 running은 외부 확인 어댑터가 실제 시작을 확인했을 때의 상태이며 현재 해당 어댑터는 미연결이다. 서버 작업 이력 입력·GPS 측정 신호와의 외부 전송 계약도 미연결이다. 상태 전용 모니터는 계속 명령을 구독하지 않는다. 실제 MQTT 브로커·Jetson 적용·물리 동작은 이번 PC 코드 검증 범위가 아니다.

@@ -72,6 +72,7 @@ class EdgeConfig:
     mqtt: MqttConfig
     ros: RosConfig
     telemetry: TelemetryConfig
+    autonomy_command: tuple[str, ...] = ()
 
 
 def load_config(path: str | Path) -> EdgeConfig:
@@ -85,6 +86,7 @@ def load_config(path: str | Path) -> EdgeConfig:
         mqtt=_mqtt_config(raw.get("mqtt") or {}, raw.get("robot_id", "MOWER-01")),
         ros=_ros_config(raw.get("ros") or {}),
         telemetry=_telemetry_config(raw.get("telemetry") or {}),
+        autonomy_command=_autonomy_command(raw.get("autonomy") or {}),
     )
 
 
@@ -100,6 +102,15 @@ def _mqtt_config(raw: dict[str, Any], robot_id: str) -> MqttConfig:
         recent_command_cache_size=int(raw.get("recent_command_cache_size", 256)),
         ca_cert_path=_optional_string(raw.get("ca_cert_path")),
     )
+
+
+def _autonomy_command(raw: dict[str, Any]) -> tuple[str, ...]:
+    command = raw.get("command", [])
+    if not isinstance(command, list) or any(not isinstance(arg, str) or not arg.strip() for arg in command):
+        raise ValueError("autonomy.command는 실행 파일과 인수를 담은 문자열 목록이어야 합니다.")
+    if command and not Path(command[0]).is_absolute():
+        raise ValueError("autonomy.command의 실행 파일은 절대 경로여야 합니다.")
+    return tuple(command)
 
 
 def _ros_config(raw: dict[str, Any]) -> RosConfig:

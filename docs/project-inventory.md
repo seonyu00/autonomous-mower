@@ -407,6 +407,7 @@ Mock/Skeleton:
 - 작업 이력의 로봇 조회는 `RobotRepository`를 직접 사용해 상태·보관 서비스와의 순환 의존성을 제거했다. `RunHistoryApplicationTest`는 서비스 대역 없이 전체 서버 시작·로그인·HTTP 이력 조회를 검사하고, 명시적으로 선택하면 브라우저 확인용 모의 작업을 격리 DB에 보존한다. 재실행 방법은 [로컬 실행·디버깅](learning/09-local-run-debugging.md#작업-이력의-전체-서버-검증과-모의-작업-생성)을 따른다.
 - 새 작업 이력은 확인된 시작·종료 이벤트만 표시한다. 기존 오류 이벤트의 작업별 연결은 미구현이다.
 - 작업 신호의 30초 확인 불가 판정과 동일 ID 재연결은 내부 입력으로 검증하며 실제 자율주행 프로그램별 작업 신호 연결과 실제 예초 면적 커버리지는 미구현이다. 합의한 기준과 미확정 사항, 후속 순서는 Git에서 제외된 로컬 문서 `docs/learning/12-development-roadmap.md`의 2026-11-07 계획을 따른다.
+- `edge/jetson-client/jetson_mower_client/autonomy.py`에 AUTO 프로세스 실행 관리와 명시적인 시작·상태·종료 확인 지점을 PC에서 준비했다. 예제 명령과 준비 확인은 기본 비활성이며 실제 GPS 준비·스크립트·작업 이력 전송 어댑터는 미연결이다. 기존 웹 AUTO/작업 시작 요청을 받는 제어 클라이언트의 실행 경로이며 상태 전용 모니터에는 적용하지 않았다. 검증·한계는 [Jetson README](../edge/jetson-client/README.md#auto-실행-관리의-pc-준비)를 따른다.
 
 ### Logs/Snapshot
 

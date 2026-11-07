@@ -244,3 +244,23 @@ ros2 topic echo /cmd_vel geometry_msgs/msg/Twist \
   --qos-durability volatile \
   --qos-reliability reliable
 ```
+## AUTO 실행 관리의 PC 준비
+
+기존 `change-mode` 명령의 `parameters.mode=autonomous` 경로에서 `AutonomyExecution`에 실행을 요청한다. 별도 작업 시작 MQTT 토픽은 추가하지 않았다. 실행 프로그램은 장비의 설정 파일 `autonomy.command`에 문자열 목록으로 지정하며, MQTT payload의 실행 파일·명령 문자열은 사용하지 않는다. `shell=False`로 실행하고 실행 파일은 절대 경로만 허용한다. 이 설정은 신뢰할 수 있는 장비 관리자만 수정해야 한다.
+
+예제 설정은 `autonomy.command: []`로 비활성이다. 준비 확인 어댑터도 연결되지 않아 `_autonomy_ready=None`으로 시작한다. 명령만 설정해도 실제 AUTO가 실행되지는 않는다. 미설정·준비 미확인·준비 실패는 거부 응답이며, 기존처럼 소프트웨어 모드만 바꿔 AUTO 요청을 성공으로 응답하지 않는다. 실제 준비 기준과 스크립트 경로는 장비·팀원 확인 후 연결해야 한다.
+
+프로세스 생성 성공은 `accepted / autonomy-process-started`, 상태는 `awaiting-start`다. 이는 주행 시작이나 명령 완료를 의미하지 않으며 작업 거리를 만들지 않는다. 현재 AUTO와 작업 시작 버튼은 같은 모드 요청을 보내므로 둘 다 이 처리의 영향을 받는다. 이미 실행 중이면 거부하고 종료가 확인되지 않은 작업의 재시작도 거부한다. 프로세스가 정상 종료해도 실제 작업 종료로 추정하지 않는다.
+
+`confirm_started(run_id, at)`, `observe(run_id, at)`, `confirm_ended(run_id, at)`는 향후 실제 상태 신호 어댑터를 위한 내부 확인 지점이다. 확인된 신호만 작업·신호 UUID를 포함한 콜백으로 전달한다. 현재 콜백은 외부 전송에 연결하지 않았으며 서버 작업 이력·GPS 입력에 자동 반영되지 않는다. 어댑터는 로봇 ID, GPS 실제 측정 시각, 정상 종료의 의미와 인증 계약을 확정한 후 연결해야 한다. 시작 미확인·프로세스 소실 후 종료 미확인 상태의 복구 방식도 실제 계약 확인 대상이다.
+
+stop, E-Stop과 다른 모드·수동 요청은 관리 중인 프로세스의 종료를 요청한다. POSIX에서는 별도 프로세스 그룹을 생성해 그룹에 종료 신호를 보내고, Windows 모의 시험에서는 직접 실행한 프로세스를 종료한다. E-Stop의 기존 출력과 로컬 비상 상태 설정은 프로세스 정리보다 먼저 수행한다. 프로세스 종료는 기체·날·현장 리모컨의 물리 정지 확인이 아니다. 스크립트가 별도 세션을 만들거나 다른 서비스를 실행하는 경우까지 정리된다고 가정하지 않으며 실제 정지·카메라·시리얼 소유 계약 확인 전에는 적용하지 않는다.
+
+ROS와 장비 없이 모의 프로그램으로 검사하려면 `requirements.txt`가 설치된 가상 환경에서 다음을 실행한다.
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path edge/jetson-client).Path
+python -m unittest discover -s edge/jetson-client/tests -p test_autonomy.py -v
+```
+
+저장소 루트 기준이다. `tests/fixtures/autonomy_mock.py`는 장비·ROS·MQTT에 접근하지 않고 대기한 뒤 지정 코드로 종료한다. Linux 프로세스 그룹 처리는 테스트 대역으로 확인하며 실제 Jetson의 프로세스·시리얼·중재·정지는 별도 검증 대상이다. 이 코드를 장비에 배포하거나 기존 모니터를 중지하지 않았다.
