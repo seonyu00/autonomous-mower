@@ -28,6 +28,40 @@ class CppPreviewControllerTest {
     @MockBean JwtTokenProvider jwt;
     static final String URL = "/api/robots/R1/work-zone/cpp-preview";
     static final String INPUT = "{\"expectedVersion\":2,\"cellSizeM\":0.5}";
+    static final String PLAN = "11111111-1111-4111-8111-111111111111";
+    static final String PREPARATION = URL + "/plans/" + PLAN + "/preparation";
+    static final String HASH = "a".repeat(64);
+
+    @Test void preparationRequiresAuthentication() throws Exception {
+        mvc.perform(post(PREPARATION).contentType(MediaType.APPLICATION_JSON).content("{\"sha256\":\"" + HASH + "\"}"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(PREPARATION)).andExpect(status().isUnauthorized());
+        verifyNoInteractions(plans);
+    }
+
+    @Test @WithMockUser(authorities = "robots:read") void readOnlyAccountCannotReportPreparation() throws Exception {
+        mvc.perform(post(PREPARATION).contentType(MediaType.APPLICATION_JSON).content("{\"sha256\":\"" + HASH + "\"}"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(plans);
+    }
+
+    @Test @WithMockUser(authorities = {"robots:read", "control:write"}) void preparationReportUsesAuthenticatedAccountAndCanBeRead() throws Exception {
+        var value = new com.autonomousmower.workzone.service.RoutePlanService.Preparation(java.util.UUID.fromString(PLAN), HASH, true,
+                java.time.Instant.parse("2026-11-07T12:00:00Z"));
+        when(plans.reportPreparation("R1", java.util.UUID.fromString(PLAN), HASH, "user")).thenReturn(value);
+        when(plans.preparation("R1", java.util.UUID.fromString(PLAN))).thenReturn(value);
+        mvc.perform(post(PREPARATION).contentType(MediaType.APPLICATION_JSON).content("{\"sha256\":\"" + HASH + "\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.reported").value(true));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(PREPARATION))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.planId").value(PLAN));
+    }
+
+    @Test @WithMockUser(authorities = "control:write") void malformedReportIsRejectedBeforeStorage() throws Exception {
+        for (String body : List.of("{}", "{\"sha256\":\"wrong\"}")) {
+            mvc.perform(post(PREPARATION).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
+        }
+        verifyNoInteractions(plans);
+    }
 
     @Test void requiresAuthentication() throws Exception {
         mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(INPUT)).andExpect(status().isUnauthorized());

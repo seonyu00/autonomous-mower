@@ -3,6 +3,7 @@ package com.autonomousmower.workzone.controller;
 import com.autonomousmower.common.api.ApiResponse;
 import com.autonomousmower.workzone.dto.CppPreviewRequest;
 import com.autonomousmower.workzone.dto.CppPreviewResponse;
+import com.autonomousmower.workzone.dto.RoutePreparationRequest;
 import com.autonomousmower.workzone.service.CppPreviewService;
 import com.autonomousmower.workzone.service.RoutePlanService;
 import java.util.UUID;
@@ -39,5 +40,18 @@ public class CppPreviewController {
     @PreAuthorize("hasAuthority('robots:read')")
     public ApiResponse<RoutePlanService.Envelope> getPlan(@PathVariable String robotId, @PathVariable UUID planId) {
         return ApiResponse.success(plans.get(robotId, planId));
+    }
+
+    @PostMapping("/plans/{planId}/preparation")
+    @PreAuthorize("hasAuthority('control:write')")
+    public ApiResponse<RoutePlanService.Preparation> reportPreparation(@PathVariable String robotId, @PathVariable UUID planId,
+            @Valid @RequestBody RoutePreparationRequest request, java.security.Principal principal) {
+        return ApiResponse.success(plans.reportPreparation(robotId, planId, request.sha256(), principal.getName()));
+    }
+
+    @GetMapping("/plans/{planId}/preparation")
+    @PreAuthorize("hasAuthority('robots:read')")
+    public ApiResponse<RoutePlanService.Preparation> preparation(@PathVariable String robotId, @PathVariable UUID planId) {
+        return ApiResponse.success(plans.preparation(robotId, planId));
     }
 }

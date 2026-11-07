@@ -30,6 +30,7 @@ export type HistoryEntry = {
   events: HistoryEvent[];
   distanceMeters: number | null;
   coveragePercent?: number | null;
+  mowingEstimate?: { areaSquareMeters: number; coveragePercent: number; partial: boolean; evidence: 'rotation' | 'power' | 'mixed' } | null;
 };
 
 export type HistoryQuery = {

@@ -19,6 +19,7 @@ export type CppPreview = {
 };
 
 export type RoutePlanResult = { planId: string; sha256: string; preview: CppPreview };
+export type RoutePreparation = { planId: string; sha256: string; reported: boolean; receivedAt: string | null };
 
 export const CPP_PREVIEW_TIMEOUT_MS = 15000;
 export const CPP_MAX_CELL_SIZE_M = 0.65;
@@ -35,11 +36,15 @@ export function useCppPreview() {
   });
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
+  const preparationController = useRef<AbortController | null>(null);
+  const [preparation, setPreparation] = useState({ message: '', loading: false });
 
   useEffect(() => {
     const invalidate = () => {
       generation.current += 1;
       controller.current?.abort();
+      preparationController.current?.abort();
+      setPreparation({ message: '', loading: false });
       setState({ path: emptyPath, message: '', loading: false, planId: null, sha256: null });
     };
     const unsubscribeRobot = useRobotStore.subscribe((next, previous) => {
@@ -57,6 +62,7 @@ export function useCppPreview() {
     return () => {
       generation.current += 1;
       controller.current?.abort();
+      preparationController.current?.abort();
       unsubscribeRobot(); unsubscribeZone(); unsubscribeAuth();
     };
   }, []);
@@ -65,6 +71,8 @@ export function useCppPreview() {
   const generate = async (cellSizeM: number) => {
     if (!available || !Number.isFinite(cellSizeM) || cellSizeM < 0.2 || cellSizeM > CPP_MAX_CELL_SIZE_M) return;
     controller.current?.abort();
+    preparationController.current?.abort();
+    setPreparation({ message: '', loading: false });
     const abort = new AbortController();
     controller.current = abort;
     const requestId = ++generation.current;
@@ -108,7 +116,42 @@ export function useCppPreview() {
       abort.signal.removeEventListener('abort', clearDeadline);
     }
   };
-  return { ...state, path: available ? state.path : emptyPath, planId: available ? state.planId : null, sha256: available ? state.sha256 : null, available, generate };
+  const checkPreparation = async () => {
+    if (!available || !robotId || !state.planId || !state.sha256) return;
+    preparationController.current?.abort();
+    const abort = new AbortController();
+    preparationController.current = abort;
+    const requestId = generation.current;
+    setPreparation({ message: '파일 준비 보고를 확인 중입니다.', loading: true });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let rejectOnAbort: (() => void) | undefined;
+    try {
+      const result = await Promise.race([
+        httpClient.get<RoutePreparation>(`/api/robots/${encodeURIComponent(robotId)}/work-zone/cpp-preview/plans/${state.planId}/preparation`, { signal: abort.signal }),
+        new Promise<never>((_, reject) => {
+          rejectOnAbort = () => reject(new Error('aborted'));
+          abort.signal.addEventListener('abort', rejectOnAbort, { once: true });
+          timer = setTimeout(() => { reject(new Error('timeout')); abort.abort(); }, CPP_PREVIEW_TIMEOUT_MS);
+        }),
+      ]);
+      if (requestId !== generation.current || preparationController.current !== abort) return;
+      if (result.planId !== state.planId || result.sha256 !== state.sha256 || typeof result.reported !== 'boolean'
+        || (result.reported && (!result.receivedAt || !Number.isFinite(Date.parse(result.receivedAt))))) throw new Error('mismatch');
+      const received = result.receivedAt ? new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'medium',
+      }).format(new Date(result.receivedAt)) : '';
+      setPreparation({ loading: false, message: result.reported
+        ? `파일 준비 보고 수신 · ${received} (한국 시간)` : '이 경로의 파일 준비 보고가 아직 없습니다.' });
+    } catch {
+      if (requestId !== generation.current || preparationController.current !== abort) return;
+      setPreparation({ loading: false, message: '파일 준비 보고를 확인하지 못했습니다. 구역 버전과 연결 상태를 확인하고 다시 조회하세요.' });
+    } finally {
+      clearTimeout(timer);
+      if (rejectOnAbort) abort.signal.removeEventListener('abort', rejectOnAbort);
+    }
+  };
+  return { ...state, path: available ? state.path : emptyPath, planId: available ? state.planId : null, sha256: available ? state.sha256 : null,
+    preparation, checkPreparation, available, generate };
 }
 
 // 긴 경로는 표식만 간추린다. 선에는 모든 경로점을 전달하고 번호는 원래 순서를 유지한다.

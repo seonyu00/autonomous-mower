@@ -33,6 +33,8 @@ public class AutonomousRunService {
     private com.autonomousmower.history.repository.StoredRunSignalRepository storedSignals;
     @org.springframework.beans.factory.annotation.Autowired
     private com.fasterxml.jackson.databind.ObjectMapper signalMapper;
+    @org.springframework.beans.factory.annotation.Autowired
+    private MowingAreaService mowingAreas;
 
     public AutonomousRunService(AutonomousRunRepository runs, RobotRepository robots, Clock clock) {
         this.runs = runs; this.robots = robots; this.clock = clock;
@@ -143,7 +145,8 @@ public class AutonomousRunService {
         if (run.getEndedAt() != null)
             events.add(lifecycleEvent(run, "job-completed", "자율주행 프로그램 종료 확인", run.getEndedAt()));
         return new RunHistoryResponse("run-" + run.getId(), run.getRobotId(), run.getStartedAt(), run.getEndedAt(),
-                run.getLastObservedAt(), checkedAt, status, segments, result.distanceMeters(), result.hasGap(), partial, null, events);
+                run.getLastObservedAt(), checkedAt, status, segments, result.distanceMeters(), result.hasGap(), partial, null, events, null,
+                mowingAreas == null ? null : mowingAreas.estimate(run, checkedAt));
     }
 
     private HistoryEventResponse lifecycleEvent(AutonomousRun run, String type, String message, Instant at) {

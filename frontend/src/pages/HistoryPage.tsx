@@ -133,8 +133,11 @@ export function HistoryPage() {
               {entry.lastObservedAt ? <span>마지막 작업 확인: {formatRange(entry.lastObservedAt, entry.lastObservedAt).split(' - ')[0]}</span> : null}
               {entry.hasGpsGap ? <span>GPS 수신 끊김 · 부분 거리</span> : null}
               <small>
-                {entry.distanceMeters == null ? '거리 미집계' : `${Math.round(entry.distanceMeters * 10) / 10} m${entry.distancePartial ? ' (부분 거리)' : ''}`} | {entry.coveragePercent == null ? '커버리지 미집계' : `커버리지 ${entry.coveragePercent}%`}
+                {entry.distanceMeters == null ? '거리 미집계' : `${Math.round(entry.distanceMeters * 10) / 10} m${entry.distancePartial ? ' (부분 거리)' : ''}`} | {entry.mowingEstimate ? `추정 커버리지 ${entry.mowingEstimate.coveragePercent.toFixed(1)}%` : entry.coveragePercent == null ? '커버리지 미집계' : `커버리지 ${entry.coveragePercent}%`}
               </small>
+              {entry.recordType === 'run' && <span>{entry.mowingEstimate
+                ? `예초 추정 면적 ${entry.mowingEstimate.areaSquareMeters.toFixed(1)}㎡${entry.mowingEstimate.partial ? ' (부분 집계)' : ''} · ${entry.mowingEstimate.evidence === 'rotation' ? '회전 신호 기반' : entry.mowingEstimate.evidence === 'power' ? '전원 신호 기반' : '혼합 신호 기반'}`
+                : '예초 추정 면적 미집계'}</span>}
             </button>
           ))}
           {resultKey === queryKey && status === 'loading' ? <p role="status">이력을 불러오는 중입니다.</p> : null}

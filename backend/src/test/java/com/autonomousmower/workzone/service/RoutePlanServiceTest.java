@@ -20,6 +20,7 @@ class RoutePlanServiceTest {
                 System.getenv("ROUTE_PLAN_TEST_DB_USER"), System.getenv("ROUTE_PLAN_TEST_DB_PASSWORD"));
         var database = new JdbcTemplate(source);
         database.execute(java.nio.file.Files.readString(java.nio.file.Path.of("src/main/resources/db/migration/V15__store_route_plan.sql")));
+        database.execute(java.nio.file.Files.readString(java.nio.file.Path.of("src/main/resources/db/migration/V16__store_route_plan_preparation.sql")));
         when(previews.preview(eq("R1"), any())).thenReturn(preview);
         when(zones.getWorkZone(anyString())).thenReturn(zone);
         var writer = new RoutePlanService(previews, zones, database, json);
@@ -28,9 +29,20 @@ class RoutePlanServiceTest {
         var stored = reader.get("R1", generated.planId());
         assertThat(stored.sha256()).isEqualTo(generated.sha256());
         assertThat(json.readTree(stored.payload()).path("preview")).isEqualTo(json.readTree(json.writeValueAsString(preview)));
+        assertThat(reader.preparation("R1", generated.planId()).reported()).isFalse();
+        assertThatThrownBy(() -> reader.reportPreparation("R1", generated.planId(), "wrong", "operator"))
+                .isInstanceOf(BusinessException.class);
+        var first = reader.reportPreparation("R1", generated.planId(), generated.sha256(), "operator");
+        var duplicate = reader.reportPreparation("R1", generated.planId(), generated.sha256(), "other-operator");
+        assertThat(first.reported()).isTrue();
+        assertThat(duplicate.receivedAt()).isEqualTo(first.receivedAt());
+        assertThat(database.queryForObject("SELECT count(*) FROM route_plan_preparation", Integer.class)).isEqualTo(1);
+        assertThat(database.queryForObject("SELECT reported_by FROM route_plan_preparation", String.class)).isEqualTo("operator");
         assertThatThrownBy(() -> reader.get("other", generated.planId())).isInstanceOf(BusinessException.class);
         when(zones.getWorkZone("R1")).thenReturn(new WorkZoneResponse(1L, "R1", 3, null, zone.zone()));
         assertThatThrownBy(() -> reader.get("R1", generated.planId())).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> reader.reportPreparation("R1", generated.planId(), generated.sha256(), "operator"))
+                .isInstanceOf(BusinessException.class);
     }
     final CppPreviewService previews = mock(CppPreviewService.class);
     final WorkZoneService zones = mock(WorkZoneService.class);

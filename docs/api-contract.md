@@ -975,5 +975,23 @@ Payload:
 
 - `POST /api/robots/{robotId}/work-zone/cpp-preview/plans`: 기존 생성 요청 `{expectedVersion, cellSizeM}`을 받아 한 번 계산한 결과와 구역을 DB에 보관한다. `data`는 `{planId, sha256, preview}`이며 `preview`는 기존 CPP 응답이다. 웹은 이 응답의 `preview`를 표시하고 경로 ID를 보유한다. 기존 POST `/cpp-preview`는 보관 없는 호환 API로 유지한다.
 - `GET /api/robots/{robotId}/work-zone/cpp-preview/plans/{planId}`: `{planId, sha256, payload}`를 반환한다. `payload`는 `{formatVersion:1, plannerProfile:"hd7000w-v1", workZone, preview}`의 JSON 원문 문자열이다. SHA-256은 이 문자열의 UTF-8 바이트를 대상으로 한다. 다른 로봇의 ID·존재하지 않는 경로는 404, 현재 구역 ID·버전 불일치는 409 `WORK_ZONE_CONFLICT`, 저장 원문 해시 불일치는 `CPP_OUTPUT_INVALID`다. 두 API는 기존 `robots:read` 권한과 인증을 요구한다.
-- V15 `route_plan`은 구역 ID·버전·원문·해시·생성 시각을 보존하고 보관본을 수정하지 않는다. 생성 결과가 비어 있으면 웹은 준비용 ID를 활성화하지 않으며 Jetson 준비는 두 점 미만을 거부한다. 보관 기간·자동 삭제와 준비 결과 보고 API는 미구현이다.
+- V15 `route_plan`은 구역 ID·버전·원문·해시·생성 시각을 보존하고 보관본을 수정하지 않는다. 생성 결과가 비어 있으면 웹은 준비용 ID를 활성화하지 않으며 Jetson 준비는 두 점 미만을 거부한다. 보관 기간·자동 삭제는 미구현이며 파일 준비 보고는 아래 계약을 따른다.
 - GET의 최신성 확인은 조회 시점 기준이다. 수신 후의 구역 변경, 실제 실행 직전 재확인과 실행 중 교체 정책은 후속 계약이다. 경로 저장·조회나 해시 일치를 주행 승인·실제 작업 시작으로 해석하지 않는다. AUTO payload와 MQTT 계약은 이번에 바꾸지 않았다.
+
+
+### 경로 파일 준비 보고
+
+- `POST /api/robots/{robotId}/work-zone/cpp-preview/plans/{planId}/preparation`: `control:write`를 요구하며 본문은 `{sha256: "<64자리 소문자 16진수>"}`다. 서버가 경로·로봇·현재 구역 ID와 버전·원문 해시를 확인하고 두 점 미만 경로와 해시 불일치를 거부한다. V16 `route_plan_preparation`에 최초 서버 수신 시각과 인증 계정을 보존한다. 같은 경로 보고의 재전송은 최초 값을 유지한다. 클라이언트가 장비 신원·수신 시각·주행 준비 상태를 지정하지 않는다.
+- `GET .../plans/{planId}/preparation`: `robots:read`를 요구하며 `{planId, sha256, reported, receivedAt}`를 반환한다. 보고가 없으면 `reported:false, receivedAt:null`이다. 오래된 구역은 GET·POST 모두 409, 다른 로봇·없는 경로는 404, 잘못된 해시는 400으로 거부한다. 이 응답은 준비 프로그램의 보고 수신 이력이며 장비 신원 인증·현재 파일 존재·연결 상태나 주행 준비 확인을 뜻하지 않는다.
+- 웹은 명시적 버튼으로 조회하고 15초 제한·요청 취소·해제·구역/경로/세션 변경 후 늦은 응답 폐기와 한국 시간 표시를 적용한다. 확인 실패를 미수신이나 수신 성공으로 바꾸지 않는다. AUTO 명령이나 주행 허용 조건과 연결하지 않는다.
+
+
+### 날 관측 기반 예초 추정 면적의 내부 준비
+
+`GET /api/history/runs`에 nullable `mowingEstimate`를 추가했다. `{areaSquareMeters, coveragePercent, partial, evidence}`이며 evidence는 `rotation|power|mixed`다. 기존 `coveragePercent`의 실제 커버리지 의미를 바꾸지 않고 별도 추정 항목으로 표시한다. 작업에 고정한 경로/구역 연결 또는 유효 날 관측이 없으면 null로 유지하며 기존 작업에 최신 작업 구역을 자동 배정하지 않는다.
+
+V17 `run_mowing_context`는 작업과 하나의 보관 경로를 연결하며 같은 작업의 경로 교체를 거부한다. `blade_observation`은 고유 신호 ID·작업·로봇·측정 시각·상태·출처를 보존한다. `MowingAreaService.bindPlan`과 `accept`는 장비 인증·운영 계약 연결 전 내부 호출용이며 공개 REST 쓰기 API나 MQTT 구독을 추가하지 않았다. 같은 ID의 동일 신호는 중복 반영하지 않고 다른 내용은 거부한다. 미래 측정과 다른 로봇의 관측도 거부한다.
+
+날 관측은 주기적 실측 상태를 전제로 하며 측정 시각부터 3초가 되면 UNKNOWN이다. 상태 전환·만료 시각으로 GPS 선분을 나누고 구동 ON 구간만 폭 0.650m로 펼친 뒤 중복 영역을 합쳐 고정 작업 구역과 교차한 면적을 계산한다. OFF가 확인된 유효 구간은 0일 수 있지만 관측 가능한 구간이 전혀 없으면 null이다. GPS 인접 측정 간격이 3초 이상이거나 좌표가 누락되면 그 선분은 계산하지 않는다. 같은 시각의 상충하는 상태는 UNKNOWN으로 처리하며 늦은 관측도 측정 시각순으로 재평가한다. 누락·미확인 구간은 partial로 표시한다.
+
+좌표는 지역 평면 근사이며 GPS 기준점이 날 중심으로 보정됐다는 기하 모델이다. 장착 오프셋·실제 신호·센서 지연·현장 오차·경사면의 실제 표면적·실제 절삭 여부는 미검증이다. 전원 관측을 회전 확인으로 승격하지 않는다. 추정 면적을 실제 예초 완료 영역이나 남은 영역 CPP의 입력으로 자동 사용하지 않는다. 대량 장기 이력의 계산 성능과 재계산 캐시는 별도 확인 대상이다.

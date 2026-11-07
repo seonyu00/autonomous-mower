@@ -17,6 +17,20 @@ vi.mock('../features/history/components/HistoryTimeline', () => ({ HistoryTimeli
 beforeEach(() => { resetStores(); env.enableMockHistory = false; vi.mocked(getHistory).mockReset().mockResolvedValue([]); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
+it('예초 추정 면적과 출처·부분 집계를 표시하고 관측이 없으면 미집계로 둔다', async () => {
+  const base: HistoryEntry = { ...mockHistoryEntries[0], recordType: 'run', coveragePercent: null };
+  vi.mocked(getHistory).mockResolvedValue([{ ...base, mowingEstimate: {
+    areaSquareMeters: 12.34, coveragePercent: 4.56, partial: true, evidence: 'power',
+  } }]);
+  render(<HistoryPage />);
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: '검색' })));
+  expect(screen.getByText('예초 추정 면적 12.3㎡ (부분 집계) · 전원 신호 기반')).toBeInTheDocument();
+  expect(screen.getByText(/추정 커버리지 4.6%/)).toBeInTheDocument();
+  vi.mocked(getHistory).mockResolvedValue([{ ...base, mowingEstimate: null }]);
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: '검색' })));
+  expect(screen.getByText('예초 추정 면적 미집계')).toBeInTheDocument();
+});
+
 it('실제 조회 기본 날짜는 한국 날짜를 사용한다', async () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-10-04T23:30:00Z'));
