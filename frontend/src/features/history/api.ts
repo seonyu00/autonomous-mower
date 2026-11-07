@@ -26,11 +26,19 @@ export async function getHistory(query: HistoryQuery): Promise<HistoryEntry[]> {
     to: toIso,
   });
 
-  const entries = await httpClient.get<HistoryEntry[]>(`/api/history?${searchParams.toString()}`);
+  const [legacy, runs] = await Promise.all([
+    httpClient.get<HistoryEntry[]>(`/api/history?${searchParams.toString()}`),
+    httpClient.get<HistoryEntry[]>(`/api/history/runs?${searchParams.toString()}`),
+  ]);
+  const entries: HistoryEntry[] = [
+    ...runs.map((entry): HistoryEntry => ({ ...entry, route: null, recordType: 'run', receivedAtClient: Date.now() })),
+    ...legacy.map((entry): HistoryEntry => ({ ...entry, recordType: 'legacy' })),
+  ];
   // 백엔드의 offset 없는 LocalDateTime 응답은 기존 UTC 계약으로 해석한다.
   return entries.map((entry) => ({
     ...entry,
     startedAt: utcTimestamp(entry.startedAt),
+    lastObservedAt: entry.lastObservedAt ? utcTimestamp(entry.lastObservedAt) : undefined,
     endedAt: entry.endedAt ? utcTimestamp(entry.endedAt) : undefined,
     events: entry.events.map((event) => ({ ...event, occurredAt: utcTimestamp(event.occurredAt) })),
   }));

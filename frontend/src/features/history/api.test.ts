@@ -30,10 +30,23 @@ it('명시적인 Mock만 샘플을 조회한다', async () => {
 });
 
 it('offset 없는 서버 시각은 UTC로 해석하고 명시된 offset은 보존한다', async () => {
-  vi.mocked(httpClient.get).mockResolvedValue([{ ...mockHistoryEntries[0],
+  vi.mocked(httpClient.get).mockResolvedValueOnce([{ ...mockHistoryEntries[0],
     startedAt: '2026-09-10T00:00:00', endedAt: '2026-09-10T10:00:00+09:00',
   }]);
   const [result] = await getHistory({ robotId: 'actual', from: '2026-09-10', to: '2026-09-10' });
   expect(result.startedAt).toBe('2026-09-10T00:00:00Z');
   expect(result.endedAt).toBe('2026-09-10T10:00:00+09:00');
+});
+
+
+it('작업별 기록과 기존 좌표 기록을 구분하고 위치 없는 작업도 유지한다', async () => {
+  vi.mocked(httpClient.get).mockResolvedValueOnce([mockHistoryEntries[0]]).mockResolvedValueOnce([{
+    id: 'run-test', robotId: 'actual', startedAt: '2026-09-10T00:00:00Z',
+    lastObservedAt: '2026-09-10T00:00:01Z', checkedAt: '2026-09-10T00:00:31Z',
+    status: 'unconfirmed', routeSegments: [], distanceMeters: null, coveragePercent: null, events: [],
+  }]);
+  const result = await getHistory({ robotId: 'actual', from: '2026-09-10', to: '2026-09-10' });
+  expect(result.map((e) => e.recordType)).toEqual(['run', 'legacy']);
+  expect(result[0].route).toBeNull();
+  expect(result[0].status).toBe('unconfirmed');
 });

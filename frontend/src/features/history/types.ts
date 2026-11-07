@@ -17,7 +17,15 @@ export type HistoryEntry = {
   robotId: string;
   startedAt: string;
   endedAt?: string;
-  route: Feature<LineString | Point>;
+  route: Feature<LineString | Point> | null;
+  routeSegments?: Feature<LineString | Point>[];
+  recordType?: 'legacy' | 'run';
+  status?: 'running' | 'completed' | 'unconfirmed';
+  lastObservedAt?: string;
+  hasGpsGap?: boolean;
+  distancePartial?: boolean;
+  checkedAt?: string;
+  receivedAtClient?: number;
   events: HistoryEvent[];
   distanceMeters: number | null;
   coveragePercent?: number | null;

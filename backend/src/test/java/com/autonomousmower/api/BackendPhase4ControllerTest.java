@@ -42,6 +42,7 @@ import org.springframework.test.web.servlet.MockMvc;
         RobotController.class,
         WorkZoneController.class,
         HistoryController.class,
+        com.autonomousmower.history.controller.RunHistoryController.class,
         LogController.class
 })
 @Import({
@@ -63,6 +64,9 @@ class BackendPhase4ControllerTest {
 
     @MockBean
     private HistoryService historyService;
+
+    @MockBean
+    private com.autonomousmower.history.service.AutonomousRunService runHistoryService;
 
     @MockBean
     private LogService logService;
@@ -170,5 +174,20 @@ class BackendPhase4ControllerTest {
                   }
                 }
                 """;
+    }
+
+    @Test
+    @WithMockUser(authorities = "history:read")
+    void runHistoryUsesHistoryReadPermission() throws Exception {
+        when(runHistoryService.find("test", null, null)).thenReturn(List.of());
+        mockMvc.perform(get("/api/history/runs").param("robotId", "test"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data", hasSize(0)));
+    }
+
+    @Test
+    @WithMockUser(authorities = "robots:read")
+    void runHistoryDoesNotAllowRobotReadOnly() throws Exception {
+        mockMvc.perform(get("/api/history/runs").param("robotId", "test"))
+                .andExpect(status().isForbidden());
     }
 }

@@ -74,29 +74,20 @@ export function HistoryMap({ selectedEntry }: HistoryMapProps) {
     overlaysRef.current.forEach((overlay) => overlay.setMap(null));
     overlaysRef.current = [];
 
-    const geometry = selectedEntry?.route.geometry;
-    const coordinates = geometry?.type === 'Point' ? [geometry.coordinates] : geometry?.coordinates ?? [];
-
-    if (coordinates.length === 1) {
-      overlaysRef.current.push(new mapsApi.Marker({
-        map,
-        position: new mapsApi.LatLng(coordinates[0][1], coordinates[0][0]),
-        title: '단일 위치 기록',
-      }));
-    }
-
-    if (coordinates.length > 1) {
-      overlaysRef.current.push(
-        new mapsApi.Polyline({
-          map,
-          path: coordinates.map(
-            ([longitude, latitude]) => new mapsApi.LatLng(latitude, longitude),
-          ),
-          strokeColor: '#f5c542',
-          strokeOpacity: 1,
-          strokeWeight: 5,
-        }),
-      );
+    const routes = selectedEntry?.routeSegments ?? (selectedEntry?.route ? [selectedEntry.route] : []);
+    const coordinates: number[][] = [];
+    for (const route of routes) {
+      const geometry = route.geometry;
+      const segment = geometry.type === 'Point' ? [geometry.coordinates] : geometry.coordinates;
+      coordinates.push(...segment);
+      if (segment.length === 1) {
+        overlaysRef.current.push(new mapsApi.Marker({ map,
+          position: new mapsApi.LatLng(segment[0][1], segment[0][0]), title: '단일 위치 기록' }));
+      } else if (segment.length > 1) {
+        overlaysRef.current.push(new mapsApi.Polyline({ map,
+          path: segment.map(([longitude, latitude]) => new mapsApi.LatLng(latitude, longitude)),
+          strokeColor: '#f5c542', strokeOpacity: 1, strokeWeight: 5 }));
+      }
     }
 
     selectedEntry?.events.forEach((event) => {
@@ -147,8 +138,10 @@ export function HistoryMap({ selectedEntry }: HistoryMapProps) {
       {mapError ? <div className="map-fallback-warning" role="alert">{mapError}</div> : null}
       <div className="map-readout">
         <strong>{selectedEntry?.robotId ?? '선택된 이력 없음'}</strong>
-        <span>{selectedEntry ? selectedEntry.distanceMeters == null ? '거리 미집계' : `${selectedEntry.distanceMeters} m 경로` : '작업 기록을 선택하면 경로 데이터를 볼 수 있습니다.'}</span>
-        {selectedEntry?.route.geometry.type === 'Point' ? <span>단일 위치 기록 · 경로를 구성할 좌표가 부족합니다.</span> : null}
+        <span>{selectedEntry ? selectedEntry.distanceMeters == null ? '거리 미집계' : `${selectedEntry.distanceMeters.toFixed(1)} m${selectedEntry.distancePartial ? ' (부분 거리)' : ' 경로'}` : '작업 기록을 선택하면 경로 데이터를 볼 수 있습니다.'}</span>
+        {selectedEntry?.route?.geometry.type === 'Point' ? <span>단일 위치 기록 · 경로를 구성할 좌표가 부족합니다.</span> : null}
+        {selectedEntry?.recordType === 'run' && !selectedEntry.routeSegments?.length ? <span>저장된 GPS 위치가 없습니다.</span> : null}
+        {selectedEntry?.hasGpsGap ? <span>GPS 수신 끊김 · 확인된 구간만 표시합니다.</span> : null}
         <small>읽기 전용 과거 경로와 이벤트 위치를 네이버 위성 지도에 표시합니다.</small>
       </div>
     </div>

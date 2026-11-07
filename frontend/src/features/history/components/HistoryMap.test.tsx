@@ -102,3 +102,20 @@ describe('HistoryMap', () => {
     expect(naverMock.maps.Polyline).not.toHaveBeenCalled();
   });
 });
+
+
+it('끊긴 두 구간을 별도 선으로 그리고 위치 없는 작업도 처리한다', async () => {
+  vi.clearAllMocks();
+  vi.mocked(loadNaverMaps).mockResolvedValue(naverMock.maps as unknown as typeof naver.maps);
+  const { rerender, getByText } = render(<HistoryMap selectedEntry={{ ...selectedEntry, route: null, events: [],
+    recordType: 'run', hasGpsGap: true, routeSegments: [
+      { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [[127, 37], [127.001, 37]] } },
+      { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [[128, 37], [128.001, 37]] } },
+    ],
+  }} />);
+  await waitFor(() => expect(naverMock.maps.Polyline).toHaveBeenCalledTimes(2));
+  expect(naverMock.maps.Polyline.mock.calls.map((c) => (c as unknown as [{path: unknown[]}])[0].path.length)).toEqual([2, 2]);
+  rerender(<HistoryMap selectedEntry={{ ...selectedEntry, route: null, routeSegments: [], recordType: 'run' }} />);
+  expect(getByText('저장된 GPS 위치가 없습니다.')).toBeInTheDocument();
+  cleanup();
+});

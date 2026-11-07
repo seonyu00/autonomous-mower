@@ -9,6 +9,11 @@ import { useRobotStore } from '../features/robots/robotStore';
 import { env } from '../shared/config/env';
 
 export function HistoryPage() {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const robots = useRobotStore((state) => state.robots);
   const robotError = useRobotStore((state) => state.error);
   const sessionVersion = useAuthStore((state) => state.sessionVersion);
@@ -121,9 +126,12 @@ export function HistoryPage() {
               onClick={() => setSelectedEntryId(entry.id)}
             >
               <strong>{entry.robotId}</strong>
+              <span>{entry.recordType === 'run' ? runStatus(entry, now) : '작업 구분 전 기록'}</span>
               <span>{formatRange(entry.startedAt, entry.endedAt)}</span>
+              {entry.lastObservedAt ? <span>마지막 작업 확인: {formatRange(entry.lastObservedAt, entry.lastObservedAt).split(' - ')[0]}</span> : null}
+              {entry.hasGpsGap ? <span>GPS 수신 끊김 · 부분 거리</span> : null}
               <small>
-                {entry.distanceMeters == null ? '거리 미집계' : `${entry.distanceMeters} m`} | {entry.coveragePercent == null ? '커버리지 미집계' : `커버리지 ${entry.coveragePercent}%`}
+                {entry.distanceMeters == null ? '거리 미집계' : `${Math.round(entry.distanceMeters * 10) / 10} m${entry.distancePartial ? ' (부분 거리)' : ''}`} | {entry.coveragePercent == null ? '커버리지 미집계' : `커버리지 ${entry.coveragePercent}%`}
               </small>
             </button>
           ))}
@@ -158,5 +166,12 @@ function formatRange(startedAt: string, endedAt?: string) {
     timeZone: 'Asia/Seoul',
   });
 
-  return `${formatter.format(new Date(startedAt))} - ${endedAt ? formatter.format(new Date(endedAt)) : '진행 중'}`;
+  return `${formatter.format(new Date(startedAt))} - ${endedAt ? formatter.format(new Date(endedAt)) : '종료 시각 미확인'}`;
+}
+
+function runStatus(entry: HistoryEntry, now: number) {
+  if (entry.status === 'running' && entry.checkedAt && entry.lastObservedAt && entry.receivedAtClient != null
+      && new Date(entry.checkedAt).getTime() - new Date(entry.lastObservedAt).getTime()
+        + Math.max(0, now - entry.receivedAtClient) >= 30_000) return '종료 확인 불가';
+  return entry.status === 'completed'  ? '완료' : entry.status === 'unconfirmed' ? '종료 확인 불가' : '진행 중';
 }

@@ -101,3 +101,19 @@ it.each(['robot', 'date', 'logout'])('%s 변경 뒤 이전 응답은 표시하�
   await act(async () => pending.resolve([{ ...mockHistoryEntries[0], distanceMeters: 9999 }]));
   expect(screen.queryByText(/9999 m/)).not.toBeInTheDocument();
 });
+
+
+it('조회 후 작업 신호가 30초 경계를 넘으면 종료 확인 불가로 표시한다', async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-11-07T00:00:29Z'));
+  vi.mocked(getHistory).mockResolvedValueOnce([{
+    ...mockHistoryEntries[0], recordType: 'run', route: null, routeSegments: [],
+    status: 'running', lastObservedAt: '2026-11-07T00:00:00Z',
+    checkedAt: '2026-11-07T00:00:29Z', receivedAtClient: Date.now(),
+  }]);
+  render(<HistoryPage />);
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: '검색' })));
+  expect(screen.getByText('진행 중')).toBeInTheDocument();
+  act(() => vi.advanceTimersByTime(1000));
+  expect(screen.getByText('종료 확인 불가')).toBeInTheDocument();
+});

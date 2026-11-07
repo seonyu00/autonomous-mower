@@ -267,6 +267,15 @@ Response `200`:
 
 Permission: `history:read`
 
+기존 날짜별 API는 유지한다. 화면은 이 결과를 `작업 구분 전 기록`으로 표시하며 작업 시작·종료를 추정하지 않는다. 별도 `GET /api/history/runs?robotId=&from=&to=`도 같은 권한과 UTC Instant 조건을 사용한다. 새 조회는 기간에 걸쳐 있는 작업 전체를 반환하며 종료가 미확인인 작업은 시작 이후 기간의 조회에 포함될 수 있다. 기존 위치 조회와 새 작업 조회는 서로 다른 출처이며 작업에 GPS를 연결하기 전 과거 위치를 자동 복사·분할하지 않는다.
+
+작업별 조회 응답에는 `id`, `robotId`, `startedAt`, `endedAt`(미확인 시 null), `lastObservedAt`, `checkedAt`, `status`(`running|completed|unconfirmed`), `routeSegments`, `distanceMeters`, `hasGpsGap`, `distancePartial`, `coveragePercent`, `events`가 있다. 시각은 UTC다. 상태 신호의 최종 서버 관측 후 30초 이상이면 `unconfirmed`이며 실제 종료를 확정하지 않는다. 동일 작업의 새로운 신호를 확인하면 같은 ID로 이어 표시한다. 중복·역순 신호는 최종 관측 시각을 연장하지 않고 확인된 종료는 이전 상태로 되돌리지 않는다.
+
+`routeSegments`는 각각 Point 또는 LineString인 Feature 배열이다. GPS가 없으면 빈 배열이며 작업 자체는 유지한다. 측정 시각의 간격이 3초 이상이거나 위치가 없으면 구간을 분리한다. 거리는 연속 측정 구간만 합산하고 구간이 없으면 null, 실제 정지는 0이다. 시작·종료 경계나 중간 위치가 부족하거나 아직 종료되지 않은 경우 `distancePartial`을 표시한다. GPS 오차·튀는 좌표의 현장 보정은 아직 없으므로 측정 경로의 계산값이며 검증된 실측 이동 거리로 보장하지 않는다. 커버리지는 null이다. 이벤트는 해당 작업에서 확인한 시작·종료만 포함하며 기존 오류 로그를 시간대만으로 결합하지 않는다.
+
+2026-11-07 PC 준비: V12와 내부 `AutonomousRunService`를 추가했다. 신호 수신용 REST 쓰기 API·MQTT 구독은 제공하지 않으며 실제 Jetson과 GPS 측정 시각의 연결은 미구현이다. 일반 텔레메트리나 오류 관측 실행 ID를 자율주행 작업 ID로 대신하지 않는다. 실제 입력 연결 시 인증·시각 신뢰·좌표 이상치·발행 주기·동시 입력 충돌 재시도와 임시 보관 재처리 계약을 별도로 확인한다. 서버는 작업 조회 시 DB 저장 상태를 사용하며 새 작업 입력의 장애 보관은 아직 기존 spool에 연결하지 않았다. 화면은 서버의 `checkedAt` 기준으로 수신 후 경과 시간을 더해 30초를 표시하고 재검색으로 최신 상태를 받는다.
+
+
 - 화면의 시작일·종료일과 결과 시각은 한국 시간(KST)이다. 프론트는 해당 날짜의 시작과 끝을 UTC Instant로 변환해 `from`·`to`로 보내며 양쪽 경계를 포함한다. 누락·유효하지 않은 날짜·역전 범위는 조회 전에 거부한다.
 - 응답의 offset 없는 `startedAt`·`endedAt`·이벤트 시각은 기존 UTC 계약으로 해석한다.
 - 실제 이력의 거리·커버리지는 아직 집계하지 않으므로 `distanceMeters`, `coveragePercent`는 `null`을 반환한다. 화면은 이를 `미집계`로 표시하며 실제 숫자 `0`과 구분한다. 아래 숫자는 집계된 데이터의 형식 예시다.
