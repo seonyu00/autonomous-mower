@@ -26,6 +26,10 @@ public class AutonomousRunService {
     private final AutonomousRunRepository runs;
     private final RobotService robots;
     private final Clock clock;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.autonomousmower.history.repository.StoredRunSignalRepository storedSignals;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.fasterxml.jackson.databind.ObjectMapper signalMapper;
 
     public AutonomousRunService(AutonomousRunRepository runs, RobotService robots, Clock clock) {
         this.runs = runs; this.robots = robots; this.clock = clock;
@@ -67,10 +71,41 @@ public class AutonomousRunService {
     public List<RunHistoryResponse> find(String robotId, Instant from, Instant to) {
         robots.getRobot(robotId);
         if (from != null && to != null && from.isAfter(to)) throw new IllegalArgumentException("조회 기간이 역전됐습니다.");
-        return runs.findByRobotIdOrderByStartedAtDesc(robotId).stream()
+        List<RunHistoryResponse> result = new ArrayList<>(runs.findByRobotIdOrderByStartedAtDesc(robotId).stream()
                 .filter(r -> to == null || !r.getStartedAt().isAfter(to))
                 .filter(r -> from == null || r.getEndedAt() == null || !r.getEndedAt().isBefore(from))
-                .map(this::response).toList();
+                .map(this::response).toList());
+        if (storedSignals != null) appendPending(result, robotId, from, to);
+        return result;
+    }
+
+    private void appendPending(List<RunHistoryResponse> result, String robotId, Instant from, Instant to) {
+        var grouped = storedSignals.findByRobotIdOrderByObservedAtAsc(robotId).stream()
+                .collect(java.util.stream.Collectors.groupingBy(com.autonomousmower.history.entity.StoredRunSignal::getRunId));
+        for (var item : grouped.entrySet()) {
+            var records = item.getValue();
+            String id = "run-" + item.getKey();
+            boolean conflict = records.stream().anyMatch(r -> r.isConflict());
+            var existing = result.stream().filter(r -> r.id().equals(id)).findFirst();
+            if (existing.isPresent() && !conflict) continue;
+            if (runs.existsById(item.getKey()) && existing.isEmpty()) continue;
+            Instant first = records.stream().map(r -> r.getObservedAt()).min(Instant::compareTo).orElseThrow();
+            Instant last = records.stream().map(r -> r.getObservedAt()).max(Instant::compareTo).orElseThrow();
+            if (existing.isEmpty() && ((from != null && last.isBefore(from)) || (to != null && first.isAfter(to)))) continue;
+            if (existing.isPresent()) result.remove(existing.get());
+            Instant ended = null;
+            for (var record : records) {
+                try {
+                    var signal = signalMapper.readValue(record.getPayload(), com.autonomousmower.history.dto.RunSignal.class);
+                    if (signal.kind().equals("end")) ended = signal.signalAt();
+                } catch (java.io.IOException error) { throw new java.io.UncheckedIOException(error); }
+            }
+            String status = conflict ? "conflict" : Duration.between(first, clock.instant()).compareTo(Duration.ofHours(24)) >= 0
+                    ? "start-unconfirmed" : "pending-start";
+            // 시작이 확인되지 않은 기간은 작업 시간·거리로 추정하지 않는다.
+            result.add(new RunHistoryResponse(id, robotId, null, ended, last, clock.instant(), status,
+                    List.of(), null, false, true, null, List.of(), first));
+        }
     }
 
     private RunHistoryResponse response(AutonomousRun run) {

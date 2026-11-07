@@ -402,7 +402,7 @@ Backend 주요 파일:
 Mock/Skeleton:
 
 - coverage 계산 미구현
-- 작업별 이력의 V12 저장 구조와 내부 `AutonomousRunService`, 읽기 전용 `/api/history/runs`, GPS 3초 구간별 거리·부분 거리와 화면 표시를 PC에서 준비했다. 기존 `/api/history`는 작업 구분 전 기록으로 함께 표시한다. 실제 작업·GPS 입력과 기존 spool 연결은 미구현이며 일반 telemetry에서 작업을 추정 생성하지 않는다.
+- 작업별 이력의 V12 저장 구조와 내부 `AutonomousRunService`, 읽기 전용 `/api/history/runs`, GPS 3초 구간별 거리·부분 거리와 화면 표시를 PC에서 준비했다. 기존 `/api/history`는 작업 구분 전 기록으로 함께 표시한다. V13과 내부 작업 신호의 spool 연결·원본 보관·24시간 시작 대기·늦은 시작 자동 연결을 PC에서 준비했다. 실제 작업·GPS 입력은 미구현이며 일반 telemetry에서 작업을 추정 생성하지 않는다.
 - 새 작업 이력은 확인된 시작·종료 이벤트만 표시한다. 기존 오류 이벤트의 작업별 연결은 미구현이다.
 - 작업 신호의 30초 확인 불가 판정과 동일 ID 재연결은 내부 입력으로 검증하며 실제 자율주행 프로그램별 작업 신호 연결과 실제 예초 면적 커버리지는 미구현이다. 합의한 기준과 미확정 사항, 후속 순서는 Git에서 제외된 로컬 문서 `docs/learning/12-development-roadmap.md`의 2026-11-07 계획을 따른다.
 

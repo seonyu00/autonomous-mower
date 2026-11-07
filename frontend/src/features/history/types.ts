@@ -15,16 +15,17 @@ export type HistoryEvent = {
 export type HistoryEntry = {
   id: string;
   robotId: string;
-  startedAt: string;
+  startedAt: string | null;
   endedAt?: string;
   route: Feature<LineString | Point> | null;
   routeSegments?: Feature<LineString | Point>[];
   recordType?: 'legacy' | 'run';
-  status?: 'running' | 'completed' | 'unconfirmed';
+  status?: 'running' | 'completed' | 'unconfirmed' | 'pending-start' | 'start-unconfirmed' | 'conflict';
   lastObservedAt?: string;
   hasGpsGap?: boolean;
   distancePartial?: boolean;
   checkedAt?: string;
+  waitingSince?: string;
   receivedAtClient?: number;
   events: HistoryEvent[];
   distanceMeters: number | null;

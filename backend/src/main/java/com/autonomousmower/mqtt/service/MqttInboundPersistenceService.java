@@ -51,8 +51,15 @@ public class MqttInboundPersistenceService {
         this.errors = errors;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.autonomousmower.history.service.RunSignalPersistence runSignals;
+
     @Transactional
     public boolean persist(InboundRecord record) {
+        if (record.runSignal() != null) {
+            try { return runSignals.persist(record.runSignal(), record.observedAt()); }
+            catch (java.io.IOException error) { throw new java.io.UncheckedIOException(error); }
+        }
         if (record.telemetry() != null) {
             if (telemetryLogRepository.existsByIngestId(record.id())) return true;
             return persistTelemetry(record.telemetry(), record.observedAt(), record.id());

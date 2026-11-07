@@ -197,4 +197,17 @@ class MqttInboundPersistenceServiceTest {
         persistStatus(new MqttStatusPayload("MOWER-01", "online", "connected", "connected", now, false));
         verify(robotEventRepository, times(4)).save(org.mockito.Mockito.any());
     }
+
+    @Test
+    void runSignalUsesOriginalObservationAndDedicatedPersistence() throws Exception {
+        var handler=org.mockito.Mockito.mock(com.autonomousmower.history.service.RunSignalPersistence.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(persistenceService,"runSignals",handler);
+        var now=Instant.parse("2026-11-07T00:00:00Z");
+        var signal=new com.autonomousmower.history.dto.RunSignal(java.util.UUID.randomUUID(),java.util.UUID.randomUUID(),
+                "test","end",now,null,null);
+        when(handler.persist(signal,now)).thenReturn(true);
+        assertThat(persistenceService.persist(InboundRecord.run(signal,now))).isTrue();
+        verify(handler).persist(signal,now);
+        org.mockito.Mockito.verifyNoInteractions(telemetryLogRepository,robotEventRepository);
+    }
 }

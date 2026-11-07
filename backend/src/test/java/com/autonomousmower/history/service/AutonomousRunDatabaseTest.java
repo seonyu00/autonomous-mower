@@ -22,7 +22,7 @@ import org.springframework.test.context.DynamicPropertySource;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(AutonomousRunService.class)
+@Import({AutonomousRunService.class, RunSignalPersistence.class, AutonomousRunDatabaseTest.Json.class})
 @EnabledIfEnvironmentVariable(named = "RUN_TEST_JDBC_URL", matches = "jdbc:postgresql://127\\.0\\.0\\.1:[0-9]+/mower_run_test")
 class AutonomousRunDatabaseTest {
     @Autowired AutonomousRunService service;
@@ -75,5 +75,97 @@ class AutonomousRunDatabaseTest {
         stale.observe(now.plusSeconds(1), now.plusSeconds(1), true);
         assertThatThrownBy(() -> runs.saveAndFlush(stale))
                 .isInstanceOf(org.springframework.dao.OptimisticLockingFailureException.class);
+    }
+
+    @org.springframework.boot.test.context.TestConfiguration
+    static class Json {
+        @org.springframework.context.annotation.Bean
+        com.fasterxml.jackson.databind.ObjectMapper mapper() {
+            return new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+        }
+    }
+    @Autowired RunSignalPersistence signalPersistence;
+    @Autowired com.autonomousmower.history.repository.StoredRunSignalRepository signals;
+
+    private com.autonomousmower.history.dto.RunSignal signal(UUID runId, String kind, Instant at) {
+        return new com.autonomousmower.history.dto.RunSignal(UUID.randomUUID(), runId, "signal-test", kind, at, null, null);
+    }
+    private Instant prepareSignals() {
+        var now=Instant.parse("2026-11-07T00:00:00Z");
+        var robot=robots.saveAndFlush(new Robot("signal-test", "test", LocalDateTime.now()));
+        when(robotService.getRobot("signal-test")).thenReturn(robot);
+        when(clock.instant()).thenReturn(now);
+        return now;
+    }
+    @Test void endBeforeStartSurvivesReloadExpiresAndReconcilesAfter24Hours() throws Exception {
+        var now=prepareSignals(); var id=UUID.randomUUID();
+        var end=signal(id,"end",now);
+        assertThat(signalPersistence.persist(end,now)).isTrue();
+        em.flush(); em.clear();
+        assertThat(service.find("signal-test",null,null).getFirst().status()).isEqualTo("pending-start");
+        when(clock.instant()).thenReturn(now.plusSeconds(86400));
+        assertThat(service.find("signal-test",null,null).getFirst().status()).isEqualTo("start-unconfirmed");
+        assertThat(signalPersistence.persist(signal(id,"start",now.minusSeconds(10)),now.plusSeconds(86401))).isTrue();
+        em.flush(); em.clear();
+        var result=service.find("signal-test",null,null).getFirst();
+        assertThat(result.id()).isEqualTo("run-"+id);
+        assertThat(result.status()).isEqualTo("completed");
+        assertThat(result.startedAt()).isEqualTo(now.minusSeconds(10));
+        assertThat(result.endedAt()).isEqualTo(now);
+        assertThat(signalPersistence.persist(end,now.plusSeconds(90000))).isTrue();
+        assertThat(signals.count()).isEqualTo(2);
+    }
+    @Test void conflictingStartDoesNotInventACompletedJob() throws Exception {
+        var now=prepareSignals(); var id=UUID.randomUUID();
+        signalPersistence.persist(signal(id,"end",now),now);
+        assertThat(signalPersistence.persist(signal(id,"start",now.plusSeconds(1)),now.plusSeconds(1))).isFalse();
+        em.flush(); em.clear();
+        var result=service.find("signal-test",null,null).getFirst();
+        assertThat(result.status()).isEqualTo("conflict");
+        assertThat(result.startedAt()).isNull();
+        assertThat(result.distanceMeters()).isNull();
+    }
+
+    @Test void duplicateIdConflictIsPreservedAndCannotExtendJobObservation() throws Exception {
+        var now=prepareSignals(); var id=UUID.randomUUID();
+        var start=signal(id,"start",now);
+        signalPersistence.persist(start,now);
+        assertThat(signalPersistence.persist(start,now.plusSeconds(100))).isTrue();
+        em.flush(); em.clear();
+        when(clock.instant()).thenReturn(now.plusSeconds(30));
+        assertThat(service.find("signal-test",null,null).getFirst().status()).isEqualTo("unconfirmed");
+        var changed=new com.autonomousmower.history.dto.RunSignal(start.id(),id,"signal-test","start",now.minusSeconds(1),null,null);
+        assertThat(signalPersistence.persist(changed,now.plusSeconds(100))).isFalse();
+        em.flush(); em.clear();
+        assertThat(service.find("signal-test",null,null).getFirst().status()).isEqualTo("conflict");
+        assertThat(signals.count()).isEqualTo(1);
+    }
+
+    @org.junit.jupiter.api.io.TempDir java.nio.file.Path spoolDirectory;
+    @Test void sqliteRestartReplaysIntoRealPostgresUsingOriginalObservationTimes() throws Exception {
+        var now=prepareSignals(); var id=UUID.randomUUID();
+        var gateway=mock(com.autonomousmower.mqtt.service.MqttInboundPersistenceService.class);
+        when(gateway.persist(any())).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("test outage"));
+        var mapper=new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+        var end=signal(id,"end",now);
+        var first=new com.autonomousmower.mqtt.service.TelemetrySpool(spoolDirectory,mapper,gateway,false);
+        first.append(com.autonomousmower.mqtt.service.InboundRecord.run(end,now));
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(first,"drain");
+        assertThat(first.recording().state()).isEqualTo("buffered");
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(first,"close");
+        doAnswer(call -> {
+            var record=call.getArgument(0, com.autonomousmower.mqtt.service.InboundRecord.class);
+            return signalPersistence.persist(record.runSignal(),record.observedAt());
+        }).when(gateway).persist(any());
+        var replay=new com.autonomousmower.mqtt.service.TelemetrySpool(spoolDirectory,mapper,gateway,false);
+        try {
+            org.springframework.test.util.ReflectionTestUtils.invokeMethod(replay,"drain");
+            em.flush(); em.clear();
+            assertThat(service.find("signal-test",null,null).getFirst().waitingSince()).isEqualTo(now);
+            replay.append(com.autonomousmower.mqtt.service.InboundRecord.run(signal(id,"start",now.minusSeconds(2)),now.plusSeconds(86401)));
+            org.springframework.test.util.ReflectionTestUtils.invokeMethod(replay,"drain");
+            em.flush(); em.clear();
+            assertThat(service.find("signal-test",null,null).getFirst().status()).isEqualTo("completed");
+        } finally { org.springframework.test.util.ReflectionTestUtils.invokeMethod(replay,"close"); }
     }
 }

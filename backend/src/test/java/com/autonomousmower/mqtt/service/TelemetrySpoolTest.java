@@ -60,4 +60,23 @@ class TelemetrySpoolTest {
             assertThat(store.recording().possibleGap()).isTrue();
         } finally { store.close(); }
     }
+
+    @Test void runSignalSurvivesDbFailureAndRestartWithoutBlockingOtherRecords() throws Exception {
+        var now=Instant.parse("2026-11-07T00:00:00Z");
+        var signal=new com.autonomousmower.history.dto.RunSignal(java.util.UUID.randomUUID(),java.util.UUID.randomUUID(),
+                "A","end",now,null,null);
+        var run=InboundRecord.run(signal,now);
+        var other=InboundRecord.event(new MqttEventPayload("other","B","info","test","유지",now,"test"),now);
+        var initial=spool(); initial.append(run); initial.append(other);
+        when(db.persist(any())).thenThrow(new DataAccessResourceFailureException("outage"));
+        initial.drain(); initial.close();
+        doReturn(true).when(db).persist(any());
+        var recovered=spool();
+        try {
+            recovered.drain();
+            verify(db,times(2)).persist(run);
+            verify(db).persist(other);
+            assertThat(recovered.recording().state()).isEqualTo("available");
+        } finally { recovered.close(); }
+    }
 }

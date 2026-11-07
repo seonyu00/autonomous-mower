@@ -102,6 +102,8 @@ public class TelemetrySpool {
                 if (row == null) return;
                 try {
                     if (!persistence.persist(mapper.readValue(row.json(), InboundRecord.class))) markGap();
+                } catch (IllegalArgumentException invalidRun) {
+                    markGap();
                 } catch (DataIntegrityViolationException | com.fasterxml.jackson.core.JsonProcessingException invalid) {
                     // 영구적으로 저장할 수 없는 행은 표시하고 다음 로봇의 기록을 계속 처리한다.
                     markGap();

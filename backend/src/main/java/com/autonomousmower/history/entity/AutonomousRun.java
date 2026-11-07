@@ -62,12 +62,11 @@ public class AutonomousRun {
         if (signalAt.isBefore(lastSignalAt)) return;
         if (endedAt != null) return;
         if (signalAt.equals(lastSignalAt) && !completed) return;
-        if (observedAt.isBefore(lastObservedAt)) throw new IllegalArgumentException("관측 시각이 역전됐습니다.");
         Instant completionAt = signalAt;
         if (completed && positions.stream().anyMatch(p -> p.measuredAt.isAfter(completionAt)))
             throw new IllegalArgumentException("종료 이후 위치 기록이 있습니다.");
         lastSignalAt = signalAt;
-        lastObservedAt = observedAt;
+        if (observedAt.isAfter(lastObservedAt)) lastObservedAt = observedAt;
         if (completed) endedAt = signalAt;
     }
 

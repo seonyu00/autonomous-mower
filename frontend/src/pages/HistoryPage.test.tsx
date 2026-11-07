@@ -117,3 +117,20 @@ it('조회 후 작업 신호가 30초 경계를 넘으면 종료 확인 불가�
   act(() => vi.advanceTimersByTime(1000));
   expect(screen.getByText('종료 확인 불가')).toBeInTheDocument();
 });
+
+
+it('시작 없는 종료는 즉시 표시하고 24시간 뒤에도 시작이나 거리를 추정하지 않는다', async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-11-07T23:59:59Z'));
+  vi.mocked(getHistory).mockResolvedValueOnce([{
+    ...mockHistoryEntries[0], recordType: 'run', route: null, routeSegments: [], startedAt: null,
+    status: 'pending-start', waitingSince: '2026-11-07T00:00:00Z', checkedAt: '2026-11-07T23:59:59Z',
+    receivedAtClient: Date.now(), distanceMeters: null,
+  }]);
+  render(<HistoryPage />);
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: '검색' })));
+  expect(screen.getByText('시작 확인 불가 · 시작 신호 대기 중')).toBeInTheDocument();
+  expect(screen.getByText('시작 시각 미확인')).toBeInTheDocument();
+  act(() => vi.advanceTimersByTime(1000));
+  expect(screen.getByText('시작 확인 불가 · 대기 기간 경과')).toBeInTheDocument();
+});

@@ -14,7 +14,7 @@ export async function getHistory(query: HistoryQuery): Promise<HistoryEntry[]> {
     const to = new Date(toIso).getTime();
 
     return mockHistoryEntries.filter((entry) => {
-      const startedAt = new Date(entry.startedAt).getTime();
+      const startedAt = new Date(entry.startedAt ?? '').getTime();
 
       return entry.robotId === query.robotId && startedAt >= from && startedAt <= to;
     });
@@ -37,7 +37,7 @@ export async function getHistory(query: HistoryQuery): Promise<HistoryEntry[]> {
   // 백엔드의 offset 없는 LocalDateTime 응답은 기존 UTC 계약으로 해석한다.
   return entries.map((entry) => ({
     ...entry,
-    startedAt: utcTimestamp(entry.startedAt),
+    startedAt: entry.startedAt ? utcTimestamp(entry.startedAt) : null,
     lastObservedAt: entry.lastObservedAt ? utcTimestamp(entry.lastObservedAt) : undefined,
     endedAt: entry.endedAt ? utcTimestamp(entry.endedAt) : undefined,
     events: entry.events.map((event) => ({ ...event, occurredAt: utcTimestamp(event.occurredAt) })),

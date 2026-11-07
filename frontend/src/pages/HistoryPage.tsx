@@ -127,7 +127,9 @@ export function HistoryPage() {
             >
               <strong>{entry.robotId}</strong>
               <span>{entry.recordType === 'run' ? runStatus(entry, now) : '작업 구분 전 기록'}</span>
-              <span>{formatRange(entry.startedAt, entry.endedAt)}</span>
+              <span>{entry.startedAt ? formatRange(entry.startedAt, entry.endedAt) : '시작 시각 미확인'}</span>
+              {!entry.startedAt && entry.endedAt ? <span>종료 신호 수신: {formatRange(entry.endedAt, entry.endedAt).split(' - ')[0]}</span> : null}
+              {entry.waitingSince ? <span>최초 신호 수신: {formatRange(entry.waitingSince, entry.waitingSince).split(' - ')[0]}</span> : null}
               {entry.lastObservedAt ? <span>마지막 작업 확인: {formatRange(entry.lastObservedAt, entry.lastObservedAt).split(' - ')[0]}</span> : null}
               {entry.hasGpsGap ? <span>GPS 수신 끊김 · 부분 거리</span> : null}
               <small>
@@ -173,5 +175,12 @@ function runStatus(entry: HistoryEntry, now: number) {
   if (entry.status === 'running' && entry.checkedAt && entry.lastObservedAt && entry.receivedAtClient != null
       && new Date(entry.checkedAt).getTime() - new Date(entry.lastObservedAt).getTime()
         + Math.max(0, now - entry.receivedAtClient) >= 30_000) return '종료 확인 불가';
-  return entry.status === 'completed'  ? '완료' : entry.status === 'unconfirmed' ? '종료 확인 불가' : '진행 중';
+  if (entry.status === 'conflict') return '작업 신호 충돌 · 확인 필요';
+  if (entry.status === 'start-unconfirmed') return '시작 확인 불가 · 대기 기간 경과';
+  if (entry.status === 'pending-start') {
+    const age = entry.checkedAt && entry.waitingSince ? new Date(entry.checkedAt).getTime() - new Date(entry.waitingSince).getTime()
+      + Math.max(0, now - (entry.receivedAtClient ?? now)) : 0;
+    return age >= 86_400_000 ? '시작 확인 불가 · 대기 기간 경과' : '시작 확인 불가 · 시작 신호 대기 중';
+  }
+  return entry.status === 'completed'   ? '완료' : entry.status === 'unconfirmed' ? '종료 확인 불가' : '진행 중';
 }
