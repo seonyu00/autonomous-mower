@@ -194,3 +194,16 @@ HW 팀이 카메라를 다시 연결한 뒤 2026년 6월 12일 재확인했을 �
 6. `command_execution` 테이블에서 명령 상태를 확인한다.
 
 로그나 화면을 공유할 때 JWT, Authorization 헤더, 실제 계정, 외부 주소를 제거한다.
+## 작업 이력의 전체 서버 검증과 모의 작업 생성
+
+`backend/src/test/java/com/autonomousmower/history/service/RunHistoryApplicationTest.java`는 전체 서버를 실제로 시작하고 로그인과 작업 이력 HTTP 조회를 검사한다. DB는 별도로 만든 PostgreSQL/PostGIS의 `mower_run_test`만 사용한다. `RUN_TEST_JDBC_URL`은 `jdbc:postgresql://127.0.0.1:<TEST_DB_PORT>/mower_run_test` 형식이어야 하며 `RUN_TEST_USER`, `RUN_TEST_PASSWORD`도 설정한다. URL이 없으면 테스트는 건너뛰므로 실행 성공으로 세지 않는다.
+
+`backend` 디렉터리에서 다음 명령을 실행한다.
+
+```powershell
+.\gradlew.bat test --tests '*RunHistoryApplicationTest'
+```
+
+기본 실행은 시작·GPS 두 구간·3초 끊김·종료를 생성하고 약 178.48m의 부분 거리와 읽기 권한을 확인한 뒤 자신이 만든 데이터를 정리한다. 브라우저 검증용 데이터를 남기려면 실행 전에 `RUN_TEST_SEED_BROWSER=true`와 테스트 전용 `RUN_TEST_BROWSER_PASSWORD`를 설정한다. 출력의 `RUN_HTTP_OK robot=...` 값은 로봇 ID이자 읽기 전용 계정 ID다. 현재 시각을 기준으로 작업을 만들므로 화면에서 오늘 한국 날짜와 해당 로봇으로 검색한다.
+
+브라우저 검증은 동일한 격리 DB를 사용해 일반 백엔드를 실행하고 프런트의 인증·장비·이력 Mock을 끈 뒤 진행한다. 프런트 API 주소와 서버 CORS 허용 주소도 해당 로컬 포트로 맞춘다. 전체 서버 시작 테스트는 HTTP까지 확인하며 브라우저나 네이버 지도 검증을 자동 수행하지는 않는다. 작업·계정을 보존한 실행에서는 확인 후 해당 테스트 DB를 폐기한다. 운영 DB·실제 장비용 계정이나 비밀번호를 사용하지 않는다.

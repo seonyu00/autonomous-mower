@@ -5,7 +5,7 @@ import static org.mockito.Mockito.*;
 import com.autonomousmower.history.entity.AutonomousRun;
 import com.autonomousmower.history.repository.AutonomousRunRepository;
 import com.autonomousmower.robot.entity.Robot;
-import com.autonomousmower.robot.service.RobotService;
+import com.autonomousmower.robot.repository.RobotRepository;
 import com.autonomousmower.history.service.GpsDistanceCalculator.Sample;
 import java.time.*;
 import java.util.*;
@@ -14,14 +14,14 @@ import org.junit.jupiter.api.Test;
 class AutonomousRunServiceTest {
     final Instant start = Instant.parse("2026-11-07T00:00:00Z");
     final AutonomousRunRepository repo = mock(AutonomousRunRepository.class);
-    final RobotService robots = mock(RobotService.class);
+    final RobotRepository robots = mock(RobotRepository.class);
     final UUID id = UUID.randomUUID();
     final AutonomousRun run = new AutonomousRun(id, "test", start, start);
 
     AutonomousRunService service(long seconds) {
         when(repo.findByRobotIdOrderByStartedAtDesc("test")).thenReturn(List.of(run));
         when(repo.findById(id)).thenReturn(Optional.of(run));
-        when(robots.getRobot("test")).thenReturn(new Robot("test", "test", LocalDateTime.now()));
+        when(robots.findById("test")).thenReturn(Optional.of(new Robot("test", "test", LocalDateTime.now())));
         return new AutonomousRunService(repo, robots, Clock.fixed(start.plusSeconds(seconds), ZoneOffset.UTC));
     }
 

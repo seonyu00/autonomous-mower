@@ -7,7 +7,10 @@ import com.autonomousmower.history.dto.HistoryEventResponse;
 import com.autonomousmower.history.entity.AutonomousRun;
 import com.autonomousmower.history.repository.AutonomousRunRepository;
 import com.autonomousmower.history.service.GpsDistanceCalculator.Sample;
-import com.autonomousmower.robot.service.RobotService;
+import com.autonomousmower.robot.repository.RobotRepository;
+import com.autonomousmower.robot.entity.Robot;
+import com.autonomousmower.common.exception.BusinessException;
+import com.autonomousmower.common.exception.ErrorCode;
 import java.time.Instant;
 import java.time.Duration;
 import java.time.Clock;
@@ -24,20 +27,20 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AutonomousRunService {
     private final AutonomousRunRepository runs;
-    private final RobotService robots;
+    private final RobotRepository robots;
     private final Clock clock;
     @org.springframework.beans.factory.annotation.Autowired
     private com.autonomousmower.history.repository.StoredRunSignalRepository storedSignals;
     @org.springframework.beans.factory.annotation.Autowired
     private com.fasterxml.jackson.databind.ObjectMapper signalMapper;
 
-    public AutonomousRunService(AutonomousRunRepository runs, RobotService robots, Clock clock) {
+    public AutonomousRunService(AutonomousRunRepository runs, RobotRepository robots, Clock clock) {
         this.runs = runs; this.robots = robots; this.clock = clock;
     }
 
     @Transactional
     public void start(String robotId, UUID id, Instant startedAt, Instant observedAt) {
-        var robot = robots.getRobot(robotId);
+        var robot = getRobot(robotId);
         if (!robot.isEnabled()) throw new IllegalArgumentException("비활성 로봇입니다.");
         var existing = runs.findById(id);
         if (existing.isPresent()) {
@@ -59,8 +62,13 @@ public class AutonomousRunService {
         getRun(robotId, id).addPosition(sample);
     }
 
+    private Robot getRobot(String robotId) {
+        return robots.findById(robotId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROBOT_NOT_FOUND));
+    }
+
     private AutonomousRun getRun(String robotId, UUID id) {
-        var robot = robots.getRobot(robotId);
+        var robot = getRobot(robotId);
         if (!robot.isEnabled()) throw new IllegalArgumentException("비활성 로봇입니다.");
         var run = runs.findById(id).orElseThrow(() -> new IllegalArgumentException("시작이 확인되지 않은 작업입니다."));
         if (!run.getRobotId().equals(robotId)) throw new IllegalArgumentException("작업의 로봇이 다릅니다.");
@@ -69,7 +77,7 @@ public class AutonomousRunService {
 
     @Transactional(readOnly = true)
     public List<RunHistoryResponse> find(String robotId, Instant from, Instant to) {
-        robots.getRobot(robotId);
+        getRobot(robotId);
         if (from != null && to != null && from.isAfter(to)) throw new IllegalArgumentException("조회 기간이 역전됐습니다.");
         List<RunHistoryResponse> result = new ArrayList<>(runs.findByRobotIdOrderByStartedAtDesc(robotId).stream()
                 .filter(r -> to == null || !r.getStartedAt().isAfter(to))
