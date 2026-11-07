@@ -18,6 +18,8 @@ export type CppPreview = {
   path: { lat: number; lon: number }[];
 };
 
+export type RoutePlanResult = { planId: string; sha256: string; preview: CppPreview };
+
 export const CPP_PREVIEW_TIMEOUT_MS = 15000;
 export const CPP_MAX_CELL_SIZE_M = 0.65;
 
@@ -28,8 +30,8 @@ export function useCppPreview() {
   const zone = useZoneStore((state) => robotId ? state.zonesByRobotId[robotId] : null);
   const version = useZoneStore((state) => robotId ? state.versionsByRobotId[robotId] : null);
   const editing = useZoneStore((state) => robotId ? state.editingByRobotId[robotId] : false);
-  const [state, setState] = useState<{ path: LngLat[]; message: string; loading: boolean }>({
-    path: emptyPath, message: '', loading: false,
+  const [state, setState] = useState<{ path: LngLat[]; message: string; loading: boolean; planId: string | null; sha256: string | null }>({
+    path: emptyPath, message: '', loading: false, planId: null, sha256: null,
   });
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
@@ -38,7 +40,7 @@ export function useCppPreview() {
     const invalidate = () => {
       generation.current += 1;
       controller.current?.abort();
-      setState({ path: emptyPath, message: '', loading: false });
+      setState({ path: emptyPath, message: '', loading: false, planId: null, sha256: null });
     };
     const unsubscribeRobot = useRobotStore.subscribe((next, previous) => {
       if (next.selectedRobotId !== previous.selectedRobotId) invalidate();
@@ -66,7 +68,7 @@ export function useCppPreview() {
     const abort = new AbortController();
     controller.current = abort;
     const requestId = ++generation.current;
-    setState({ path: emptyPath, message: 'CPP 예정 경로를 생성 중입니다.', loading: true });
+    setState({ path: emptyPath, message: 'CPP 예정 경로를 생성 중입니다.', loading: true, planId: null, sha256: null });
     let timeout: ReturnType<typeof setTimeout>;
     const deadline = new Promise<never>((_, reject) => {
       timeout = setTimeout(() => {
@@ -78,21 +80,22 @@ export function useCppPreview() {
     abort.signal.addEventListener('abort', clearDeadline, { once: true });
     try {
       // 취소 신호를 무시하는 응답도 제한 시간이 지난 화면을 덮어쓰지 못하게 한다.
-      const result = await Promise.race([deadline, httpClient.post<CppPreview>(
-        `/api/robots/${encodeURIComponent(robotId!)}/work-zone/cpp-preview`,
+      const stored = await Promise.race([deadline, httpClient.post<RoutePlanResult>(
+        `/api/robots/${encodeURIComponent(robotId!)}/work-zone/cpp-preview/plans`,
         { expectedVersion: version, cellSizeM }, { signal: abort.signal },
       )]);
       if (requestId !== generation.current) return;
+      const result = stored.preview;
       if (result.robotId !== robotId || result.version !== version) {
         throw new Error('응답 구역이 현재 선택과 다릅니다.');
       }
       const path: LngLat[] = result.path.map(({ lat, lon }) => [lon, lat]);
-      setState({ path, loading: false, message: path.length
-        ? `예정 경로 ${path.length}점 · 저장 버전 ${result.version} · 격자 ${result.cellSizeM}m · 번호가 증가하는 순서로 이동`
+      setState({ path, loading: false, planId: path.length ? stored.planId : null, sha256: path.length ? stored.sha256 : null, message: path.length
+        ? `예정 경로 ${path.length}점 · 저장 버전 ${result.version} · 격자 ${result.cellSizeM}m · 경로 ID ${stored.planId} · 번호가 증가하는 순서로 이동`
         : '생성된 경로점이 없습니다. 구역 크기와 격자 간격을 확인하세요.' });
     } catch (error) {
       if (requestId !== generation.current) return;
-      setState({ path: emptyPath, loading: false, message: error instanceof ApiError
+      setState({ path: emptyPath, loading: false, planId: null, sha256: null, message: error instanceof ApiError
         ? error.status === 408 ? '미리보기 요청이 15초 안에 완료되지 않았습니다. 다시 생성해 주세요.'
           : error.status === 422 ? '구역 크기에 비해 격자가 큽니다. 격자 간격을 줄이세요.'
           : error.status === 409 ? '작업 구역이 변경되었습니다. 최신 구역을 다시 불러오세요.'
@@ -105,7 +108,7 @@ export function useCppPreview() {
       abort.signal.removeEventListener('abort', clearDeadline);
     }
   };
-  return { ...state, path: available ? state.path : emptyPath, available, generate };
+  return { ...state, path: available ? state.path : emptyPath, planId: available ? state.planId : null, sha256: available ? state.sha256 : null, available, generate };
 }
 
 // 긴 경로는 표식만 간추린다. 선에는 모든 경로점을 전달하고 번호는 원래 순서를 유지한다.

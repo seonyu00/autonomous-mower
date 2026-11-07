@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
+from uuid import UUID
 
 from shapely.geometry import Polygon
 
@@ -62,20 +63,22 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
-def fetch(base_url: str, robot_id: str, token: str) -> dict:
+def fetch(base_url: str, robot_id: str, token: str, plan_id: str | None = None) -> dict:
     url = urlsplit(base_url)
     if url.scheme != "https" or not url.hostname or url.username or url.password or url.query or url.fragment:
         raise ValueError("계정 정보·쿼리가 없는 HTTPS 서버 주소를 지정해 주세요.")
     if not token.strip() or any(c in token for c in "\r\n"):
         raise ValueError("작업 구역 조회용 인증 토큰이 필요합니다.")
-    request = Request(base_url.rstrip("/") + "/api/robots/" + quote(robot_id, safe="") + "/work-zone",
+    suffix = "" if plan_id is None else "/cpp-preview/plans/" + str(UUID(plan_id))
+    limit = MAX_BYTES if plan_id is None else 2 * MAX_BYTES + 1024
+    request = Request(base_url.rstrip("/") + "/api/robots/" + quote(robot_id, safe="") + "/work-zone" + suffix,
                       headers={"Authorization": "Bearer " + token, "Accept": "application/json"})
     try:
         with build_opener(NoRedirect()).open(request, timeout=10) as reply:
-            body = reply.read(MAX_BYTES + 1)
+            body = reply.read(limit + 1)
     except (HTTPError, URLError, TimeoutError) as error:
         raise ValueError("작업 구역 조회에 실패했습니다. 서버 주소·인증·연결 상태를 확인해 주세요.") from error
-    if len(body) > MAX_BYTES:
+    if len(body) > limit:
         raise ValueError("작업 구역 응답이 너무 큽니다.")
     return json.loads(body)
 

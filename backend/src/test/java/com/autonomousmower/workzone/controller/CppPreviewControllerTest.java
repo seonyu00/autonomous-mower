@@ -24,6 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CppPreviewControllerTest {
     @Autowired MockMvc mvc;
     @MockBean CppPreviewService service;
+    @MockBean com.autonomousmower.workzone.service.RoutePlanService plans;
     @MockBean JwtTokenProvider jwt;
     static final String URL = "/api/robots/R1/work-zone/cpp-preview";
     static final String INPUT = "{\"expectedVersion\":2,\"cellSizeM\":0.5}";
@@ -31,6 +32,18 @@ class CppPreviewControllerTest {
     @Test void requiresAuthentication() throws Exception {
         mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(INPUT)).andExpect(status().isUnauthorized());
         verifyNoInteractions(service);
+    }
+    @Test void planEndpointsRequireAuthentication() throws Exception {
+        mvc.perform(post(URL + "/plans").contentType(MediaType.APPLICATION_JSON).content(INPUT)).andExpect(status().isUnauthorized());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(URL + "/plans/11111111-1111-4111-8111-111111111111"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(plans);
+    }
+    @Test @WithMockUser(authorities = "logs:read") void planEndpointsRequireRobotRead() throws Exception {
+        mvc.perform(post(URL + "/plans").contentType(MediaType.APPLICATION_JSON).content(INPUT)).andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(URL + "/plans/11111111-1111-4111-8111-111111111111"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(plans);
     }
     @Test @WithMockUser(authorities = "logs:read") void requiresRobotReadPermission() throws Exception {
         mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(INPUT)).andExpect(status().isForbidden());

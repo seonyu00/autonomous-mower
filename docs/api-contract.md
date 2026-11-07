@@ -969,3 +969,11 @@ Payload:
 계정 변경 감사는 로봇 이벤트와 별도 테이블에 기록한다. 변경 성공과 감사 기록은 같은 트랜잭션으로 저장하고 행위자·대상·작업·역할 및 상태 변경 전후를 포함한다. 비밀번호·해시·JWT는 남기지 않는다. 감사 저장 실패 시 계정 변경을 롤백하고 열린 세션도 종료하지 않는다. 조회는 admin만 허용하며 UTC 시각 내림차순·동률 ID 순으로 페이지화한다. 최초 관리자는 기존 수동 등록 절차를 유지하며 공개 가입·자동 기본 관리자 생성을 추가하지 않았다. 감사 기록은 자동 삭제하지 않고 보존 기간 확정·삭제 기능은 운영 후속 범위로 남긴다.
 
 설계 참고: [OWASP 권한 검사 지침](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html), [세션 관리 지침](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html). 이 자료는 서버 권한 검사·세션 종료 원칙의 근거이며 프로젝트의 구현 완료 증거가 아니다.
+
+
+### 확인한 예정 경로의 보관·조회
+
+- `POST /api/robots/{robotId}/work-zone/cpp-preview/plans`: 기존 생성 요청 `{expectedVersion, cellSizeM}`을 받아 한 번 계산한 결과와 구역을 DB에 보관한다. `data`는 `{planId, sha256, preview}`이며 `preview`는 기존 CPP 응답이다. 웹은 이 응답의 `preview`를 표시하고 경로 ID를 보유한다. 기존 POST `/cpp-preview`는 보관 없는 호환 API로 유지한다.
+- `GET /api/robots/{robotId}/work-zone/cpp-preview/plans/{planId}`: `{planId, sha256, payload}`를 반환한다. `payload`는 `{formatVersion:1, plannerProfile:"hd7000w-v1", workZone, preview}`의 JSON 원문 문자열이다. SHA-256은 이 문자열의 UTF-8 바이트를 대상으로 한다. 다른 로봇의 ID·존재하지 않는 경로는 404, 현재 구역 ID·버전 불일치는 409 `WORK_ZONE_CONFLICT`, 저장 원문 해시 불일치는 `CPP_OUTPUT_INVALID`다. 두 API는 기존 `robots:read` 권한과 인증을 요구한다.
+- V15 `route_plan`은 구역 ID·버전·원문·해시·생성 시각을 보존하고 보관본을 수정하지 않는다. 생성 결과가 비어 있으면 웹은 준비용 ID를 활성화하지 않으며 Jetson 준비는 두 점 미만을 거부한다. 보관 기간·자동 삭제와 준비 결과 보고 API는 미구현이다.
+- GET의 최신성 확인은 조회 시점 기준이다. 수신 후의 구역 변경, 실제 실행 직전 재확인과 실행 중 교체 정책은 후속 계약이다. 경로 저장·조회나 해시 일치를 주행 승인·실제 작업 시작으로 해석하지 않는다. AUTO payload와 MQTT 계약은 이번에 바꾸지 않았다.

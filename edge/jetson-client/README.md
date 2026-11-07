@@ -286,3 +286,23 @@ Linux에서는 `bash scripts/prepare-web-work-zone.sh` 뒤에 같은 인수를 �
 결과에는 구역 ID·버전·원본 도형·SHA-256과 `status=prepared`를 저장한다. 조회한 시점의 스냅샷이며 이후 웹 변경을 자동 반영하지 않는다. 실제 적용 전 최신 버전과 일치하는지 다시 확인할 계약이 필요하다. 기존 출력 파일과 `boundary.json`이라는 이름은 거부하므로 확인할 새 구역은 새 이름으로 저장한다. POSIX에서는 소유자만 읽는 권한으로 생성하며, 위치 정보의 저장 기간과 파일 접근 권한을 관리해야 한다. 준비 성공은 실제 경로 안전성·GPS 준비 완료·주행 승인·예초 완료를 의미하지 않는다.
 
 검사는 저장소 루트에서 `PYTHONPATH`를 `edge/jetson-client`로 지정하고 `python -m unittest discover -s edge/jetson-client/tests -p test_web_work_zone.py -v`를 실행한다. 구역 처리와 실제 CLI 파일 생성을 PC에서 검사했고 인증 HTTP 조회는 대역 검사다. 실제 서버·Jetson 수신, Linux 셸 래퍼 실행과 주행·비전 표시는 아직 검증하지 않았다.
+
+
+## 웹에서 확인한 예정 경로의 준비
+
+웹의 예정 경로 생성은 `/api/robots/{robotId}/work-zone/cpp-preview/plans`로 요청하고 서버가 보관한 원본과 같은 경로를 표시한다. 화면에 표시된 경로 ID를 사용한다. 서버는 구역 ID·버전과 경로·격자·계산 프로필을 한 원문에 묶어 V15 `route_plan`에 보관한다. Jetson은 경로를 다시 계산하지 않는다.
+
+`requirements-work-zone.txt`의 의존성을 설치한 Python과 이 저장소의 `PYTHONPATH`를 사용한다. 서버·웹 적용과 인증 토큰 준비는 별도로 필요하다.
+
+```bash
+python3 -m jetson_mower_client.web_route_plan \
+  --api-base-url https://<API_HOST> --robot-id <ROBOT_ID> \
+  --expected-version <ZONE_VERSION> --plan-id <PLAN_ID> \
+  --output web-route-<PLAN_ID>.json
+```
+
+토큰은 기존 `WORK_ZONE_API_TOKEN` 환경변수로 제공하며 명령에 넣지 않는다. HTTPS 인증서 검증·리다이렉트 거부와 기존 서버의 `robots:read` 권한을 적용한다. 장비 전용 HTTP 인증의 운영 방식은 아직 확정하지 않았다. 오프라인에서는 `--api-base-url` 대신 `--response-file <GET_RESPONSE_JSON>`으로 같은 준비 검사를 실행한다. 오프라인 파일은 서버의 현재 버전을 확인할 수 없다.
+
+조회 API는 로봇과 현재 구역 ID·버전 일치를 확인하고, 준비 코드는 기대 경로 ID·원문 SHA-256·구역과 경로의 식별 정보·좌표·경계와 차체 외접원 여유를 검사한다. 해시는 UTF-8 `payload` 문자열의 바이트를 대상으로 하며 JSON을 다시 직렬화하지 않는다. 해시는 인증을 대신하지 않는다. 성공하면 원문·해시·ID를 `route_prepared` 파일에 그대로 보존하고 터미널에 경로 ID를 출력한다. 기존 파일과 `boundary.json`은 덮어쓰지 않는다.
+
+이번 단계는 파일 준비이며 실제 주행 준비 완료가 아니다. 서버 재시작 뒤에도 보관본은 DB에 남지만 자동 삭제·보관 기간은 아직 정하지 않았다. 빈 경로·한 점짜리 경로는 Jetson 준비에서 거부한다. 준비 후 구역이 변경될 수 있으므로 실제 실행 직전 최신 버전 재확인과 적용 중 변경 정책, Jetson 준비 결과의 서버 보고·웹 표시, AUTO 명령에 경로 ID를 붙이는 연결·작업 시작 신호·실제 추종기는 후속 작업이다. 기존 AUTO 동작이나 5×5 시험 스크립트를 교체하지 않는다. 실제 Jetson 배포·HTTPS 조회·물리 주행은 이번 검증에 포함하지 않았다.
