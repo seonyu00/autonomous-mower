@@ -28,7 +28,9 @@ public class RobotController {
 
     @GetMapping("/{robotId}")
     @PreAuthorize("hasAuthority('robots:read')")
-    public ApiResponse<RobotResponse> getRobot(@PathVariable String robotId) {
-        return ApiResponse.success(robotService.findById(robotId));
+    public ApiResponse<RobotResponse> getRobot(@PathVariable String robotId, org.springframework.security.core.Authentication authentication) {
+        boolean includeControl = authentication.getAuthorities().stream()
+                .anyMatch(authority -> "telemetry:read".equals(authority.getAuthority()));
+        return ApiResponse.success(robotService.findById(robotId, includeControl));
     }
 }

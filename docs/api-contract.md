@@ -122,6 +122,8 @@ Response `200`:
 
 Permission: `robots:read`
 
+`control`은 추가로 `telemetry:read`가 있을 때 서버의 현재 제어 상태를 반환한다. 해당 권한이 없으면 `null`이다. 이 상태는 서버 메모리의 제어권·모드·긴급 정지 상태이며 Jetson·STM32의 실제 물리 실행 여부를 보증하지 않는다. 상세 응답 형식은 유지한다.
+
 Response `200`:
 
 ```json

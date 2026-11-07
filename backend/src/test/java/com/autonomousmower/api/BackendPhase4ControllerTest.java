@@ -190,4 +190,26 @@ class BackendPhase4ControllerTest {
         mockMvc.perform(get("/api/history/runs").param("robotId", "test"))
                 .andExpect(status().isForbidden());
     }
+
+    @Test
+    @WithMockUser(authorities = {"robots:read", "telemetry:read"})
+    void robotDetailIncludesControlOnlyWithTelemetryPermission() throws Exception {
+        when(robotService.findById("test", true)).thenReturn(new RobotResponse(
+                "test", "test", "offline", true, null,
+                new com.autonomousmower.robot.dto.ControlSummaryResponse("held", "operator", "emergency", true), null));
+        mockMvc.perform(get("/api/robots/test")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.control.lockState", is("held")))
+                .andExpect(jsonPath("$.data.control.emergency", is(true)));
+        verify(robotService).findById("test", true);
+    }
+
+    @Test
+    @WithMockUser(authorities = "robots:read")
+    void robotDetailWithRobotPermissionAloneDoesNotExposeControl() throws Exception {
+        when(robotService.findById("test", false)).thenReturn(new RobotResponse(
+                "test", "test", "offline", true, null, null, null));
+        mockMvc.perform(get("/api/robots/test")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.control").doesNotExist());
+        verify(robotService).findById("test", false);
+    }
 }

@@ -26,14 +26,14 @@ public record RobotResponse(
         );
     }
 
-    public static RobotResponse detail(Robot robot, TelemetryReception reception) {
+    public static RobotResponse detail(Robot robot, TelemetryReception reception, ControlSummaryResponse control) {
         return new RobotResponse(
                 robot.getRobotId(),
                 robot.getModelName(),
                 "normal".equals(reception.state()) ? "online" : "delayed".equals(reception.state()) ? "degraded" : "offline",
                 robot.isEnabled(),
                 reception.lastReceivedAt() == null ? null : LocalDateTime.ofInstant(reception.lastReceivedAt(), ZoneOffset.UTC),
-                ControlSummaryResponse.placeholder(),
+                control,
                 reception
         );
     }

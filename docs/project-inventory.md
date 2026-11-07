@@ -494,6 +494,7 @@ Backend 주요 파일:
 주의:
 
 - control lock state는 현재 DB persistence가 아니라 backend process memory 기반이다.
+- 로봇 상세 API의 `control`은 `telemetry:read` 권한이 있으면 이 서버 상태를 반환하며 권한이 없으면 `null`이다. 장비의 물리 실행 확인을 의미하지 않는다.
 - 다중 backend instance 환경에서는 분산 lock 또는 DB/Redis 기반 state가 필요하다.
 
 ### E-Stop

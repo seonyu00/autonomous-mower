@@ -6,7 +6,7 @@ public record ControlSummaryResponse(
         String mode,
         boolean emergency
 ) {
-    public static ControlSummaryResponse placeholder() {
-        return new ControlSummaryResponse("none", null, "idle", false);
+    public static ControlSummaryResponse from(com.autonomousmower.control.model.ControlLockSnapshot snapshot) {
+        return new ControlSummaryResponse(snapshot.lockState(), snapshot.controlOwner(), snapshot.mode(), snapshot.emergency());
     }
 }

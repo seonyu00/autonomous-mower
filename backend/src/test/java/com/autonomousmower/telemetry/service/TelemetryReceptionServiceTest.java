@@ -135,7 +135,7 @@ class TelemetryReceptionServiceTest {
         when(repository.findAll()).thenReturn(java.util.List.of(
                 new com.autonomousmower.robot.entity.Robot("A", "test", java.time.LocalDateTime.of(2026, 9, 10, 0, 0)),
                 new com.autonomousmower.robot.entity.Robot("B", "test", java.time.LocalDateTime.of(2026, 9, 10, 0, 0))));
-        var robots = new com.autonomousmower.robot.service.RobotService(repository, service);
+        var robots = new com.autonomousmower.robot.service.RobotService(repository, service, new com.autonomousmower.control.model.ControlStateStore());
         service.recordTelemetry("A", now, now.minusSeconds(50));
         now = start.plusSeconds(3);
         assertThat(robots.findAll().get(0).telemetryReception().state()).isEqualTo("delayed");

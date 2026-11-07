@@ -3,6 +3,8 @@ package com.autonomousmower.robot.service;
 import com.autonomousmower.common.exception.BusinessException;
 import com.autonomousmower.common.exception.ErrorCode;
 import com.autonomousmower.robot.dto.RobotResponse;
+import com.autonomousmower.robot.dto.ControlSummaryResponse;
+import com.autonomousmower.control.model.ControlStateStore;
 import com.autonomousmower.robot.entity.Robot;
 import com.autonomousmower.robot.repository.RobotRepository;
 import java.util.List;
@@ -15,10 +17,12 @@ public class RobotService {
 
     private final RobotRepository robotRepository;
     private final TelemetryReceptionService receptionService;
+    private final ControlStateStore controlStateStore;
 
-    public RobotService(RobotRepository robotRepository, TelemetryReceptionService receptionService) {
+    public RobotService(RobotRepository robotRepository, TelemetryReceptionService receptionService, ControlStateStore controlStateStore) {
         this.robotRepository = robotRepository;
         this.receptionService = receptionService;
+        this.controlStateStore = controlStateStore;
     }
 
     @Transactional(readOnly = true)
@@ -29,8 +33,11 @@ public class RobotService {
     }
 
     @Transactional(readOnly = true)
-    public RobotResponse findById(String robotId) {
-        return RobotResponse.detail(getRobot(robotId), receptionService.snapshot(robotId));
+    public RobotResponse findById(String robotId, boolean includeControl) {
+        Robot robot = getRobot(robotId);
+        ControlSummaryResponse control = includeControl
+                ? ControlSummaryResponse.from(controlStateStore.stateFor(robotId).snapshot()) : null;
+        return RobotResponse.detail(robot, receptionService.snapshot(robotId), control);
     }
 
     @Transactional(readOnly = true)
