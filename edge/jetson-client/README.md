@@ -264,3 +264,25 @@ python -m unittest discover -s edge/jetson-client/tests -p test_autonomy.py -v
 ```
 
 저장소 루트 기준이다. `tests/fixtures/autonomy_mock.py`는 장비·ROS·MQTT에 접근하지 않고 대기한 뒤 지정 코드로 종료한다. Linux 프로세스 그룹 처리는 테스트 대역으로 확인하며 실제 Jetson의 프로세스·시리얼·중재·정지는 별도 검증 대상이다. 이 코드를 장비에 배포하거나 기존 모니터를 중지하지 않았다.
+## 웹 작업 구역의 별도 준비 파일
+
+기존 Jetson의 `mower_test.sh`는 5×5m 시험용 원본으로 보존한다. 새 `scripts/prepare-web-work-zone.sh`와 `jetson_mower_client/web_work_zone.py`는 웹 저장 구역을 별도 JSON으로 준비한다. 주행 스크립트의 복사본이나 자동 출발 실행기가 아니며 ROS·시리얼·카메라·기존 구역 파일을 조작하지 않는다. 실제 다각형 주행 경로와 비전 지도 표시의 연결은 후속 작업이다.
+
+필요한 의존성은 별도 가상 환경에서 `python -m pip install -r requirements-work-zone.txt`로 설치한다. 다각형 검증에는 Shapely를 사용하며 Jetson의 Python·시스템 패키지 호환성은 실제 적용 전에 확인한다. 기존 상태 전송 클라이언트만 실행할 때는 기존 `requirements.txt`를 사용한다.
+
+기존 작업 구역 조회 API 응답 파일을 사용하려면 패키지 디렉터리에서 다음과 같이 실행한다.
+
+```bash
+python3 -m jetson_mower_client.web_work_zone \
+  --response-file /path/to/work-zone-response.json \
+  --robot-id '<ROBOT_ID>' --expected-version 3 \
+  --output /path/to/web-work-zone-v3.json
+```
+
+Linux에서는 `bash scripts/prepare-web-work-zone.sh` 뒤에 같은 인수를 지정해도 된다. 인수의 버전은 사용자가 확인한 실제 웹 구역 버전이다. 파일 입력은 기존 `GET /api/robots/{robotId}/work-zone`의 전체 응답(`success`, `data`) 형식이며 좌표는 GeoJSON 순서 `[경도, 위도]`다. 로봇·구역 ID와 버전, WGS84 Polygon, 닫힌 고리와 자기 교차·내부 제외 구역의 유효성을 확인한다. 도형을 사각형으로 바꾸거나 자동 복구하지 않는다.
+
+서버에서 직접 조회하려면 `--response-file` 대신 `--api-base-url https://<BACKEND_HOST>`를 지정하고 `WORK_ZONE_API_TOKEN` 환경변수에 해당 서버의 `robots:read` 권한이 있는 단기 인증 토큰을 설정한다. 토큰은 명령줄·문서·Git에 넣지 않는다. HTTPS 인증서 검증은 유지하며 리다이렉트는 거부한다. 로그인·토큰 발급·갱신을 이 실행기에서 대신하지 않으며 실제 장비 계정의 인증 방식은 담당자와 정해야 한다.
+
+결과에는 구역 ID·버전·원본 도형·SHA-256과 `status=prepared`를 저장한다. 조회한 시점의 스냅샷이며 이후 웹 변경을 자동 반영하지 않는다. 실제 적용 전 최신 버전과 일치하는지 다시 확인할 계약이 필요하다. 기존 출력 파일과 `boundary.json`이라는 이름은 거부하므로 확인할 새 구역은 새 이름으로 저장한다. POSIX에서는 소유자만 읽는 권한으로 생성하며, 위치 정보의 저장 기간과 파일 접근 권한을 관리해야 한다. 준비 성공은 실제 경로 안전성·GPS 준비 완료·주행 승인·예초 완료를 의미하지 않는다.
+
+검사는 저장소 루트에서 `PYTHONPATH`를 `edge/jetson-client`로 지정하고 `python -m unittest discover -s edge/jetson-client/tests -p test_web_work_zone.py -v`를 실행한다. 구역 처리와 실제 CLI 파일 생성을 PC에서 검사했고 인증 HTTP 조회는 대역 검사다. 실제 서버·Jetson 수신, Linux 셸 래퍼 실행과 주행·비전 표시는 아직 검증하지 않았다.
