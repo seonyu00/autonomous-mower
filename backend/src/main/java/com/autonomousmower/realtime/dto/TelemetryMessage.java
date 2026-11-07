@@ -14,6 +14,7 @@ public record TelemetryMessage(
         Instant lastReceivedAt,
         String errorState,
         Instant edgeSampledAt,
-        Instant serverTimestamp
+        Instant serverTimestamp,
+        boolean errorObserved
 ) {
 }

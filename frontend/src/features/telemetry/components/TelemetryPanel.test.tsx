@@ -11,6 +11,47 @@ describe('TelemetryPanel compact summary', () => {
 
   afterEach(() => { cleanup(); vi.useRealTimers(); });
 
+  it.each([true, false])('오류와 원본 코드를 구분해 표시한다 (요약 %s)', (compact) => {
+    const telemetry = useTelemetryStore.getState().telemetryByRobotId[TEST_ROBOT_ID];
+    const update = (errorState: string | null) => act(() =>
+      useTelemetryStore.getState().upsertTelemetry({ ...telemetry, errorState }));
+    render(<TelemetryPanel compact={compact} />);
+    expect(screen.queryByRole('status')).toBeNull();
+    update('emergency-stop-active');
+    expect(screen.getByRole('status')).toHaveTextContent('비상 정지 활성화');
+    update('<unknown>');
+    expect(screen.getByRole('status')).toHaveTextContent('알 수 없는 오류');
+    expect(screen.getByText('<unknown>').tagName).toBe('CODE');
+    update(null);
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it.each(['통신 끊김', '텔레메트리(Telemetry) 지연'])('샘플 경고 %s를 유지한다', (errorState) => {
+    const telemetry = useTelemetryStore.getState().telemetryByRobotId[TEST_ROBOT_ID];
+    useTelemetryStore.setState({ telemetryByRobotId: { [TEST_ROBOT_ID]: { ...telemetry, errorState } }, dataSource: 'mock' });
+    render(<TelemetryPanel compact />);
+    expect(screen.getByRole('status')).toHaveTextContent(errorState);
+  });
+
+  it('수신 정상·DB 저장 대기·복구 후 누락 가능성을 독립적으로 안내한다', () => {
+    const store = useTelemetryStore.getState();
+    const sample = store.telemetryByRobotId[TEST_ROBOT_ID];
+    store.upsertTelemetry({ ...sample, lastReceivedAt: new Date().toISOString() });
+    store.setConnectionState('connected');
+    const received = new Date().toISOString();
+    const reception = { state: 'normal' as const, lastReceivedAt: received, edgeSampledAt: null };
+    store.upsertReception(TEST_ROBOT_ID, { ...reception, checkedAt: new Date(Date.now() + 1).toISOString(),
+      recording: { state: 'buffered', possibleGap: false } });
+    render(<TelemetryPanel compact />);
+    expect(screen.getByLabelText('텔레메트리 수신 상태')).toHaveTextContent('정상');
+    expect(screen.getByLabelText('서버 기록 상태')).toHaveTextContent('DB 저장 대기');
+    act(() => store.upsertReception(TEST_ROBOT_ID, { ...reception, checkedAt: new Date(Date.now() + 2).toISOString(),
+      recording: { state: 'available', possibleGap: true } }));
+    expect(screen.getByLabelText('서버 기록 상태')).toHaveTextContent('DB 기록 가능 · 일부 기록 누락 가능');
+    act(() => store.setConnectionState('disconnected'));
+    expect(screen.getByLabelText('서버 기록 상태')).toHaveTextContent('현재 DB 기록 상태 확인 불가');
+  });
+
   it('추가 메시지가 없어도 정확히 3초부터 지연 표시로 바뀐다', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-10T00:00:00Z'));

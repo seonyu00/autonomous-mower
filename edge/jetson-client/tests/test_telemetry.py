@@ -6,6 +6,13 @@ from jetson_mower_client.telemetry import build_telemetry_payload
 
 
 class TelemetryTest(unittest.TestCase):
+    def test_only_the_error_observer_identifies_its_run(self):
+        self.assertNotIn("errorObserverSession", build_telemetry_payload("test", "now"))
+        for code in ("emergency-stop-active", None):
+            observation = build_telemetry_payload("test", "now", error_state=code, error_observer_session="run")
+            self.assertEqual(observation["errorObserverSession"], "run")
+            self.assertEqual(observation["errorState"], code)
+
     def test_missing_sensors_are_json_null_instead_of_default_measurements(self):
         payload = build_telemetry_payload("test", "2026-10-21T00:00:00Z")
         decoded = json.loads(json.dumps(payload, allow_nan=False))

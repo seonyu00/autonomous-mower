@@ -6,6 +6,7 @@ public record TelemetryReception(
         String state,
         Instant lastReceivedAt,
         Instant edgeSampledAt,
-        Instant checkedAt
+        Instant checkedAt,
+        com.autonomousmower.mqtt.service.TelemetrySpool.Recording recording
 ) {
 }

@@ -8,8 +8,8 @@ import com.autonomousmower.mqtt.dto.MqttTelemetryPayload;
 import com.autonomousmower.robot.entity.Robot;
 import com.autonomousmower.robot.repository.RobotRepository;
 import com.autonomousmower.telemetry.entity.TelemetryLog;
+import com.autonomousmower.telemetry.service.TelemetryErrorHistory;
 import com.autonomousmower.telemetry.repository.TelemetryLogRepository;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -35,7 +35,7 @@ public class MqttInboundPersistenceService {
     private final RobotRepository robotRepository;
     private final TelemetryLogRepository telemetryLogRepository;
     private final RobotEventRepository robotEventRepository;
-    private final Clock clock;
+    private final TelemetryErrorHistory errors;
     private final Map<String, StatusSignature> lastStatuses = new HashMap<>();
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), WGS84_SRID);
 
@@ -43,16 +43,30 @@ public class MqttInboundPersistenceService {
             RobotRepository robotRepository,
             TelemetryLogRepository telemetryLogRepository,
             RobotEventRepository robotEventRepository,
-            Clock clock
+            TelemetryErrorHistory errors
     ) {
         this.robotRepository = robotRepository;
         this.telemetryLogRepository = telemetryLogRepository;
         this.robotEventRepository = robotEventRepository;
-        this.clock = clock;
+        this.errors = errors;
     }
 
     @Transactional
-    public boolean persistTelemetry(MqttTelemetryPayload payload, Instant receivedAt) {
+    public boolean persist(InboundRecord record) {
+        if (record.telemetry() != null) {
+            if (telemetryLogRepository.existsByIngestId(record.id())) return true;
+            return persistTelemetry(record.telemetry(), record.observedAt(), record.id());
+        }
+        if (record.status() != null) {
+            String id = "status-" + record.id();
+            if (robotEventRepository.existsById(id)) return true;
+            return persistStatus(record.status(), id, record.observedAt());
+        }
+        if (robotEventRepository.existsById(record.event().id())) return true;
+        return persistEvent(record.event(), record.observedAt());
+    }
+
+    private boolean persistTelemetry(MqttTelemetryPayload payload, Instant receivedAt, UUID ingestId) {
         Optional<Robot> robot = knownRobot(payload.robotId(), "telemetry");
         if (robot.isEmpty()) {
             return false;
@@ -63,18 +77,21 @@ public class MqttInboundPersistenceService {
             point = geometryFactory.createPoint(new Coordinate(payload.longitude(), payload.latitude()));
             point.setSRID(WGS84_SRID);
         }
-        telemetryLogRepository.save(new TelemetryLog(
+        TelemetryLog sample = new TelemetryLog(
                 robot.get(),
                 point,
                 payload.batteryLevel(),
                 robotState(payload),
-                toUtcLocal(receivedAt)
-        ));
+                toUtcLocal(receivedAt),
+                payload.errorState()
+        );
+        sample.setIngestId(ingestId);
+        telemetryLogRepository.save(sample);
+        errors.observe(robot.get(), payload, receivedAt, ingestId);
         return true;
     }
 
-    @Transactional
-    public synchronized boolean persistStatus(MqttStatusPayload payload) {
+    private boolean persistStatus(MqttStatusPayload payload, String id, Instant observedAt) {
         Optional<Robot> robot = knownRobot(payload.robotId(), "status");
         if (robot.isEmpty()) {
             return false;
@@ -84,7 +101,7 @@ public class MqttInboundPersistenceService {
         if (signature.equals(lastStatuses.get(payload.robotId()))) return true;
 
         robotEventRepository.save(new RobotEvent(
-                "status-" + payload.robotId() + "-" + UUID.randomUUID(),
+                id,
                 robot.get(),
                 payload.stale() ? "warning" : "info",
                 "status-update",
@@ -93,15 +110,17 @@ public class MqttInboundPersistenceService {
                         payload.mqttState(),
                         payload.edgeState()
                 ),
-                serverNow(),
+                toUtcLocal(observedAt),
                 "mqtt-status"
         ));
-        lastStatuses.put(payload.robotId(), signature);
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override public void afterCommit() { lastStatuses.put(payload.robotId(), signature); }
+                });
         return true;
     }
 
-    @Transactional
-    public boolean persistEvent(MqttEventPayload payload) {
+    private boolean persistEvent(MqttEventPayload payload, Instant observedAt) {
         Optional<Robot> robot = knownRobot(payload.robotId(), "event");
         if (robot.isEmpty()) {
             return false;
@@ -113,7 +132,7 @@ public class MqttInboundPersistenceService {
                 payload.severity(),
                 payload.eventType(),
                 payload.message(),
-                toUtcLocal(payload.occurredAt() == null ? Instant.now(clock) : payload.occurredAt()),
+                toUtcLocal(payload.occurredAt() == null ? observedAt : payload.occurredAt()),
                 payload.source()
         ));
         return true;
@@ -122,7 +141,7 @@ public class MqttInboundPersistenceService {
     private record StatusSignature(String connection, String mqtt, String edge, boolean stale) {}
 
     private Optional<Robot> knownRobot(String robotId, String payloadType) {
-        Optional<Robot> robot = robotRepository.findById(robotId);
+        Optional<Robot> robot = robotRepository.findById(robotId).filter(Robot::isEnabled);
         if (robot.isEmpty()) {
             log.warn("Ignoring MQTT {} payload for unknown robotId={}", payloadType, robotId);
         }
@@ -137,10 +156,6 @@ public class MqttInboundPersistenceService {
             return payload.workState().toUpperCase();
         }
         return payload.mode() == null || payload.mode().isBlank() ? null : payload.mode().toUpperCase();
-    }
-
-    private LocalDateTime serverNow() {
-        return toUtcLocal(Instant.now(clock));
     }
 
     private LocalDateTime toUtcLocal(Instant instant) {

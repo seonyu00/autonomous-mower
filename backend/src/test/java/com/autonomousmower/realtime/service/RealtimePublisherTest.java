@@ -34,7 +34,7 @@ class RealtimePublisherTest {
                 0.4,
                 92,
                 Instant.parse("2026-05-30T01:00:00Z"),
-                null, null, Instant.parse("2026-05-30T01:00:00Z")
+                null, null, Instant.parse("2026-05-30T01:00:00Z"), false
         );
 
         publisher.publishTelemetry(message);

@@ -26,6 +26,7 @@ public class RealtimePublisher {
         messagingTemplate.convertAndSend(RealtimeTopics.status(message.robotId()), message);
     }
 
+    @org.springframework.transaction.event.TransactionalEventListener
     public void publishEvent(RobotEventMessage message) {
         messagingTemplate.convertAndSend(RealtimeTopics.events(message.robotId()), message);
     }

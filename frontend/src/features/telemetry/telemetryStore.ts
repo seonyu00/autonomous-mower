@@ -26,7 +26,9 @@ export const useTelemetryStore = create<TelemetryStore>((set, get) => ({
   upsertReception: (robotId, reception) => set((state) => {
     const previous = state.receptionByRobotId[robotId];
     if (previous && Date.parse(previous.checkedAt) >= Date.parse(reception.checkedAt)) return state;
-    return { receptionByRobotId: { ...state.receptionByRobotId, [robotId]: { ...reception, observedAt: Date.now() } } };
+    return { receptionByRobotId: { ...state.receptionByRobotId, [robotId]: {
+      ...reception, recording: reception.recording ?? previous?.recording, observedAt: Date.now(),
+    } } };
   }),
   dataSource: 'real',
   telemetryByRobotId: {},

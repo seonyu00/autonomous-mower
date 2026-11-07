@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface TelemetryLogRepository extends JpaRepository<TelemetryLog, Long> {
+    boolean existsByIngestId(java.util.UUID ingestId);
 
     List<TelemetryLog> findByRobotRobotIdAndRecordedAtBetweenOrderByRecordedAtAsc(
             String robotId,

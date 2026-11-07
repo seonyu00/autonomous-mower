@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { getLogs } from '../features/logs/api';
+import { eventTypeLabel } from '../features/logs/eventTypeLabel';
 import { LogTimeline } from '../features/logs/components/LogTimeline';
 import { SnapshotViewer } from '../features/logs/components/SnapshotViewer';
 import { mockLogEntries } from '../features/logs/mockLogs';
@@ -113,7 +114,7 @@ export function LogViewerPage() {
           </div>
           {selectedLog ? (
             <>
-              <strong className="logs-detail-event">{selectedLog.eventType}</strong>
+              <strong className="logs-detail-event">{eventTypeLabel(selectedLog.eventType)}</strong>
               <p className="logs-detail-message">{selectedLog.message}</p>
               <dl className="logs-detail-fields">
                 <div><dt>발생 시간</dt><dd>{new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date(selectedLog.occurredAt))}</dd></div>

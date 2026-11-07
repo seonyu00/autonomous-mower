@@ -1,4 +1,5 @@
 import type { LogEntry } from '../types';
+import { eventTypeLabel } from '../eventTypeLabel';
 
 type LogTimelineProps = {
   logs: LogEntry[];
@@ -28,7 +29,7 @@ export function LogTimeline({ logs, selectedLogId, onSelectLog }: LogTimelinePro
             <time dateTime={log.occurredAt}>{new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(log.occurredAt))}</time>
             <span className={`log-severity ${log.severity}`}>{{ info: '정보', warning: '경고', critical: '치명' }[log.severity]}</span>
             <span className="log-event-content">
-              <strong>{log.eventType}</strong>
+              <strong>{eventTypeLabel(log.eventType)}</strong>
               <span className="log-event-message">{log.message}</span>
             </span>
           </button>

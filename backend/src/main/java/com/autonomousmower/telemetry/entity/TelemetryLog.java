@@ -38,6 +38,12 @@ public class TelemetryLog {
     @Column(name = "robot_state", length = 20)
     private String robotState;
 
+    @Column(name = "error_code", columnDefinition = "text")
+    private String errorCode;
+
+    @Column(name = "ingest_id", unique = true)
+    private java.util.UUID ingestId;
+
     @Column(name = "recorded_at", nullable = false)
     private LocalDateTime recordedAt;
 
@@ -45,10 +51,15 @@ public class TelemetryLog {
     }
 
     public TelemetryLog(Robot robot, Point locationPoint, Integer batteryLevel, String robotState, LocalDateTime recordedAt) {
+        this(robot, locationPoint, batteryLevel, robotState, recordedAt, null);
+    }
+
+    public TelemetryLog(Robot robot, Point locationPoint, Integer batteryLevel, String robotState, LocalDateTime recordedAt, String errorCode) {
         this.robot = Objects.requireNonNull(robot, "robot must not be null");
         this.locationPoint = locationPoint;
         this.batteryLevel = batteryLevel;
         this.robotState = robotState;
+        this.errorCode = errorCode;
         this.recordedAt = Objects.requireNonNull(recordedAt, "recordedAt must not be null");
     }
 
@@ -78,6 +89,14 @@ public class TelemetryLog {
 
     public String getRobotState() {
         return robotState;
+    }
+
+    public String getErrorCode() {
+        return errorCode;
+    }
+
+    public void setIngestId(java.util.UUID ingestId) {
+        this.ingestId = ingestId;
     }
 
     public LocalDateTime getRecordedAt() {

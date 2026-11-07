@@ -257,7 +257,8 @@ Field policy:
 - `speedMps`: 지상 속도(m/s) 또는 `null`. 실제 정지 속도 `0`과 미수신을 구분한다.
 - `signalStrength`: 정수 `0..100` 또는 `null`.
 - `receivedAt`: Jetson timestamp when telemetry sample was produced.
-- `errorState`: nullable machine-readable string.
+- `errorState`는 nullable 기계 판독 코드다. 전체 Jetson 클라이언트의 `emergency-stop-active`는 소프트웨어 비상 정지 상태를 나타낸다.
+- 선택 필드 `errorObserverSession`은 오류를 직접 관측하는 전체 클라이언트가 실행마다 새로 생성하는 UUID다. 같은 실행에서 활성 상태를 본 뒤 더 최신의 명시적인 `errorState: null`을 받으면 소프트웨어 해제로 기록한다. 상태 전용 모니터·기존 송신원·직접 이벤트를 발행하는 Edge Mock은 이 필드를 생략한다. 송신원 선언의 신뢰 경계는 기존 MQTT 장비 계정과 토픽 ACL이다.
 
 현재 Jetson 클라이언트는 유효한 GPS fix가 최근 3초 미만에 도착한 경우에만 위치를 보낸다. 배터리·속도·신호의 실제 입력원은 아직 없어 `null`을 보낸다. 초기 모드·작업도 `null`이며 기존 명령 처리로 갱신되는 로컬 소프트웨어 상태를 STM32 실행 완료로 해석하지 않는다. 센서 미수신과 메시지 자체의 통신 두절은 별개다.
 

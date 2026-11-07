@@ -115,7 +115,12 @@ public class MqttInboundSubscriber {
         try {
             switch (channel) {
                 case "telemetry" -> {
-                    MqttTelemetryPayload telemetry = objectMapper.readValue(payload, MqttTelemetryPayload.class);
+                    var json = objectMapper.readTree(payload);
+                    // 필드 생략을 관측자가 명시적으로 보낸 null과 구분한다.
+                    if (json instanceof com.fasterxml.jackson.databind.node.ObjectNode object && !object.has("errorState")) {
+                        object.remove("errorObserverSession");
+                    }
+                    MqttTelemetryPayload telemetry = objectMapper.treeToValue(json, MqttTelemetryPayload.class);
                     if (sameRobot(topicRobotId, telemetry.robotId(), topic)) {
                         inboundHandler.handleTelemetry(telemetry);
                     }

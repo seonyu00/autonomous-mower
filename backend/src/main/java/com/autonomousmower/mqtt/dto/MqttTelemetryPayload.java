@@ -12,7 +12,8 @@ public record MqttTelemetryPayload(
         Double speedMps,
         Integer signalStrength,
         Instant receivedAt,
-        String errorState
+        String errorState,
+        java.util.UUID errorObserverSession
 ) {
     public MqttTelemetryPayload {
         // 한쪽 좌표만으로는 위치를 만들 수 없지만 다른 센서값은 계속 처리한다.

@@ -13,6 +13,7 @@ def build_telemetry_payload(
     mode: str | None = None,
     work_state: str | None = None,
     error_state: str | None = None,
+    error_observer_session: str | None = None,
 ) -> dict[str, Any]:
     latitude = longitude = None
     if (fix is not None and fix_age_seconds is not None
@@ -33,4 +34,5 @@ def build_telemetry_payload(
         "signalStrength": None,
         "receivedAt": received_at,
         "errorState": error_state,
+        **({"errorObserverSession": error_observer_session} if error_observer_session else {}),
     }

@@ -2,7 +2,8 @@ package com.autonomousmower.telemetry.service;
 
 import com.autonomousmower.mqtt.dto.MqttEventPayload;
 import com.autonomousmower.mqtt.dto.MqttStatusPayload;
-import com.autonomousmower.mqtt.service.MqttInboundPersistenceService;
+import com.autonomousmower.mqtt.service.InboundRecord;
+import com.autonomousmower.mqtt.service.TelemetrySpool;
 import com.autonomousmower.realtime.dto.RobotEventMessage;
 import com.autonomousmower.realtime.dto.RobotStatusMessage;
 import com.autonomousmower.realtime.service.RealtimePublisher;
@@ -11,6 +12,8 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -23,21 +26,26 @@ public class TelemetryReceptionService {
     private final Map<String, ReceptionState> states = new HashMap<>();
     private final Clock clock;
     private final RealtimePublisher publisher;
-    private final MqttInboundPersistenceService persistence;
+    private final TelemetrySpool spool;
+    private TelemetrySpool.Recording lastRecording;
 
-    public TelemetryReceptionService(Clock clock, RealtimePublisher publisher, MqttInboundPersistenceService persistence) {
+    public TelemetryReceptionService(Clock clock, RealtimePublisher publisher, TelemetrySpool spool) {
         this.clock = clock;
         this.publisher = publisher;
-        this.persistence = persistence;
+        this.spool = spool;
     }
 
     // 수신과 주기 검사를 직렬화해 지연 통지가 복구 통지보다 늦게 발행되지 않게 한다.
-    public synchronized void recordTelemetry(String robotId, Instant receivedAt, Instant edgeSampledAt) {
-        ReceptionState state = states.computeIfAbsent(robotId, ignored -> new ReceptionState());
-        if (state.lastReceivedAt != null && receivedAt.isBefore(state.lastReceivedAt)) return;
-        state.lastReceivedAt = receivedAt;
-        state.edgeSampledAt = edgeSampledAt;
-        detectTransition(robotId, state, clock.instant());
+    public void recordTelemetry(String robotId, Instant receivedAt, Instant edgeSampledAt) {
+        MqttEventPayload event;
+        synchronized (this) {
+            ReceptionState state = states.computeIfAbsent(robotId, ignored -> new ReceptionState());
+            if (state.lastReceivedAt != null && receivedAt.isBefore(state.lastReceivedAt)) return;
+            state.lastReceivedAt = receivedAt;
+            state.edgeSampledAt = edgeSampledAt;
+            event = detectTransition(robotId, state, clock.instant());
+        }
+        if (event != null) recordEvent(event);
     }
 
     public synchronized void recordStatus(MqttStatusPayload status) {
@@ -50,15 +58,28 @@ public class TelemetryReceptionService {
         return snapshot(states.getOrDefault(robotId, new ReceptionState()), clock.instant());
     }
 
-    @Scheduled(fixedDelay = 250)
-    public synchronized void detectDelays() {
-        Instant now = clock.instant();
-        states.forEach((robotId, state) -> detectTransition(robotId, state, now));
+    @Scheduled(fixedDelay = 250, scheduler = "telemetryWatchdog")
+    public void detectDelays() {
+        List<MqttEventPayload> events = new ArrayList<>();
+        synchronized (this) {
+            Instant now = clock.instant();
+            var recording = spool.recording();
+            boolean recordingChanged = !java.util.Objects.equals(lastRecording, recording);
+            lastRecording = recording;
+            states.forEach((robotId, state) -> {
+                String previous = state.reportedState;
+                MqttEventPayload event = detectTransition(robotId, state, now);
+                if (event != null) events.add(event);
+                if (recordingChanged && previous.equals(state.reportedState))
+                    publisher.publishStatus(statusMessage(robotId, state, now));
+            });
+        }
+        events.forEach(this::recordEvent);
     }
 
-    private void detectTransition(String robotId, ReceptionState state, Instant now) {
+    private MqttEventPayload detectTransition(String robotId, ReceptionState state, Instant now) {
         String next = snapshot(state, now).state();
-        if (next.equals(state.reportedState)) return;
+        if (next.equals(state.reportedState)) return null;
         String previous = state.reportedState;
         state.reportedState = next;
         publisher.publishStatus(statusMessage(robotId, state, now));
@@ -70,16 +91,21 @@ public class TelemetryReceptionService {
             String severity = delayed ? "warning" : "info";
             String eventType = delayed ? "telemetry-delayed" : "telemetry-recovered";
             String message = delayed ? "텔레메트리를 3초 이상 수신하지 못했습니다." : "텔레메트리 수신이 복구됐습니다.";
-            if (persistence.persistEvent(new MqttEventPayload(id, robotId, severity, eventType, message, now, "telemetry-monitor"))) {
-                publisher.publishEvent(new RobotEventMessage(id, robotId, severity, eventType, message, now, "telemetry-monitor", null, null));
-            }
+            publisher.publishEvent(new RobotEventMessage(id, robotId, severity, eventType, message, now,
+                    "telemetry-monitor", null, null));
+            return new MqttEventPayload(id, robotId, severity, eventType, message, now, "telemetry-monitor");
         }
+        return null;
+    }
+
+    private void recordEvent(MqttEventPayload event) {
+        spool.append(InboundRecord.event(event, event.occurredAt()));
     }
 
     private TelemetryReception snapshot(ReceptionState state, Instant now) {
         String reception = state.lastReceivedAt == null ? "never-seen"
                 : Duration.between(state.lastReceivedAt, now).compareTo(DELAY_THRESHOLD) >= 0 ? "delayed" : "normal";
-        return new TelemetryReception(reception, state.lastReceivedAt, state.edgeSampledAt, now);
+        return new TelemetryReception(reception, state.lastReceivedAt, state.edgeSampledAt, now, spool.recording());
     }
 
     private RobotStatusMessage statusMessage(String robotId, ReceptionState state, Instant now) {

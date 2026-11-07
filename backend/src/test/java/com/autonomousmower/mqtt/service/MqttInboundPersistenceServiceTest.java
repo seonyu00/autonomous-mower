@@ -15,16 +15,15 @@ import com.autonomousmower.robot.entity.Robot;
 import com.autonomousmower.robot.repository.RobotRepository;
 import com.autonomousmower.telemetry.entity.TelemetryLog;
 import com.autonomousmower.telemetry.repository.TelemetryLogRepository;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,8 +46,7 @@ class MqttInboundPersistenceServiceTest {
         persistenceService = new MqttInboundPersistenceService(
                 robotRepository,
                 telemetryLogRepository,
-                robotEventRepository,
-                Clock.fixed(Instant.parse("2026-05-31T01:00:00Z"), ZoneOffset.UTC)
+                robotEventRepository, org.mockito.Mockito.mock(com.autonomousmower.telemetry.service.TelemetryErrorHistory.class)
         );
     }
 
@@ -57,7 +55,7 @@ class MqttInboundPersistenceServiceTest {
         MqttTelemetryPayload payload = telemetry("MOWER-01");
         when(robotRepository.findById("MOWER-01")).thenReturn(Optional.of(robot));
 
-        boolean persisted = persistenceService.persistTelemetry(payload, Instant.parse("2026-05-31T01:00:00Z"));
+        boolean persisted = persistenceService.persist(InboundRecord.telemetry(payload, Instant.parse("2026-05-31T01:00:00Z")));
 
         assertThat(persisted).isTrue();
         ArgumentCaptor<TelemetryLog> captor = ArgumentCaptor.forClass(TelemetryLog.class);
@@ -77,7 +75,7 @@ class MqttInboundPersistenceServiceTest {
         MqttTelemetryPayload payload = telemetry("UNKNOWN");
         when(robotRepository.findById("UNKNOWN")).thenReturn(Optional.empty());
 
-        boolean persisted = persistenceService.persistTelemetry(payload, Instant.parse("2026-05-31T01:00:00Z"));
+        boolean persisted = persistenceService.persist(InboundRecord.telemetry(payload, Instant.parse("2026-05-31T01:00:00Z")));
 
         assertThat(persisted).isFalse();
         verify(telemetryLogRepository, never()).save(org.mockito.Mockito.any());
@@ -88,9 +86,9 @@ class MqttInboundPersistenceServiceTest {
     void missingMeasurementsRemainNullAndZeroBatteryRemainsMeasured() {
         when(robotRepository.findById("MOWER-01")).thenReturn(Optional.of(robot));
         MqttTelemetryPayload payload = new MqttTelemetryPayload(
-                "MOWER-01", null, null, 0, null, null, null, null, Instant.now(), null);
+                "MOWER-01", null, null, 0, null, null, null, null, Instant.now(), null, null);
 
-        assertThat(persistenceService.persistTelemetry(payload, Instant.parse("2026-05-31T01:00:00Z"))).isTrue();
+        assertThat(persistenceService.persist(InboundRecord.telemetry(payload, Instant.parse("2026-05-31T01:00:00Z")))).isTrue();
         ArgumentCaptor<TelemetryLog> captor = ArgumentCaptor.forClass(TelemetryLog.class);
         verify(telemetryLogRepository).save(captor.capture());
         assertThat(captor.getValue().getLocationPoint()).isNull();
@@ -116,7 +114,7 @@ class MqttInboundPersistenceServiceTest {
         );
         when(robotRepository.findById("MOWER-01")).thenReturn(Optional.of(robot));
 
-        boolean persisted = persistenceService.persistEvent(payload);
+        boolean persisted = persistenceService.persist(InboundRecord.event(payload, payload.occurredAt()));
 
         assertThat(persisted).isTrue();
         ArgumentCaptor<RobotEvent> captor = ArgumentCaptor.forClass(RobotEvent.class);
@@ -140,7 +138,7 @@ class MqttInboundPersistenceServiceTest {
         );
         when(robotRepository.findById("MOWER-01")).thenReturn(Optional.of(robot));
 
-        boolean persisted = persistenceService.persistStatus(payload);
+        boolean persisted = persistStatus(payload);
 
         assertThat(persisted).isTrue();
         ArgumentCaptor<RobotEvent> captor = ArgumentCaptor.forClass(RobotEvent.class);
@@ -148,6 +146,18 @@ class MqttInboundPersistenceServiceTest {
         assertThat(captor.getValue().getEventType()).isEqualTo("status-update");
         assertThat(captor.getValue().getSeverity()).isEqualTo("warning");
         assertThat(captor.getValue().getOccurredAt()).isEqualTo(LocalDateTime.parse("2026-05-31T01:00:00"));
+    }
+
+    private boolean persistStatus(MqttStatusPayload payload) {
+        var record = InboundRecord.status(payload, Instant.parse("2026-05-31T01:00:00Z"));
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            boolean stored = persistenceService.persist(record);
+            TransactionSynchronizationManager.getSynchronizations().forEach(sync -> sync.afterCommit());
+            return stored;
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     private MqttTelemetryPayload telemetry(String robotId) {
@@ -161,16 +171,16 @@ class MqttInboundPersistenceServiceTest {
                 0.4,
                 92,
                 Instant.parse("2026-05-31T00:59:59Z"),
-                null
+                null, null
         );
     }
 
     @Test
     void repeatedStatusWithOnlyTimestampChangedDoesNotCreateDuplicateEvents() {
         when(robotRepository.findById("MOWER-01")).thenReturn(Optional.of(robot));
-        persistenceService.persistStatus(new MqttStatusPayload(
+        persistStatus(new MqttStatusPayload(
                 "MOWER-01", "online", "connected", "connected", Instant.parse("2026-05-31T00:59:45Z"), false));
-        persistenceService.persistStatus(new MqttStatusPayload(
+        persistStatus(new MqttStatusPayload(
                 "MOWER-01", "online", "connected", "connected", Instant.parse("2026-05-31T00:59:48Z"), false));
         verify(robotEventRepository, times(1)).save(org.mockito.Mockito.any());
     }
@@ -181,10 +191,10 @@ class MqttInboundPersistenceServiceTest {
         when(robotRepository.findById("MOWER-02")).thenReturn(Optional.of(
                 new Robot("MOWER-02", "test", LocalDateTime.parse("2026-05-30T00:00:00"))));
         Instant now = Instant.parse("2026-05-31T00:59:45Z");
-        persistenceService.persistStatus(new MqttStatusPayload("MOWER-01", "online", "connected", "connected", now, false));
-        persistenceService.persistStatus(new MqttStatusPayload("MOWER-02", "online", "connected", "connected", now, false));
-        persistenceService.persistStatus(new MqttStatusPayload("MOWER-01", "degraded", "connected", "connected", now, true));
-        persistenceService.persistStatus(new MqttStatusPayload("MOWER-01", "online", "connected", "connected", now, false));
+        persistStatus(new MqttStatusPayload("MOWER-01", "online", "connected", "connected", now, false));
+        persistStatus(new MqttStatusPayload("MOWER-02", "online", "connected", "connected", now, false));
+        persistStatus(new MqttStatusPayload("MOWER-01", "degraded", "connected", "connected", now, true));
+        persistStatus(new MqttStatusPayload("MOWER-01", "online", "connected", "connected", now, false));
         verify(robotEventRepository, times(4)).save(org.mockito.Mockito.any());
     }
 }

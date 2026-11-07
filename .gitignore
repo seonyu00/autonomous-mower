@@ -8,6 +8,7 @@
 *.log
 **/integration-*.log
 data/snapshots/
+**/data/telemetry-spool/
 
 # Python artifacts
 __pycache__/

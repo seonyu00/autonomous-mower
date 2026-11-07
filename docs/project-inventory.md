@@ -815,9 +815,11 @@ Repositories:
 Telemetry persistence:
 
 - MQTT telemetry inbound -> `MqttInboundHandler.handleTelemetry()`
-- persistence -> `MqttInboundPersistenceService.persistTelemetry()`
+- `TelemetryRegistration`에서 활성 로봇을 확인한다. DB 조회 장애 시 마지막 확인 후 5분 미만인 목록을 사용한다.
+- `TelemetrySpool`은 MQTT 수신 시각과 메시지를 로컬 SQLite에 보관하고 별도 작업자가 PostgreSQL에 순서대로 기록한다. V11은 오류 원문, 재저장 식별자와 오류 관측 상태를 추가한다.
 - DB -> `telemetry_log`
 - STOMP publish -> `/topic/robots/{robotId}/telemetry`
+- 전체 Jetson 클라이언트가 보낸 실행 식별자로 관측한 비상 정지 발생·해제는 기존 로그와 최근 이벤트에서 조회한다. 상태 전용·구버전 메시지는 오류 해제 근거로 사용하지 않는다. [등록·보존·복구 기준](learning/03-telemetry-flow.md#4-백엔드-처리)
 - `TelemetryReceptionService`: 서버 수신 시각과 Edge 샘플 시각을 분리하고 로봇별 never-seen·normal·delayed 상태를 관리한다. 3초 이상 미수신 전이·복구를 status로 전달하고 이벤트를 한 번씩 기록한다.
 - `useTelemetryReception`: 브라우저 메시지 중단 시에도 타이머로 지연 표시를 갱신한다. 수신 상태는 서버 프로세스 메모리에 보관하며 실제 장비 정지 기능과 별개다.
 

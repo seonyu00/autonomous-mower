@@ -11,8 +11,8 @@ Jetson 또는 Edge Mock
   -> MQTT mowers/<ROBOT_ID>/telemetry (QoS 1)
   -> MqttInboundSubscriber.messageArrived()
   -> MqttInboundHandler.handleTelemetry()
-     -> MqttInboundPersistenceService.persistTelemetry()
-     -> TelemetryLogRepository.save()
+     -> TelemetryRegistration + TelemetrySpool.append()
+        -> 별도 작업자 -> MqttInboundPersistenceService.persist() -> PostgreSQL
      -> RealtimePublisher.publishTelemetry()
   -> STOMP /topic/robots/<ROBOT_ID>/telemetry
   -> RealtimeProvider
@@ -55,9 +55,13 @@ Jetson 또는 Edge Mock
 1. topic의 robot ID와 payload의 `robotId`가 같은지 확인한다.
 2. JSON을 `MqttTelemetryPayload`로 변환한다.
 3. `MqttInboundHandler.handleTelemetry()`를 호출한다.
-4. persistence service는 등록된 로봇인지 확인하고 위치를 PostGIS `Point`로 변환한다.
-5. `TelemetryLogRepository`가 `telemetry_log`에 저장한다.
-6. 같은 handler가 `RealtimePublisher`로 STOMP 메시지를 발행한다.
+4. 활성 로봇 목록을 DB에서 조회한다. 조회가 실패하거나 200ms 안에 끝나지 않으면 마지막 성공한 조회 시작 시각부터 5분 미만인 목록만 신뢰한다. 동시에 진행하는 조회는 한 건이며 새 확인에서 빠진 ID는 즉시 제외한다. 재시작하면 다시 확인해야 한다. PostgreSQL이 없는 초기 기동은 기존 Flyway·JPA 초기화 단계에서도 차단될 수 있다.
+5. 수신한 telemetry·status·Edge 이벤트와 서버의 수신 지연·복구 이벤트를 SQLite에 보관한다. 별도 작업자가 수신 순번대로 PostgreSQL 트랜잭션을 커밋한 뒤 로컬 행을 삭제한다. DB 재저장 중에도 수신 시각, 3초 감시와 실시간 상태 전송을 처리한다.
+6. 텔레메트리 원본 오류 코드는 V11의 `error_code`에 저장한다. 기존 요약 `ERROR`와 과거 행을 유지한다. 저장 식별자와 이벤트 ID로 커밋 직후 재시작에 따른 중복을 막는다. MQTT 재전송처럼 별도로 수신한 샘플에는 서로 다른 수신 식별자를 부여한다.
+
+기본 보관 파일은 백엔드 작업 디렉터리의 `data/telemetry-spool/inbound.sqlite`다. 실행 간 같은 디렉터리를 사용하고 서버 인스턴스 한 개가 전용으로 관리한다. SQLite 주 파일 한도는 32MiB이며 트랜잭션 임시 파일에는 추가 공간이 필요하다. 가득 차면 기존 대기분을 보존하고 새로 넣지 못한 기록을 누락 가능으로 표시한다. 디스크 자체가 고장 나면 누락 표시까지 영속화하지 못할 수 있다. 보관 파일은 로봇 위치를 포함하므로 운영 계정 전용 디렉터리를 사용한다. DB 복구 뒤 등록 해제·비활성으로 확인되거나 영구 제약 위반인 행도 누락 가능으로 표시한다.
+
+오류 관측 실행 식별자가 있는 샘플만 비상 정지 발생·복구 이력을 만든다. 같은 로봇의 최신 Edge 샘플 시각보다 오래되거나 같은 샘플은 전이에서 제외한다. 같은 오류 반복, 미지 코드로 변경, 통신 중단 및 모니터의 빈 값은 해제 이력을 만들지 않는다. 새 실행의 초기값은 이전 오류를 해제하지 않는다. 새 실행에서도 활성 상태를 확인한 뒤 해제를 관측해야 한다. 관측 상태·로그·텔레메트리는 같은 DB 트랜잭션으로 보존한다. 수신 사이에 발생해 관측하지 못한 오류는 복원할 수 없다.
 
 DB에는 로봇 FK, 위치 Point, 배터리, 상태, 기록 시각이 저장된다. `MqttInboundHandler` 진입 시 주입된 `Clock`으로 서버 수신 시각을 잡아 DB와 STOMP `lastReceivedAt`에 함께 사용한다. Edge의 MQTT `receivedAt`은 `edgeSampledAt`으로 별도 전달하며 지연 판정에는 사용하지 않는다.
 

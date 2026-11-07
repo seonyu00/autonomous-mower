@@ -42,19 +42,36 @@ class AccountWebSocketSessionsTest {
         var second = connect("second");
         when(tokens.parse("token")).thenReturn(user);
         var message = data("first");
-        assertThat(sessions.preSend(message, null)).isSameAs(message);
+        assertThat(sessions.beforeHandle(message, null, null)).isSameAs(message);
         sessions.closeForAccount("viewer");
         verify(first).close(CloseStatus.POLICY_VIOLATION);
         verify(second).close(CloseStatus.POLICY_VIOLATION);
-        assertThat(sessions.preSend(message, null)).isNull();
+        assertThat(sessions.beforeHandle(message, null, null)).isNull();
     }
 
     @Test
     void expiredTokenCannotReceiveDataBeforeScheduledCleanup() throws Exception {
         var socket = connect("expired");
         when(tokens.parse("token")).thenThrow(new BadCredentialsException("expired"));
-        assertThat(sessions.preSend(data("expired"), null)).isNull();
+        assertThat(sessions.beforeHandle(data("expired"), null, null)).isNull();
         verify(socket).close(CloseStatus.POLICY_VIOLATION);
+    }
+
+    @Test
+    void databaseFailureBlocksDataWithRetryableCloseInsteadOfRevokingLogin() throws Exception {
+        var socket = connect("outage");
+        when(tokens.parse("token")).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("test outage"));
+        assertThat(sessions.beforeHandle(data("outage"), null, null)).isNull();
+        verify(socket).close(CloseStatus.SERVER_ERROR);
+        verify(socket, never()).close(CloseStatus.POLICY_VIOLATION);
+    }
+
+    @Test
+    void scheduledDatabaseFailureAlsoClosesWithRetryableStatus() throws Exception {
+        var socket = connect("idle-outage");
+        when(tokens.parse("token")).thenThrow(new org.springframework.transaction.CannotCreateTransactionException("test outage"));
+        sessions.closeExpiredSessions();
+        verify(socket).close(CloseStatus.SERVER_ERROR);
     }
 
     @Test

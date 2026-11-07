@@ -7,6 +7,7 @@ export type TelemetryReception = {
   lastReceivedAt: string | null;
   edgeSampledAt: string | null;
   checkedAt: string;
+  recording?: { state: 'unknown' | 'available' | 'buffered'; possibleGap: boolean };
 };
 
 export type Telemetry = {
@@ -22,6 +23,7 @@ export type Telemetry = {
   edgeSampledAt?: string | null;
   serverTimestamp?: string;
   errorState?: string | null;
+  errorObserved?: boolean;
 };
 
 export type RobotStatus = {

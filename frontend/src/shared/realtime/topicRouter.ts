@@ -127,6 +127,8 @@ function isTelemetry(value: unknown): value is Telemetry {
     isNullableNumber(value.speedMps) &&
     isNullableNumber(value.signalStrength) &&
     isString(value.lastReceivedAt) &&
+    (value.errorState === undefined || isNullableString(value.errorState)) &&
+    (value.errorObserved === undefined || typeof value.errorObserved === 'boolean') &&
     (value.edgeSampledAt === undefined || isNullableString(value.edgeSampledAt)) &&
     (value.serverTimestamp === undefined || isString(value.serverTimestamp))
   );
@@ -152,7 +154,10 @@ function isRobotStatus(value: unknown): value is RobotStatus {
 function isTelemetryReception(value: unknown): value is TelemetryReception {
   return isRecord(value) &&
     (value.state === 'never-seen' || value.state === 'normal' || value.state === 'delayed') &&
-    isNullableString(value.lastReceivedAt) && isNullableString(value.edgeSampledAt) && isString(value.checkedAt);
+    isNullableString(value.lastReceivedAt) && isNullableString(value.edgeSampledAt) && isString(value.checkedAt) &&
+    (value.recording === undefined || (isRecord(value.recording) &&
+      (value.recording.state === 'unknown' || value.recording.state === 'available' || value.recording.state === 'buffered') &&
+      typeof value.recording.possibleGap === 'boolean'));
 }
 
 function isControlLockSnapshot(value: unknown): value is ControlLockSnapshot {

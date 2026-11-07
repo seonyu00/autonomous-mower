@@ -17,30 +17,35 @@ import org.springframework.stereotype.Service;
 public class MqttInboundHandler {
 
     private final RealtimePublisher realtimePublisher;
-    private final MqttInboundPersistenceService persistenceService;
+    private final TelemetrySpool spool;
     private final CommandExecutionService commandExecutionService;
     private final TelemetryReceptionService receptionService;
     private final Clock clock;
+    private final TelemetryRegistration registration;
 
     public MqttInboundHandler(
             RealtimePublisher realtimePublisher,
-            MqttInboundPersistenceService persistenceService,
+            TelemetrySpool spool,
             CommandExecutionService commandExecutionService,
             TelemetryReceptionService receptionService,
-            Clock clock
+            Clock clock,
+            TelemetryRegistration registration
     ) {
         this.realtimePublisher = realtimePublisher;
-        this.persistenceService = persistenceService;
+        this.spool = spool;
         this.commandExecutionService = commandExecutionService;
         this.receptionService = receptionService;
         this.clock = clock;
+        this.registration = registration;
     }
 
     public void handleTelemetry(MqttTelemetryPayload payload) {
         Instant receivedAt = clock.instant();
-        if (!persistenceService.persistTelemetry(payload, receivedAt)) {
+        if (!registration.accepts(payload.robotId())) {
+            if (registration.wasConfirmed(payload.robotId())) spool.markGap();
             return;
         }
+        spool.append(InboundRecord.telemetry(payload, receivedAt));
         receptionService.recordTelemetry(payload.robotId(), receivedAt, payload.receivedAt());
         realtimePublisher.publishTelemetry(new TelemetryMessage(
                 payload.robotId(),
@@ -54,21 +59,23 @@ public class MqttInboundHandler {
                 receivedAt,
                 payload.errorState(),
                 payload.receivedAt(),
-                clock.instant()
+                clock.instant(), payload.errorObserverSession() != null
         ));
     }
 
     public void handleStatus(MqttStatusPayload payload) {
-        if (!persistenceService.persistStatus(payload)) {
+        if (!registration.accepts(payload.robotId())) {
             return;
         }
+        spool.append(InboundRecord.status(payload, clock.instant()));
         receptionService.recordStatus(payload);
     }
 
     public void handleEvent(MqttEventPayload payload) {
-        if (!persistenceService.persistEvent(payload)) {
+        if (!registration.accepts(payload.robotId())) {
             return;
         }
+        spool.append(InboundRecord.event(payload, clock.instant()));
         realtimePublisher.publishEvent(new RobotEventMessage(
                 payload.id(),
                 payload.robotId(),

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import time
+from uuid import uuid4
 from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any
@@ -29,6 +30,7 @@ class JetsonMowerClientNode(Node):
         self._topics = MowerTopics(config.robot_id)
         self._mqtt = MqttEdgeClient(config, self._topics, self._handle_mqtt_message, self.get_logger().info)
         self._emergency_active = False
+        self._error_observer_session = str(uuid4())
         self._mode: str | None = None
         self._work_state: str | None = None
         self._latest_fix: NavSatFix | None = None
@@ -237,6 +239,7 @@ class JetsonMowerClientNode(Node):
             mode=self._mode,
             work_state=self._work_state,
             error_state="emergency-stop-active" if self._emergency_active else None,
+            error_observer_session=self._error_observer_session,
         )
         # TODO: 속도, 배터리, 신호 세기는 실제 ROS/Jetson 소스에서 계산한다.
         # TODO: 영상 송출 구현 후 카메라/WebRTC 상태를 추가한다.

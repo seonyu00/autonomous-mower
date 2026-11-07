@@ -38,12 +38,11 @@ class MqttBridgeServiceTest {
         assertThat(payload.speedMps()).isNull();
 
         RealtimePublisher publisher = Mockito.mock(RealtimePublisher.class);
-        MqttInboundPersistenceService persistence = Mockito.mock(MqttInboundPersistenceService.class);
+        TelemetrySpool persistence = Mockito.mock(TelemetrySpool.class);
         Instant serverTime = Instant.parse("2026-10-21T00:00:01Z");
-        when(persistence.persistTelemetry(payload, serverTime)).thenReturn(true);
         MqttInboundHandler handler = new MqttInboundHandler(publisher, persistence,
                 Mockito.mock(CommandExecutionService.class), Mockito.mock(TelemetryReceptionService.class),
-                Clock.fixed(serverTime, ZoneOffset.UTC));
+                Clock.fixed(serverTime, ZoneOffset.UTC), registration("PARTIAL-TEST"));
         handler.handleTelemetry(payload);
         ArgumentCaptor<TelemetryMessage> captor = ArgumentCaptor.forClass(TelemetryMessage.class);
         verify(publisher).publishTelemetry(captor.capture());
@@ -58,14 +57,14 @@ class MqttBridgeServiceTest {
     @Test
     void inboundTelemetryPublishesStompTelemetryMessage() {
         RealtimePublisher realtimePublisher = Mockito.mock(RealtimePublisher.class);
-        MqttInboundPersistenceService persistenceService = Mockito.mock(MqttInboundPersistenceService.class);
+        TelemetrySpool persistenceService = Mockito.mock(TelemetrySpool.class);
         CommandExecutionService commandExecutionService = Mockito.mock(CommandExecutionService.class);
         MqttInboundHandler handler = new MqttInboundHandler(
                 realtimePublisher,
                 persistenceService,
                 commandExecutionService,
                 Mockito.mock(TelemetryReceptionService.class),
-                Clock.fixed(Instant.parse("2026-09-10T00:00:00Z"), ZoneOffset.UTC)
+                Clock.fixed(Instant.parse("2026-09-10T00:00:00Z"), ZoneOffset.UTC), registration("MOWER-01")
         );
         MqttTelemetryPayload payload = new MqttTelemetryPayload(
                 "MOWER-01",
@@ -77,9 +76,8 @@ class MqttBridgeServiceTest {
                 0.4,
                 92,
                 Instant.parse("2026-05-30T01:00:00Z"),
-                null
+                null, null
         );
-        when(persistenceService.persistTelemetry(payload, Instant.parse("2026-09-10T00:00:00Z"))).thenReturn(true);
 
         handler.handleTelemetry(payload);
 
@@ -131,14 +129,14 @@ class MqttBridgeServiceTest {
     @Test
     void inboundCommandAckUpdatesCommandExecutionLifecycle() {
         RealtimePublisher realtimePublisher = Mockito.mock(RealtimePublisher.class);
-        MqttInboundPersistenceService persistenceService = Mockito.mock(MqttInboundPersistenceService.class);
+        TelemetrySpool persistenceService = Mockito.mock(TelemetrySpool.class);
         CommandExecutionService commandExecutionService = Mockito.mock(CommandExecutionService.class);
         MqttInboundHandler handler = new MqttInboundHandler(
                 realtimePublisher,
                 persistenceService,
                 commandExecutionService,
                 Mockito.mock(TelemetryReceptionService.class),
-                Clock.fixed(Instant.parse("2026-09-10T00:00:00Z"), ZoneOffset.UTC)
+                Clock.fixed(Instant.parse("2026-09-10T00:00:00Z"), ZoneOffset.UTC), registration("MOWER-01")
         );
         MqttCommandAckPayload payload = new MqttCommandAckPayload(
                 "cmd-001",
@@ -154,6 +152,12 @@ class MqttBridgeServiceTest {
         handler.handleCommandAck(payload);
 
         verify(commandExecutionService).applyAck(payload);
+    }
+
+    private TelemetryRegistration registration(String robotId) {
+        var registration = Mockito.mock(TelemetryRegistration.class);
+        when(registration.accepts(robotId)).thenReturn(true);
+        return registration;
     }
 
     private MqttCommandPayload command(String commandType) {

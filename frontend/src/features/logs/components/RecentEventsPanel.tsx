@@ -3,6 +3,7 @@ import { env } from '../../../shared/config/env';
 import { useAuthStore } from '../../auth/authStore';
 import { useRobotStore } from '../../robots/robotStore';
 import { getLogs } from '../api';
+import { eventTypeLabel } from '../eventTypeLabel';
 import { useRecentEventsStore } from '../recentEventsStore';
 import type { RecentEvent } from '../types';
 
@@ -66,7 +67,7 @@ export function RecentEventsPanel() {
                 )}
               </time>
             </div>
-            <strong>{event.eventType}</strong>
+            <strong>{eventTypeLabel(event.eventType)}</strong>
             <p>{event.message}</p>
           </article>
         ))}

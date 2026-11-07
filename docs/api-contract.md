@@ -693,6 +693,8 @@ Frontend currently subscribes per selected robot. Backend should allow unsubscri
 
 현재 클라이언트 발행 계약은 없으므로 `/topic/**`, `/app/**`를 포함한 모든 클라이언트 `SEND`를 거부한다. 서버의 토픽 발행, 구독 해제, 연결 종료와 heartbeat는 유지한다. 이 정책은 HTTP 로그인 방식이나 MQTT 브로커 인증을 변경하지 않는다.
 
+DB 계정 조회 실패 시 사용자 권한 유예 없이 해당 소켓의 데이터 전달을 차단한다. 계정 조회·트랜잭션 장애는 1011로 연결을 종료해 재접속 시 현재 권한을 다시 검사한다. 실제 계정 무효·권한 만료는 1008로 종료해 기존 브라우저 세션 정리 절차를 따른다.
+
 ### 4.1 `/topic/robots/{robotId}/telemetry`
 
 SRS 기준 약 1Hz로 전송한다. 서버 마지막 수신 후 3초 이상이면 `delayed`로 판정한다. 서버는 250ms 주기로 상태 전이를 검사하고, 브라우저도 추가 메시지 없이 경과 시간을 갱신한다.
@@ -724,6 +726,8 @@ Payload:
 
 `workState`: `idle | mowing | paused | error`
 
+`errorObserved`는 전체 클라이언트가 이번 메시지에 오류 관측 실행 식별자를 제공했는지 나타낸다. 이전 서버의 필드 생략도 허용한다. 웹은 `emergency-stop-active`를 ‘비상 정지 활성화’로 표시하며 미지 코드는 ‘알 수 없는 오류’와 펼쳐 볼 수 있는 원문으로 표시한다. 상태 전용 메시지의 빈 오류값은 해제 근거가 없다.
+
 `lastReceivedAt`은 서버의 MQTT 텔레메트리 처리 진입 시각이며 DB 기록에도 같은 값을 사용한다. `edgeSampledAt`은 MQTT `receivedAt`을 보존한 Edge 샘플 생성 시각이다. `serverTimestamp`는 서버 응답 생성 시각이며 브라우저는 서버 경과 시간과 브라우저 경과 시간을 합산한다. Edge 시각은 지연 판정에 사용하지 않는다.
 
 ### 4.2 `/topic/robots/{robotId}/status`
@@ -743,7 +747,8 @@ Payload:
     "state": "normal",
     "lastReceivedAt": "2026-05-30T01:00:00.000Z",
     "edgeSampledAt": "2026-05-30T00:59:59.900Z",
-    "checkedAt": "2026-05-30T01:00:00.010Z"
+    "checkedAt": "2026-05-30T01:00:00.010Z",
+    "recording": { "state": "available", "possibleGap": false }
   }
 }
 ```
@@ -753,6 +758,10 @@ Payload:
 `telemetryReception`은 로봇 목록·상세 조회 응답에도 포함한다. `state`는 `never-seen | normal | delayed`이며 서버 프로세스 시작 후 수신 이력이 없으면 `never-seen`, 두 수신 시각은 null이다. `checkedAt`은 서버 판정 시각이다. 수신 상태는 현재 서버 메모리에 보관하며 재시작 후 첫 수신으로 다시 초기화한다.
 
 Edge status의 `lastSeenAt`과 텔레메트리 마지막 서버 수신은 별개다. status heartbeat는 텔레메트리 수신 시각을 갱신하지 않는다. 지연·복구 전이만 각각 `telemetry-delayed`·`telemetry-recovered` 이벤트로 한 번 기록하고 발행한다. 같은 Edge 상태는 시각이 달라도 DB `status-update`를 중복 기록하지 않는다.
+
+`recording`은 서버 전체의 기록 상태다. `unknown`은 기록 확인 전, `available`은 PostgreSQL 기록 가능, `buffered`는 재저장 대기 또는 저장 지연이다. 특정 샘플의 DB 저장 확인은 이력 조회로 한다. `possibleGap`은 로컬 보관 한도 초과 등으로 누락 가능성을 확인한 경우 복구 후에도 유지한다. WSS가 끊기면 화면은 현재 DB 상태를 확인 불가로 표시한다.
+
+오류 관측 전이는 기존 이벤트 구독과 로그 API에서 `source=jetson-telemetry`, `eventType=emergency-stop-active | emergency-stop-recovered`로 조회한다. 발생은 `critical`, 해제 관측은 `info`이며 `occurredAt`은 해당 샘플의 서버 수신 시각이다. 장치가 보낸 사건 시각과 서버가 뒤늦게 재저장한 시각을 구분한다.
 
 ### 4.3 `/topic/robots/{robotId}/events`
 
