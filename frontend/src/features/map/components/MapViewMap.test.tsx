@@ -68,8 +68,8 @@ describe('MapViewMap', () => {
   it('실제 모드 대체 지도에 CPP 선과 시작·끝을 표시하고 구역 변경 시 제거한다', async () => {
     envMock.enableMockWorkZone = false;
     useZoneStore.getState().setZone('MOWER-01', { type: 'Polygon', coordinates: [[[127, 37], [127.001, 37], [127, 37.001], [127, 37]]] }, 2);
-    vi.spyOn(httpClient, 'post').mockResolvedValue({ robotId: 'MOWER-01', version: 2,
-      path: [{ lon: 127.0001, lat: 37.0001 }, { lon: 127.0002, lat: 37.0002 }] });
+    vi.spyOn(httpClient, 'post').mockResolvedValue({ planId: 'test-plan', sha256: 'a'.repeat(64), preview: { robotId: 'MOWER-01', version: 2,
+      path: [{ lon: 127.0001, lat: 37.0001 }, { lon: 127.0002, lat: 37.0002 }] } });
     render(<MapViewMap />);
     fireEvent.click(screen.getByRole('button', { name: '예정 경로 생성' }));
     expect(await screen.findByLabelText('예정 경로 시작 1')).toBeInTheDocument();

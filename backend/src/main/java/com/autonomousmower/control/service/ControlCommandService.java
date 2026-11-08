@@ -19,6 +19,8 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class ControlCommandService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.autonomousmower.workzone.service.RoutePlanService routePlans;
 
     private static final Set<String> ALLOWED_MODES = Set.of("idle", "manual", "autonomous", "home");
     private static final Set<String> ALLOWED_ATTACHMENT_ACTIONS = Set.of("blade-start", "blade-stop", "raise", "lower");
@@ -76,6 +78,12 @@ public class ControlCommandService {
         controlRobotGuard.requireKnownRobot(robotId);
         validateRobotId(robotId, request.robotId());
         validateAllowed(request.mode(), ALLOWED_MODES);
+        if ("autonomous".equals(request.mode())) {
+            if (request.planId() == null) throw new BusinessException(ErrorCode.CPP_INPUT_INVALID);
+            routePlans.get(robotId, request.planId());
+            // 파일 준비 보고는 실제 위치·방향·제어 중재 확인이 아니다. 운영 어댑터 연결 전 발행을 막는다.
+            throw new BusinessException(ErrorCode.AUTONOMY_READINESS_UNCONFIRMED);
+        }
         Instant requestedAt = Instant.now();
         ControlStateStore.MutableControlState state = controlStateStore.stateFor(robotId);
         synchronized (state) {

@@ -109,6 +109,10 @@ int main() {
   const std::vector<GpsCoordinate> slit = {gps(0, 0), gps(30, 0), gps(30, 30),
       gps(15.02, 30), gps(15.02, 10), gps(15, 10), gps(15, 30), gps(0, 30)};
   excludesBox(planCoverage(slit, {}, 0.5), 15, 15.02, 10, 30);
+  const auto entry = planCoverage(u_shape, {}, 0.5, {}, gps(5, 25), gps(25, 25));
+  excludesBox(entry, 10, 20, 10, 30);
+  assert(entry.path.front().latitude == gps(5,25).latitude);
+  assert(entry.path.back().longitude == gps(25,25).longitude);
 
   const std::vector<GpsCoordinate> narrow_bridge = {gps(0, 0), gps(10, 0), gps(10, 4),
       gps(20, 4), gps(20, 0), gps(30, 0), gps(30, 10), gps(20, 10),

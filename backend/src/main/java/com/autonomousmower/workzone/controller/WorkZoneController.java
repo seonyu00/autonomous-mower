@@ -38,4 +38,10 @@ public class WorkZoneController {
     ) {
         return ApiResponse.success(workZoneService.saveWorkZone(robotId, request));
     }
+
+    @PutMapping("/travel-zone")
+    @PreAuthorize("hasAuthority('control:write')")
+    public ApiResponse<SaveWorkZoneResponse> saveTravelZone(@PathVariable String robotId, @Valid @RequestBody WorkZoneRequest request) {
+        return ApiResponse.success(workZoneService.saveTravelZone(robotId, request));
+    }
 }

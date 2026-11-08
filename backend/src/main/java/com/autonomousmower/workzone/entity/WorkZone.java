@@ -32,6 +32,13 @@ public class WorkZone {
 
     @Column(name = "zone_polygon", nullable = false, columnDefinition = "geometry(Polygon, 4326)")
     private Polygon zonePolygon;
+    @Column(name = "travel_polygon", columnDefinition = "geometry(Polygon, 4326)")
+    private Polygon travelPolygon;
+
+    public Polygon getTravelPolygon() { return travelPolygon; }
+    public void replaceTravelPolygon(Polygon polygon, LocalDateTime now) {
+        travelPolygon = Objects.requireNonNull(polygon); updatedAt = now;
+    }
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

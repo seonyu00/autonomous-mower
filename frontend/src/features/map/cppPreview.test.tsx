@@ -94,7 +94,7 @@ describe('CPP 미리보기', () => {
     expect(result.current.planId).toBe(response.planId);
   });
 
-  it.each(['robot', 'zone', 'editing', 'version'])('%s 변경 후 늦은 응답을 버린다', async (change) => {
+  it.each(['robot', 'zone', 'editing', 'travel-editing', 'version'])('%s 변경 후 늦은 응답을 버린다', async (change) => {
     let resolve!: (value: RoutePlanResult) => void;
     vi.mocked(httpClient.post).mockReturnValue(new Promise((done) => { resolve = done; }));
     const { result } = renderHook(useCppPreview);
@@ -107,6 +107,7 @@ describe('CPP 미리보기', () => {
         useRobotStore.setState({ selectedRobotId: 'R1' });
       } else if (change === 'zone') useZoneStore.getState().setZone('R1', { ...zone }, 2);
       else if (change === 'editing') useZoneStore.getState().startEditing('R1');
+      else if (change === 'travel-editing') useZoneStore.getState().startEditing('R1::travel');
       else useZoneStore.setState({ versionsByRobotId: { R1: 3 } });
     });
     await act(async () => { resolve(response); await request; });

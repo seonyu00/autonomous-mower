@@ -53,6 +53,7 @@ describe('zoneApi', () => {
     });
 
     await expect(getWorkZone('MOWER-01')).resolves.toEqual({
+      workGeometry: polygon, travelGeometry: null,
       geometry: polygon,
       version: 4,
       zoneId: 12,

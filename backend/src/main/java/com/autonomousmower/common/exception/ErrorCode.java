@@ -3,6 +3,7 @@ package com.autonomousmower.common.exception;
 import org.springframework.http.HttpStatus;
 
 public enum ErrorCode {
+    AUTONOMY_READINESS_UNCONFIRMED(HttpStatus.CONFLICT, "AUTONOMY_READINESS_UNCONFIRMED", "실제 주행 준비 확인 어댑터가 연결되지 않았습니다. 경로 파일 준비만으로 AUTO를 시작하지 않습니다."),
     CPP_GRID_TOO_LARGE(HttpStatus.UNPROCESSABLE_ENTITY, "CPP_GRID_TOO_LARGE", "구역 크기에 비해 격자가 큽니다. 격자 간격을 줄이세요."),
     CPP_INPUT_INVALID(HttpStatus.BAD_REQUEST, "CPP_INPUT_INVALID", "미리보기 입력을 확인하세요. 구멍 없는 구역, 최대 500개 꼭짓점과 10만 격자, 격자 간격 0.2~5m를 지원합니다."),
     CPP_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "CPP_UNAVAILABLE", "서버에 CPP 실행 파일이 설정되지 않았습니다."),

@@ -26,6 +26,16 @@ def envelope(data=None):
 
 
 class WebRoutePlanTest(unittest.TestCase):
+    def test_entry_route_requires_travel_polygon_and_connected_endpoint(self):
+        data = json.loads(envelope()["data"]["payload"])
+        data.update(formatVersion=2, plannerProfile="hd7000w-transit-v1")
+        data["workZone"]["travelZone"] = {"type":"Polygon","srid":4326,"geometry":{"type":"Polygon","coordinates":[[
+            [126.995,35.995],[127.015,35.995],[127.015,36.015],[126.995,36.015],[126.995,35.995]]]}}
+        data["preview"]["transitPath"] = [{"lat":36.003,"lon":126.999},data["preview"]["path"][0]]
+        prepared=prepare_route(envelope(data),"test-robot",3,PLAN_ID)
+        self.assertEqual(json.loads(prepared["payload"])["preview"]["transitPath"],data["preview"]["transitPath"])
+        data["preview"]["transitPath"][-1] = {"lat":36.004,"lon":127.004}
+        with self.assertRaises(ValueError): prepare_route(envelope(data),"test-robot",3,PLAN_ID)
     def test_authenticated_plan_get_and_offline_cli(self):
         opener = MagicMock()
         opener.open.return_value.__enter__.return_value.read.return_value = json.dumps(envelope()).encode()

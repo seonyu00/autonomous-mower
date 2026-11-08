@@ -35,6 +35,9 @@ export function MapViewMap() {
     selectedRobotId ? state.telemetryByRobotId[selectedRobotId] : undefined,
   );
   const dataSource = useTelemetryStore((state) => state.dataSource);
+  const area = useZoneStore((state) => state.selectedArea);
+  const scopeId = selectedRobotId ? selectedRobotId + (area === 'travel' ? '::travel' : '') : null;
+  const travelZone = selectedRobotId ? useZoneStore.getState().zonesByRobotId[selectedRobotId + '::travel'] : null;
   const zonesByRobotId = useZoneStore((state) => state.zonesByRobotId);
   const mapReady = useZoneStore((state) => state.mapReady);
   const setMapReady = useZoneStore((state) => state.setMapReady);
@@ -70,14 +73,14 @@ export function MapViewMap() {
         : sampleRouteSegments.completed.at(-1),
     [livePositionAvailable, sampleRouteSegments.completed, telemetry],
   );
-  const editingWorkZone = selectedRobotId ? Boolean(editingByRobotId[selectedRobotId]) : false;
+  const editingWorkZone = selectedRobotId ? Boolean(editingByRobotId[scopeId!]) : false;
   const draftVertices = selectedRobotId
-    ? draftVerticesByRobotId[selectedRobotId] ?? emptyDraftVertices
+    ? draftVerticesByRobotId[scopeId!] ?? emptyDraftVertices
     : emptyDraftVertices;
   const storedWorkZone = selectedRobotId ? zonesByRobotId[selectedRobotId] : undefined;
   const displayedWorkZone = editingWorkZone
     ? closePolygonVertices(draftVertices)
-    : storedWorkZone;
+    : area === 'travel' ? travelZone : storedWorkZone;
   const sourceLabel = sampleMode ? '샘플 운용 데이터' : livePositionAvailable ? 'GPS 위치' : '위치 수신 대기';
   const positionStatus = !positionAvailable
     ? 'GPS 미수신'
@@ -110,20 +113,22 @@ export function MapViewMap() {
         livePositionAvailable={livePositionAvailable}
         markerPosition={markerPosition}
         headingDegrees={headingDegrees}
-        workZone={displayedWorkZone}
+        workZone={area === 'travel' ? storedWorkZone : displayedWorkZone}
+        travelZone={area === 'travel' ? displayedWorkZone : travelZone}
         draftVertices={draftVertices}
         plannedRoute={preview.path.length ? [] : plannedRoute}
         previewRoute={preview.path}
+        transitRoute={preview.transitPath}
         completedRoute={completedRoute}
         editing={editingWorkZone && mapReady}
         onAddVertex={(position) => {
           if (selectedRobotId && useZoneStore.getState().mapReady) {
-            addDraftVertex(selectedRobotId, position);
+            addDraftVertex(scopeId!, position);
           }
         }}
         onMoveVertex={(index, position) => {
           if (selectedRobotId && useZoneStore.getState().mapReady) {
-            moveDraftVertex(selectedRobotId, index, position);
+            moveDraftVertex(scopeId!, index, position);
           }
         }}
         onError={handleMapError}
@@ -134,6 +139,8 @@ export function MapViewMap() {
             robotId={selectedRobotId}
             sampleMode={sampleMode && !preview.path.length}
             previewRoute={preview.path}
+            transitRoute={preview.transitPath}
+            travelZone={travelZone}
             headingDegrees={headingDegrees}
             workZone={sampleEditing ? displayedWorkZone : storedWorkZone}
             draftVertices={sampleEditing ? draftVertices : []}
@@ -141,12 +148,12 @@ export function MapViewMap() {
             sampleEditing={sampleEditing}
             onAddVertex={(position) => {
               if (selectedRobotId && sampleEditing) {
-                addDraftVertex(selectedRobotId, position);
+                addDraftVertex(scopeId!, position);
               }
             }}
             onMoveVertex={(index, position) => {
               if (selectedRobotId && sampleEditing) {
-                moveDraftVertex(selectedRobotId, index, position);
+                moveDraftVertex(scopeId!, index, position);
               }
             }}
           />
@@ -190,6 +197,7 @@ export function MapViewMap() {
         <span><i className="legend-line completed" />{sampleMode ? '샘플 완료 경로' : '세션 완료 경로'}</span>
         {preview.path.length ? <span><i className="legend-line planned" />CPP 예정 경로 · 시작 → 번호 → 끝</span> : sampleMode ? <span><i className="legend-line planned" />샘플 예정 경로</span> : null}
         <span><i className="legend-area" />작업 구역</span>
+        {travelZone && <span>주황색: 이동 가능 범위·진입 경로</span>}
       </div>
     </div>
   );
@@ -197,6 +205,7 @@ export function MapViewMap() {
 
 function FallbackMapLayer({
   previewRoute,
+  transitRoute = [], travelZone,
   robotId,
   sampleMode,
   headingDegrees,
@@ -208,6 +217,8 @@ function FallbackMapLayer({
   onMoveVertex,
 }: {
   previewRoute: LngLat[];
+  transitRoute?: LngLat[];
+  travelZone?: PolygonGeometry | null;
   robotId: string | null;
   sampleMode: boolean;
   headingDegrees: number | null;
@@ -218,7 +229,7 @@ function FallbackMapLayer({
   onAddVertex: (position: LngLat) => void;
   onMoveVertex: (index: number, position: LngLat) => void;
 }) {
-  const bounds = sampleEditing ? fallbackMapBounds : storedZoneBounds(workZone);
+  const bounds = sampleEditing ? fallbackMapBounds : storedZoneBounds(travelZone ?? workZone);
   const workZonePath = toFallbackPath(workZone, bounds);
   const draggingVertexIndexRef = useRef<number | null>(null);
   const suppressNextClickRef = useRef(false);
@@ -267,6 +278,8 @@ function FallbackMapLayer({
         </defs>
         <rect width="1000" height="620" className="fallback-map-ground" />
         <rect width="1000" height="620" fill="url(#fallback-grid)" />
+        {travelZone && <path aria-label="이동 가능 범위" d={toFallbackPath(travelZone, bounds) ?? ''} fill="none" stroke="#e5a42b" strokeWidth="3" />}
+        {transitRoute.length > 0 && <polyline aria-label="진입 경로" fill="none" stroke="#e5a42b" strokeWidth="4" points={transitRoute.map(point => toFallbackSvgPoint(point, bounds).join(',')).join(' ')} />}
         {workZonePath ? <path className="fallback-work-zone" d={workZonePath} /> : null}
         {previewRoute.length > 0 && <g aria-label="CPP 예정 경로">
           <polyline fill="none" stroke="#61b6ff" strokeWidth="3" points={previewRoute.map((point) => toFallbackSvgPoint(point, bounds).join(',')).join(' ')} />

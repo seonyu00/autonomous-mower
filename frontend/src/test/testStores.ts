@@ -58,6 +58,8 @@ export function resetStores(role: Role = 'admin') {
     versionsByRobotId: {},
     draftVerticesByRobotId: {},
     editingByRobotId: {},
+    selectedArea: 'work',
+    reviewedPlans: {},
   });
 }
 

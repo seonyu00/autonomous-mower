@@ -36,7 +36,7 @@ public class RoutePlanService {
         var zone = zones.getWorkZone(robotId);
         requireVersion(zone, preview.zoneId(), preview.version());
         try {
-            String payload = json.writeValueAsString(new Payload(1, "hd7000w-v1", zone, preview));
+            String payload = json.writeValueAsString(new Payload(preview.transitPath().isEmpty() ? 1 : 2, preview.transitPath().isEmpty() ? "hd7000w-v1" : "hd7000w-transit-v1", zone, preview));
             if (payload.getBytes(StandardCharsets.UTF_8).length > 2 * 1024 * 1024) {
                 throw new BusinessException(ErrorCode.CPP_OUTPUT_INVALID);
             }

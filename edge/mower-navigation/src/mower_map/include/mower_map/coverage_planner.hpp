@@ -20,6 +20,8 @@ struct CoveragePlanResult {
 CoveragePlanResult planCoverage(const std::vector<GpsCoordinate>& polygon,
                                  const std::vector<GpsCoordinate>& obstacles,
                                  double cell_size_m = 0.20,
-                                 const std::vector<std::vector<GpsCoordinate>>& holes = {});
+                                 const std::vector<std::vector<GpsCoordinate>>& holes = {},
+                                 std::optional<GpsCoordinate> transit_start = {},
+                                 std::optional<GpsCoordinate> transit_goal = {});
 
 }  // namespace mower_map

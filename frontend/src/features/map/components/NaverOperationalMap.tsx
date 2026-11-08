@@ -17,6 +17,8 @@ type NaverOperationalMapProps = {
   markerPosition?: LngLat;
   headingDegrees: number | null;
   workZone: PolygonGeometry | null | undefined;
+  travelZone?: PolygonGeometry | null;
+  transitRoute?: LngLat[];
   draftVertices: LngLat[];
   previewRoute?: LngLat[];
   plannedRoute: LngLat[];
@@ -35,7 +37,7 @@ export function NaverOperationalMap({
   livePositionAvailable,
   markerPosition,
   headingDegrees,
-  workZone,
+  workZone, travelZone, transitRoute,
   draftVertices,
   previewRoute,
   plannedRoute,
@@ -176,6 +178,19 @@ export function NaverOperationalMap({
 
     return () => polygon.setMap(null);
   }, [mapsApi, workZone]);
+
+  useEffect(() => {
+    if (!mapsApi || !mapRef.current || !travelZone) return;
+    const polygon = new mapsApi.Polygon({ map: mapRef.current,
+      paths: travelZone.coordinates.map(ring => ring.map(point => toLatLng(mapsApi, point))),
+      strokeColor: '#e5a42b', strokeWeight: 3, strokeOpacity: 1, fillOpacity: 0, clickable: false });
+    return () => polygon.setMap(null);
+  }, [mapsApi, travelZone]);
+  useEffect(() => {
+    if (!mapsApi || !mapRef.current || !transitRoute?.length) return;
+    const line = new mapsApi.Polyline({ map: mapRef.current, path: transitRoute.map(p => toLatLng(mapsApi,p)), strokeColor: '#e5a42b', strokeWeight: 4 });
+    return () => line.setMap(null);
+  }, [mapsApi, transitRoute]);
 
   useEffect(() => {
     const map = mapRef.current;

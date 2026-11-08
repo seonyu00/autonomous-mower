@@ -1,0 +1,21 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import { httpClient } from '../../shared/api/httpClient';
+import { env } from '../../shared/config/env';
+import { getWorkZone, saveWorkZone } from './zoneApi';
+import { useZoneStore } from './zoneStore';
+import type { PolygonGeometry } from './geojson';
+afterEach(() => vi.restoreAllMocks());
+it('이동 가능 범위를 별도로 읽고 저장하며 두 영역의 버전을 함께 갱신한다', async () => {
+  env.enableMockWorkZone=false;
+  const work: PolygonGeometry = { type:'Polygon', coordinates:[[[127,37],[127.001,37],[127,37.001],[127,37]]] };
+  const travel: PolygonGeometry = { type:'Polygon', coordinates:[[[127,37],[127.002,37],[127,37.002],[127,37]]] };
+  vi.spyOn(httpClient,'get').mockResolvedValue({zoneId:1,robotId:'R1',version:3,zone:{geometry:work},travelZone:{geometry:travel}});
+  expect((await getWorkZone('R1')).geometry).toEqual(work);
+  expect((await getWorkZone('R1','travel')).geometry).toEqual(travel);
+  vi.spyOn(httpClient,'put').mockResolvedValue({version:4,saved:true});
+  await saveWorkZone('R1',travel,3,'travel');
+  expect(httpClient.put).toHaveBeenCalledWith('/api/robots/R1/work-zone/travel-zone',expect.objectContaining({expectedVersion:3}));
+  useZoneStore.getState().setZone('R1::travel',travel,4);
+  expect(useZoneStore.getState().versionsByRobotId.R1).toBe(4);
+  useZoneStore.setState({zonesByRobotId:{},versionsByRobotId:{}});
+});

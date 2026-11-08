@@ -79,6 +79,9 @@ public class WorkZoneService {
         if (expectedVersion == null || expectedVersion != workZone.getVersion()) {
             throw new BusinessException(ErrorCode.WORK_ZONE_CONFLICT);
         }
+        if (workZone.getTravelPolygon() != null && !workZone.getTravelPolygon().covers(polygon)) {
+            throw new BusinessException(ErrorCode.CPP_INPUT_INVALID);
+        }
         workZone.replacePolygon(polygon, now);
         return workZone;
     }
@@ -89,7 +92,25 @@ public class WorkZoneService {
                 workZone.getRobot().getRobotId(),
                 workZone.getVersion(),
                 workZone.getUpdatedAt(),
-                polygonMapper.fromPolygon(workZone.getZonePolygon())
+                polygonMapper.fromPolygon(workZone.getZonePolygon()),
+                workZone.getTravelPolygon() == null ? null : polygonMapper.fromPolygon(workZone.getTravelPolygon())
         );
+    }
+
+    @Transactional
+    public SaveWorkZoneResponse saveTravelZone(String robotId, WorkZoneRequest request) {
+        if (!robotId.equals(request.robotId())) throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        robotService.getRobot(robotId);
+        var zone = workZoneRepository.findByRobotRobotId(robotId).orElseThrow(() -> new BusinessException(ErrorCode.WORK_ZONE_NOT_FOUND));
+        if (request.expectedVersion() == null || request.expectedVersion() != zone.getVersion()) throw new BusinessException(ErrorCode.WORK_ZONE_CONFLICT);
+        var travel = polygonMapper.toPolygon(request.zone());
+        if (!travel.covers(zone.getZonePolygon())) throw new BusinessException(ErrorCode.CPP_INPUT_INVALID);
+        zone.replaceTravelPolygon(travel, LocalDateTime.now());
+        try {
+            var saved = workZoneRepository.saveAndFlush(zone);
+            return new SaveWorkZoneResponse(true, robotId, saved.getZoneId(), saved.getVersion(), saved.getUpdatedAt());
+        } catch (OptimisticLockingFailureException exception) {
+            throw new BusinessException(ErrorCode.WORK_ZONE_CONFLICT);
+        }
     }
 }

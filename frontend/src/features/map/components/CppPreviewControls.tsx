@@ -3,14 +3,22 @@ import type { useCppPreview } from '../cppPreview';
 import { CPP_MAX_CELL_SIZE_M } from '../cppPreview';
 
 export function CppPreviewControls({ preview }: { preview: ReturnType<typeof useCppPreview> }) {
+  const [entry, setEntry] = useState(false);
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const entryValid = !entry || (latitude.trim() !== '' && longitude.trim() !== '' && Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude)) && Math.abs(Number(latitude)) <= 85 && Math.abs(Number(longitude)) <= 180);
   const [cellSize, setCellSize] = useState(0.2);
   return <details className="cpp-preview-controls" name="map-tools" aria-label="CPP 예정 경로 미리보기">
     <summary>CPP 예정 경로 · 검토용 미리보기</summary>
     <label>격자 간격(m) <input type="number" min="0.2" max={CPP_MAX_CELL_SIZE_M} step="0.05" value={cellSize}
       aria-describedby="cpp-mower-spec"
       onChange={(event) => setCellSize(event.target.valueAsNumber)} /></label>
+    <label><input type="checkbox" checked={entry} onChange={event => setEntry(event.target.checked)} />진입 경로도 계산</label>
+    {entry && <><label>진입 시작 위도(검토용) <input type="number" value={latitude} onChange={event => setLatitude(event.target.value)} /></label>
+      <label>진입 시작 경도(검토용) <input type="number" value={longitude} onChange={event => setLongitude(event.target.value)} /></label>
+      <p>저장한 이동 가능 범위 안의 좌표만 사용합니다. 실측 위치나 주행 허가를 뜻하지 않습니다.</p></>}
     <button type="button" disabled={!preview.available || preview.loading || !Number.isFinite(cellSize)
-      || cellSize < 0.2 || cellSize > CPP_MAX_CELL_SIZE_M} onClick={() => void preview.generate(cellSize)}>
+      || cellSize < 0.2 || cellSize > CPP_MAX_CELL_SIZE_M || !entryValid} onClick={() => void (entry ? preview.generate(cellSize, { lat: Number(latitude), lon: Number(longitude) }) : preview.generate(cellSize))}>
       {preview.loading ? '생성 중…' : '예정 경로 생성'}
     </button>
     {!preview.available && <p>실제 저장된 구역을 불러오고 편집을 마친 뒤 생성하세요.</p>}

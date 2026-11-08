@@ -16,6 +16,7 @@ export type CppPreview = {
   columns: number;
   origin: { lat: number; lon: number };
   path: { lat: number; lon: number }[];
+  transitPath?: { lat: number; lon: number }[];
 };
 
 export type RoutePlanResult = { planId: string; sha256: string; preview: CppPreview };
@@ -30,7 +31,8 @@ export function useCppPreview() {
   const robotId = useRobotStore((state) => state.selectedRobotId);
   const zone = useZoneStore((state) => robotId ? state.zonesByRobotId[robotId] : null);
   const version = useZoneStore((state) => robotId ? state.versionsByRobotId[robotId] : null);
-  const editing = useZoneStore((state) => robotId ? state.editingByRobotId[robotId] : false);
+  const editing = useZoneStore((state) => robotId ? Boolean(state.editingByRobotId[robotId] || state.editingByRobotId[robotId + '::travel']) : false);
+  const [transitPath, setTransitPath] = useState<LngLat[]>([]);
   const [state, setState] = useState<{ path: LngLat[]; message: string; loading: boolean; planId: string | null; sha256: string | null }>({
     path: emptyPath, message: '', loading: false, planId: null, sha256: null,
   });
@@ -42,9 +44,12 @@ export function useCppPreview() {
   useEffect(() => {
     const invalidate = () => {
       generation.current += 1;
+      const id = useRobotStore.getState().selectedRobotId;
+      useZoneStore.setState(state => ({ reviewedPlans: id ? Object.fromEntries(Object.entries(state.reviewedPlans).filter(([key]) => key !== id)) : {} }));
       controller.current?.abort();
       preparationController.current?.abort();
       setPreparation({ message: '', loading: false });
+      setTransitPath([]);
       setState({ path: emptyPath, message: '', loading: false, planId: null, sha256: null });
     };
     const unsubscribeRobot = useRobotStore.subscribe((next, previous) => {
@@ -54,7 +59,8 @@ export function useCppPreview() {
       const id = useRobotStore.getState().selectedRobotId;
       if (id && (next.zonesByRobotId[id] !== previous.zonesByRobotId[id]
         || next.versionsByRobotId[id] !== previous.versionsByRobotId[id]
-        || next.editingByRobotId[id] !== previous.editingByRobotId[id])) invalidate();
+        || next.editingByRobotId[id] !== previous.editingByRobotId[id]
+        || next.editingByRobotId[id + '::travel'] !== previous.editingByRobotId[id + '::travel'])) invalidate();
     });
     const unsubscribeAuth = useAuthStore.subscribe((next, previous) => {
       if (next.sessionVersion !== previous.sessionVersion) invalidate();
@@ -68,14 +74,16 @@ export function useCppPreview() {
   }, []);
 
   const available = Boolean(robotId && zone && version != null && !editing && !isMockWorkZoneEnabled());
-  const generate = async (cellSizeM: number) => {
+  const generate = async (cellSizeM: number, start?: { lat: number; lon: number }) => {
     if (!available || !Number.isFinite(cellSizeM) || cellSizeM < 0.2 || cellSizeM > CPP_MAX_CELL_SIZE_M) return;
     controller.current?.abort();
     preparationController.current?.abort();
     setPreparation({ message: '', loading: false });
+      setTransitPath([]);
     const abort = new AbortController();
     controller.current = abort;
     const requestId = ++generation.current;
+    useZoneStore.setState(state => ({ reviewedPlans: Object.fromEntries(Object.entries(state.reviewedPlans).filter(([key]) => key !== robotId)) }));
     setState({ path: emptyPath, message: 'CPP 예정 경로를 생성 중입니다.', loading: true, planId: null, sha256: null });
     let timeout: ReturnType<typeof setTimeout>;
     const deadline = new Promise<never>((_, reject) => {
@@ -90,13 +98,15 @@ export function useCppPreview() {
       // 취소 신호를 무시하는 응답도 제한 시간이 지난 화면을 덮어쓰지 못하게 한다.
       const stored = await Promise.race([deadline, httpClient.post<RoutePlanResult>(
         `/api/robots/${encodeURIComponent(robotId!)}/work-zone/cpp-preview/plans`,
-        { expectedVersion: version, cellSizeM }, { signal: abort.signal },
+        { expectedVersion: version, cellSizeM, ...(start ? { start } : {}) }, { signal: abort.signal },
       )]);
       if (requestId !== generation.current) return;
       const result = stored.preview;
       if (result.robotId !== robotId || result.version !== version) {
         throw new Error('응답 구역이 현재 선택과 다릅니다.');
       }
+      if (result.path.length >= 2) useZoneStore.setState(state => ({ reviewedPlans: { ...state.reviewedPlans, [robotId!]: { planId: stored.planId, version: result.version } } }));
+      setTransitPath((result.transitPath ?? []).map(({ lat, lon }) => [lon, lat] as LngLat));
       const path: LngLat[] = result.path.map(({ lat, lon }) => [lon, lat]);
       setState({ path, loading: false, planId: path.length ? stored.planId : null, sha256: path.length ? stored.sha256 : null, message: path.length
         ? `예정 경로 ${path.length}점 · 저장 버전 ${result.version} · 격자 ${result.cellSizeM}m · 경로 ID ${stored.planId} · 번호가 증가하는 순서로 이동`
@@ -151,7 +161,7 @@ export function useCppPreview() {
     }
   };
   return { ...state, path: available ? state.path : emptyPath, planId: available ? state.planId : null, sha256: available ? state.sha256 : null,
-    preparation, checkPreparation, available, generate };
+    preparation, checkPreparation, transitPath: available ? transitPath : [], available, generate };
 }
 
 // 긴 경로는 표식만 간추린다. 선에는 모든 경로점을 전달하고 번호는 원래 순서를 유지한다.

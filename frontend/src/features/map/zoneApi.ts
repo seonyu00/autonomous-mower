@@ -11,9 +11,12 @@ type WorkZoneResponse = {
   version: number;
   updatedAt: string;
   zone: PostGisPolygonPayload;
+  travelZone?: PostGisPolygonPayload | null;
 };
 
 export type WorkZoneSnapshot = {
+  workGeometry?: PolygonGeometry;
+  travelGeometry?: PolygonGeometry | null;
   geometry: PolygonGeometry | null;
   version: number | null;
   zoneId: number | null;
@@ -21,7 +24,7 @@ export type WorkZoneSnapshot = {
   mock: boolean;
 };
 
-export async function getWorkZone(robotId: string): Promise<WorkZoneSnapshot> {
+export async function getWorkZone(robotId: string, area?: 'travel'): Promise<WorkZoneSnapshot> {
   if (isMockWorkZoneEnabled()) {
     return {
       geometry: mockWorkZoneByRobotId[robotId]?.geometry ?? null,
@@ -35,7 +38,9 @@ export async function getWorkZone(robotId: string): Promise<WorkZoneSnapshot> {
   try {
     const response = await httpClient.get<WorkZoneResponse>(`/api/robots/${robotId}/work-zone`);
     return {
-      geometry: response.zone.geometry,
+      workGeometry: response.zone.geometry,
+      travelGeometry: response.travelZone?.geometry ?? null,
+      geometry: area === 'travel' ? response.travelZone?.geometry ?? null : response.zone.geometry,
       version: response.version,
       zoneId: response.zoneId,
       updatedAt: response.updatedAt,
@@ -74,6 +79,7 @@ export async function saveWorkZone(
   robotId: string,
   polygon: PolygonGeometry,
   expectedVersion: number | null,
+  area?: 'travel',
 ): Promise<SaveWorkZoneResponse> {
   const request: SaveWorkZoneRequest = {
     robotId,
@@ -91,7 +97,7 @@ export async function saveWorkZone(
     };
   }
 
-  return httpClient.put<SaveWorkZoneResponse>(`/api/robots/${robotId}/work-zone`, request);
+  return httpClient.put<SaveWorkZoneResponse>(`/api/robots/${robotId}/work-zone${area === 'travel' ? '/travel-zone' : ''}`, request);
 }
 
 export function isMockWorkZoneEnabled() {

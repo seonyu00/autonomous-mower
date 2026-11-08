@@ -10,6 +10,22 @@ import static org.mockito.Mockito.*;
 
 @EnabledIfEnvironmentVariable(named = "CPP_EXECUTABLE", matches = ".+")
 class CppNativeIntegrationTest {
+    @Test void entryFromOutsideWorkZoneUsesTravelPolygonAndExactEndpoints() {
+        var zones=mock(WorkZoneService.class);
+        var work=List.of(point(10,10),point(25,10),point(25,25),point(10,25),point(10,10));
+        var travel=List.of(point(0,0),point(30,0),point(30,30),point(0,30),point(0,0));
+        var payload=new WorkZonePayload("Polygon",4326,new GeoJsonGeometryDto("Polygon",List.of(work)));
+        var boundary=new WorkZonePayload("Polygon",4326,new GeoJsonGeometryDto("Polygon",List.of(travel)));
+        when(zones.getWorkZone("R1")).thenReturn(new WorkZoneResponse(1L,"R1",2,null,payload,boundary));
+        var service=new CppPreviewService(zones,new GeoJsonPolygonMapper(),new CppProcessRunner(System.getenv("CPP_EXECUTABLE"),5000,2097152),new ObjectMapper());
+        var coordinate=point(3,3); var start=new CppPreviewResponse.Point(coordinate.get(1),coordinate.get(0));
+        var result=service.preview("R1",new CppPreviewRequest(2,.5,start));
+        assertThat(result.transitPath()).hasSizeGreaterThan(1);
+        assertThat(result.transitPath().getFirst()).isEqualTo(start);
+        assertThat(result.transitPath().getLast()).isEqualTo(result.path().getFirst());
+        var outside=point(40,40);
+        assertThatThrownBy(()->service.preview("R1",new CppPreviewRequest(2,.5,new CppPreviewResponse.Point(outside.get(1),outside.get(0))))).isInstanceOf(com.autonomousmower.common.exception.BusinessException.class);
+    }
     List<Double> point(double east, double north) {
         return List.of(127 + east / (111319.49079327358 * Math.cos(Math.toRadians(37))),
                 37 + north / 111319.49079327358);

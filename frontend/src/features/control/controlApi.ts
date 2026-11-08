@@ -1,3 +1,4 @@
+import { useZoneStore } from '../map/zoneStore';
 import { httpClient } from '../../shared/api/httpClient';
 import { env } from '../../shared/config/env';
 import { useAuthStore } from '../auth/authStore';
@@ -58,10 +59,13 @@ export async function takeoverControl(robotId: string) {
 
 export async function changeMode(robotId: string, mode: ControlMode) {
   requireCanControl(robotId);
+  const plan = useZoneStore.getState().reviewedPlans[robotId];
+  if (mode === 'autonomous' && (!plan || plan.version !== useZoneStore.getState().versionsByRobotId[robotId] || useZoneStore.getState().editingByRobotId[robotId] || useZoneStore.getState().editingByRobotId[robotId + '::travel'])) throw new ControlPrecheckError(['현재 구역의 예정 경로를 먼저 생성하고 확인하세요.']);
   const command: ModeCommand = {
     action: 'change-mode',
     robotId,
     mode,
+    ...(mode === 'autonomous' ? { planId: plan.planId } : {}),
     idempotencyKey: createIdempotencyKey('mode'),
     lockVersion: useControlStore.getState().getControlState(robotId).lockVersion,
   };

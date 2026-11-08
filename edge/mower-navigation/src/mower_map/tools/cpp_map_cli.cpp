@@ -31,6 +31,7 @@ class JsonReader {
 
   struct Request {
     double cell_size_m = 0.20;
+    std::optional<mower_map::GpsCoordinate> start, goal;
     std::vector<mower_map::GpsCoordinate> polygon;
     std::vector<mower_map::GpsCoordinate> obstacles;
     std::vector<std::vector<mower_map::GpsCoordinate>> holes;
@@ -51,6 +52,10 @@ class JsonReader {
       expect(':');
       if (key == "cell_size_m") {
         request.cell_size_m = parseNumber();
+      } else if (key == "start") {
+        request.start = parseGpsCoordinate();
+      } else if (key == "goal") {
+        request.goal = parseGpsCoordinate();
       } else if (key == "polygon") {
         request.polygon = parseGpsArray();
       } else if (key == "obstacles") {
@@ -214,7 +219,7 @@ int main() {
   mower_map::CoveragePlanResult result;
   try {
     result = mower_map::planCoverage(request.polygon, request.obstacles,
-                                     request.cell_size_m, request.holes);
+                                     request.cell_size_m, request.holes, request.start, request.goal);
   } catch (const std::exception& error) {
     std::cerr << "coverage planning failed: " << error.what() << '\n';
     return 1;

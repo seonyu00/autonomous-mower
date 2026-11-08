@@ -10,7 +10,10 @@ import { useZoneStore } from '../zoneStore';
 import { closePolygonVertices, openPolygonVertices } from '../workZoneEditing';
 
 export function WorkZoneEditor() {
-  const selectedRobotId = useRobotStore((state) => state.selectedRobotId);
+  const robotId = useRobotStore((state) => state.selectedRobotId);
+  const area = useZoneStore((state) => state.selectedArea);
+  const setArea = useZoneStore((state) => state.setSelectedArea);
+  const selectedRobotId = robotId ? robotId + (area === 'travel' ? '::travel' : '') : null;
   const zonesByRobotId = useZoneStore((state) => state.zonesByRobotId);
   const versionsByRobotId = useZoneStore((state) => state.versionsByRobotId);
   const draftVerticesByRobotId = useZoneStore((state) => state.draftVerticesByRobotId);
@@ -49,10 +52,12 @@ export function WorkZoneEditor() {
     setSaveMessage(null);
     setConflict(false);
 
-    getWorkZone(selectedRobotId)
+    (area === 'travel' ? getWorkZone(robotId!, 'travel') : getWorkZone(robotId!))
       .then((snapshot) => {
         if (cancelled || useAuthStore.getState().sessionVersion !== sessionVersion) return;
         setZone(selectedRobotId, snapshot.geometry, snapshot.version);
+        if (snapshot.workGeometry) setZone(robotId!, snapshot.workGeometry, snapshot.version);
+        if (snapshot.travelGeometry !== undefined) setZone(robotId! + '::travel', snapshot.travelGeometry, snapshot.version);
         setLoadMessage(snapshot.geometry ? null : '등록된 작업 구역이 없습니다.');
       })
       .catch(() => {
@@ -68,7 +73,7 @@ export function WorkZoneEditor() {
     return () => {
       cancelled = true;
     };
-  }, [selectedRobotId, setZone]);
+  }, [selectedRobotId, robotId, area, setZone]);
 
   const handleSave = async () => {
     if (!selectedRobotId || !polygon || !validation.valid
@@ -80,7 +85,7 @@ export function WorkZoneEditor() {
     const sessionVersion = useAuthStore.getState().sessionVersion;
 
     try {
-      const response = await saveWorkZone(selectedRobotId, polygon, currentVersion);
+      const response = await (area === 'travel' ? saveWorkZone(robotId!, polygon, currentVersion, 'travel') : saveWorkZone(robotId!, polygon, currentVersion));
       if (useAuthStore.getState().sessionVersion !== sessionVersion) return;
       setZone(selectedRobotId, polygon, response.version);
       setConflict(false);
@@ -103,16 +108,18 @@ export function WorkZoneEditor() {
     if (!selectedRobotId) return;
     const sessionVersion = useAuthStore.getState().sessionVersion;
     try {
-      const snapshot = await getWorkZone(selectedRobotId);
+      const snapshot = await (area === 'travel' ? getWorkZone(robotId!, 'travel') : getWorkZone(robotId!));
       if (useAuthStore.getState().sessionVersion !== sessionVersion
-        || useRobotStore.getState().selectedRobotId !== selectedRobotId) return;
+        || useRobotStore.getState().selectedRobotId !== robotId) return;
       // 최신 저장본과 버전만 갱신하고 사용자가 작성한 꼭짓점은 유지한다.
       setZone(selectedRobotId, snapshot.geometry, snapshot.version);
+        if (snapshot.workGeometry) setZone(robotId!, snapshot.workGeometry, snapshot.version);
+        if (snapshot.travelGeometry !== undefined) setZone(robotId! + '::travel', snapshot.travelGeometry, snapshot.version);
       setConflict(false);
       setSaveMessage('최신 작업 구역을 불러왔습니다. 편집 내용은 유지됩니다. 변경 내용을 확인한 뒤 저장하세요.');
     } catch {
       if (useAuthStore.getState().sessionVersion !== sessionVersion
-        || useRobotStore.getState().selectedRobotId !== selectedRobotId) return;
+        || useRobotStore.getState().selectedRobotId !== robotId) return;
       setSaveMessage('최신 작업 구역을 불러오지 못했습니다. 편집 내용은 유지됩니다.');
     }
   };
@@ -122,13 +129,18 @@ export function WorkZoneEditor() {
       <div className="panel-heading compact">
         <div>
           <p className="eyebrow">2단계</p>
-          <h2>작업 구역(Work Zone)</h2>
+          <h2>{area === 'travel' ? '이동 가능 범위' : '작업 구역(Work Zone)'}</h2>
         </div>
         <span className={editing ? 'status-pill degraded' : 'status-pill connected'}>
           {editing ? `편집 중 · ${draftVertices.length}점` : mockMode ? '샘플 모드' : '실제 저장 모드'}
         </span>
       </div>
 
+      <label>편집할 영역 <select value={area} disabled={editing || loading} onChange={(event) => setArea(event.target.value as 'work' | 'travel')}>
+        <option value="work">작업 구역</option><option value="travel">이동 가능 범위</option>
+      </select></label>
+      <p>영역 저장은 현재 주행을 정지시키지 않습니다. 주행 중에는 먼저 현장에서 정지를 확인하세요.</p>
+      {area === 'travel' && <p>작업 구역을 포함하는 이동 가능 범위를 지정하세요. 실제 장애물 확인은 별도로 필요합니다.</p>}
       <p className="muted">
         {editing
           ? '지도에서 꼭짓점을 선택하세요'

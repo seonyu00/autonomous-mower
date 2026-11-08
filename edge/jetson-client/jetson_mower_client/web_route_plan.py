@@ -31,7 +31,7 @@ def prepare_route(response: dict, robot_id: str, version: int, plan_id: str) -> 
     if digest != envelope.get("sha256"):
         raise ValueError("경로 해시가 일치하지 않습니다.")
     data = json.loads(payload)
-    if not isinstance(data, dict) or type(data.get("formatVersion")) is not int or data["formatVersion"] != 1 or data.get("plannerProfile") != "hd7000w-v1":
+    if not isinstance(data, dict) or type(data.get("formatVersion")) is not int or (data["formatVersion"], data.get("plannerProfile")) not in {(1, "hd7000w-v1"), (2, "hd7000w-transit-v1")}:
         raise ValueError("지원하지 않는 경로 형식입니다.")
     zone = prepare({"success": True, "data": data.get("workZone")}, robot_id, version)
     preview = data.get("preview")
@@ -54,13 +54,36 @@ def prepare_route(response: dict, robot_id: str, version: int, plan_id: str) -> 
     polygon, line = Polygon(rings[0], rings[1:]), LineString(coordinates)
     if not polygon.contains(line) or polygon.boundary.intersects(line):
         raise ValueError("경로가 작업 구역을 벗어납니다.")
-    west, south, east, north = polygon.bounds
     north_scale = 6378137 * math.pi / 180
-    east_scale = north_scale * math.cos(math.radians((south + north) / 2))
-    def to_meters(geometry):
-        return scale(translate(geometry, xoff=-west, yoff=-south), xfact=east_scale, yfact=north_scale, origin=(0, 0))
+    def to_meters(geometry, reference=polygon):
+        w, s, e, n = reference.bounds
+        x_scale = north_scale * math.cos(math.radians((s + n) / 2))
+        return scale(translate(geometry, xoff=-w, yoff=-s), xfact=x_scale, yfact=north_scale, origin=(0, 0))
     if to_meters(line).distance(to_meters(polygon.boundary)) <= math.hypot(1.150, 1.030) / 2:
         raise ValueError("차체 경계 여유가 부족합니다.")
+    transit = preview.get("transitPath", [])
+    if not isinstance(transit, list):
+        raise ValueError("진입 경로가 유효하지 않습니다.")
+    if data["formatVersion"] == 2:
+        travel_zone = data["workZone"].get("travelZone")
+        travel_data = {**data["workZone"], "zone": travel_zone}
+        travel_prepared = prepare({"success": True, "data": travel_data}, robot_id, version)
+        travel_rings = travel_prepared["zone"]["geometry"]["coordinates"]
+        travel_polygon = Polygon(travel_rings[0], travel_rings[1:])
+        if not travel_polygon.covers(polygon) or not 2 <= len(transit) <= 20000:
+            raise ValueError("이동 가능 범위와 진입 경로가 필요합니다.")
+        entry_points = []
+        for point in transit:
+            if not isinstance(point, dict) or any(type(point.get(k)) not in (int, float) or not math.isfinite(point[k]) for k in ("lat", "lon")):
+                raise ValueError("진입 좌표가 유효하지 않습니다.")
+            entry_points.append((point["lon"], point["lat"]))
+        entry_line = LineString(entry_points)
+        if entry_points[-1] != coordinates[0] or not travel_polygon.contains(entry_line) or travel_polygon.boundary.intersects(entry_line):
+            raise ValueError("진입 경로가 작업 경로와 연결되지 않거나 범위를 벗어납니다.")
+        if to_meters(entry_line, travel_polygon).distance(to_meters(travel_polygon.boundary, travel_polygon)) <= math.hypot(1.150, 1.030) / 2:
+            raise ValueError("진입 경로의 차체 여유가 부족합니다.")
+    elif transit:
+        raise ValueError("이 형식은 진입 경로를 지원하지 않습니다.")
     # 서버의 원문 문자열과 해시를 그대로 보존해 좌표를 다시 계산·축약하지 않는다.
     return {"status": "route_prepared", "robotId": robot_id, "zoneId": zone["zoneId"],
             "version": version, "planId": plan_id, "sha256": digest, "payload": payload}

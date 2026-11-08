@@ -51,6 +51,21 @@ public class CppPreviewService {
             Point origin = readPoint(output.path("origin"));
             List<Point> path = new ArrayList<>();
             for (JsonNode point : output.path("path")) path.add(readPoint(point));
+            List<Point> transit = new ArrayList<>();
+            if (request.start() != null) {
+                if (zone.travelZone() == null || path.isEmpty() || !validPoint(request.start().lat(), request.start().lon())) throw new BusinessException(ErrorCode.CPP_INPUT_INVALID);
+                var travel = polygons.toPolygon(zone.travelZone());
+                if (!travel.covers(polygons.toPolygon(zone.zone()))) throw new BusinessException(ErrorCode.CPP_INPUT_INVALID);
+                var travelRings = validatePolygon(zone.travelZone(), request.cellSizeM());
+                byte[] routeInput = json.writeValueAsBytes(Map.of("polygon", travelRings.getFirst(), "holes", travelRings.subList(1, travelRings.size()),
+                        "cell_size_m", request.cellSizeM(), "start", request.start(), "goal", path.getFirst()));
+                var entry = json.reader().with(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(runner.run(routeInput));
+                if (entry == null || !entry.path("path").isArray() || entry.path("path").size() < 2 || entry.path("path").size() > 20000) throw new BusinessException(ErrorCode.CPP_OUTPUT_INVALID);
+                for (var point : entry.path("path")) transit.add(readPoint(point));
+                if (!transit.getFirst().equals(request.start()) || !transit.getLast().equals(path.getFirst())) throw new BusinessException(ErrorCode.CPP_OUTPUT_INVALID);
+                var entryLine = travel.getFactory().createLineString(transit.stream().map(p -> new Coordinate(p.lon(),p.lat())).toArray(Coordinate[]::new));
+                if (!travel.contains(entryLine) || travel.getBoundary().intersects(entryLine)) throw new BusinessException(ErrorCode.CPP_OUTPUT_INVALID);
+            }
             // CLI 결과도 저장 다각형으로 재확인해 점 사이의 경계 횡단을 막는다.
             var polygon = polygons.toPolygon(zone.zone());
             var factory = polygon.getFactory();
@@ -69,7 +84,7 @@ public class CppPreviewService {
                 throw new BusinessException(ErrorCode.WORK_ZONE_CONFLICT);
             }
             return new CppPreviewResponse(robotId, zone.zoneId(), zone.version(), request.cellSizeM(),
-                    rows, columns, origin, List.copyOf(path));
+                    rows, columns, origin, List.copyOf(path), List.copyOf(transit));
         } catch (IOException exception) {
             throw new BusinessException(ErrorCode.CPP_OUTPUT_INVALID);
         }

@@ -125,7 +125,9 @@ void validateRings(const std::vector<Ring>& rings) {
 CoveragePlanResult planCoverage(const std::vector<GpsCoordinate>& polygon,
                                  const std::vector<GpsCoordinate>& obstacles,
                                  double cell_size_m,
-                                 const std::vector<std::vector<GpsCoordinate>>& holes) {
+                                 const std::vector<std::vector<GpsCoordinate>>& holes,
+                                 std::optional<GpsCoordinate> transit_start, std::optional<GpsCoordinate> transit_goal) {
+  if (transit_start.has_value() != transit_goal.has_value()) throw std::invalid_argument("start and goal required together");
   if (polygon.size() < 3) {
     throw std::invalid_argument("polygon must have at least 3 vertices");
   }
@@ -219,8 +221,16 @@ CoveragePlanResult planCoverage(const std::vector<GpsCoordinate>& polygon,
     allowed[i] = map.canPlaceMower(cell(i)) && hasBodyClearance(points[i], points[i], rings, obstacle_points);
   }
   std::vector<CellIndex> targets;
-  for (const auto target : map.coveragePath()) {
-    if (allowed[index(target)]) targets.push_back(target);
+  if (transit_start) {
+    for (auto p : {*transit_start, *transit_goal}) {
+      project(p);
+      auto c = map.cellForGps(p);
+      if (!c || !allowed[index(*c)] || !pointInPolygon(project(p), rings.front()) ||
+          !hasBodyClearance(project(p), points[index(*c)], rings, obstacle_points)) throw std::invalid_argument("entry point not traversable");
+      targets.push_back(*c);
+    }
+  } else {
+    for (const auto target : map.coveragePath()) if (allowed[index(target)]) targets.push_back(target);
   }
   if (targets.empty()) return result;
   // 점뿐 아니라 이동 선분 전체에서도 차체 외접원이 경계·장애물에 닿지 않아야 한다.
@@ -260,7 +270,7 @@ CoveragePlanResult planCoverage(const std::vector<GpsCoordinate>& polygon,
   const auto start = index(targets.front());
   search(start, start, true);
   for (std::size_t i = 0; i < count; ++i) {
-    if (allowed[i] && visited[i] != generation) {
+    if (!transit_start && allowed[i] && visited[i] != generation) {
       throw std::invalid_argument("work zone has disconnected traversable areas");
     }
   }
@@ -268,6 +278,7 @@ CoveragePlanResult planCoverage(const std::vector<GpsCoordinate>& polygon,
   for (std::size_t t = 1; t < targets.size(); ++t) {
     const auto goal = index(targets[t]);
     search(route.back(), goal, false);
+    if (visited[goal] != generation) throw std::invalid_argument("no connected entry route");
     std::vector<std::size_t> connection;
     for (auto i = goal; i != route.back(); i = parent[i]) connection.push_back(i);
     route.insert(route.end(), connection.rbegin(), connection.rend());
@@ -285,7 +296,9 @@ CoveragePlanResult planCoverage(const std::vector<GpsCoordinate>& polygon,
     }
     compact.push_back(i);
   }
+  if (transit_start) result.path.push_back(*transit_start);
   for (auto i : compact) result.path.push_back(map.gpsForCell(cell(i)));
+  if (transit_goal) result.path.push_back(*transit_goal);
   return result;
 }
 

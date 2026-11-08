@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import type { LngLat, PolygonGeometry } from './geojson';
 
 type ZoneStore = {
+  reviewedPlans: Record<string, { planId: string; version: number }>;
+  selectedArea: 'work' | 'travel';
+  setSelectedArea: (area: 'work' | 'travel') => void;
   mapReady: boolean;
   setMapReady: (ready: boolean) => void;
   zonesByRobotId: Record<string, PolygonGeometry | null>;
@@ -19,6 +22,9 @@ type ZoneStore = {
 };
 
 export const useZoneStore = create<ZoneStore>((set) => ({
+  reviewedPlans: {},
+  selectedArea: 'work',
+  setSelectedArea: (selectedArea) => set({ selectedArea }),
   mapReady: false,
   setMapReady: (mapReady) => set({ mapReady }),
   zonesByRobotId: {},
@@ -34,6 +40,7 @@ export const useZoneStore = create<ZoneStore>((set) => ({
       versionsByRobotId: {
         ...state.versionsByRobotId,
         [robotId]: version,
+        [robotId.endsWith('::travel') ? robotId.slice(0, -8) : robotId + '::travel']: version,
       },
     })),
   startEditing: (robotId, vertices = []) =>

@@ -7,6 +7,8 @@ import jakarta.validation.constraints.PositiveOrZero;
 
 public record CppPreviewRequest(
         @NotNull @PositiveOrZero Integer expectedVersion,
-        @NotNull @DecimalMin("0.2") @DecimalMax("0.65") Double cellSizeM
+        @NotNull @DecimalMin("0.2") @DecimalMax("0.65") Double cellSizeM,
+        CppPreviewResponse.Point start
 ) {
+    public CppPreviewRequest(Integer expectedVersion, Double cellSizeM) { this(expectedVersion, cellSizeM, null); }
 }

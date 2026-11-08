@@ -28,6 +28,7 @@ export type ManualCommand = {
 
 export type ModeCommand = {
   action: 'change-mode';
+  planId?: string;
   robotId: string;
   mode: ControlMode;
   idempotencyKey?: string;
