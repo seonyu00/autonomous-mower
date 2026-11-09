@@ -42,7 +42,7 @@ class ManualSerialBridgeTest(unittest.TestCase):
         self.assertTrue(bridge.arm("epoch", 1.1))
         self.assertTrue(bridge.command("epoch", "press-1", "forward", 1, 1.2))
         bridge.tick(1.3)
-        self.assertEqual(port.sent[-1], encode_packet(1, 1800, 1800))
+        self.assertEqual(port.sent[-1], encode_packet(1, 1600, 1600))
         port.incoming.extend(b"Remote active: 1 (hold remaining=5000ms)\r\n")
         bridge.tick(1.4)
         self.assertEqual(port.sent[-1], encode_packet(0, 1500, 1500))

@@ -70,7 +70,7 @@ class ManualSerialClientTest(TestCase):
         }}
         self.node._handle_manual(movement, "now")
         self.node._tick_manual_serial()
-        self.assertEqual(port.sent[-1], encode_packet(1, 1800, 1800))
+        self.assertEqual(port.sent[-1], encode_packet(1, 1600, 1600))
         self.node._handle_stop({"parameters": {"armId": "arm", "pressId": "press"}}, "now")
         self.assertEqual(port.sent[-1], encode_packet(0, 1500, 1500))
         self.node._handle_manual(movement, "now")

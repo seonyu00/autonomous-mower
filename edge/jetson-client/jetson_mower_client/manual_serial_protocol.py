@@ -2,9 +2,11 @@
 
 import math
 
+MAX_PWM_DELTA = 100
+
 
 def encode_packet(mode: int, left: int, right: int) -> bytes:
-    if mode not in (0, 1) or not all(1000 <= value <= 2000 for value in (left, right)):
+    if mode not in (0, 1) or not all(1500 - MAX_PWM_DELTA <= value <= 1500 + MAX_PWM_DELTA for value in (left, right)):
         raise ValueError("잘못된 모드 또는 바퀴 명령")
     body = f"{mode},{left},{right},0"
     checksum = 0
@@ -16,7 +18,7 @@ def encode_packet(mode: int, left: int, right: int) -> bytes:
 def manual_wheels(direction: str, speed: float) -> tuple[int, int]:
     if not math.isfinite(speed) or not 0 <= speed <= 1:
         raise ValueError("잘못된 속도")
-    delta = round(speed * 300)
+    delta = min(round(speed * 300), MAX_PWM_DELTA)
     directions = {
         "forward": (delta, delta),
         "backward": (-delta, -delta),
