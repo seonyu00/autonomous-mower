@@ -7,6 +7,7 @@ import com.autonomousmower.control.dto.ClaimControlRequest;
 import com.autonomousmower.control.dto.ControlCommandResponse;
 import com.autonomousmower.control.dto.EmergencyStopRequest;
 import com.autonomousmower.control.dto.ManualCommandRequest;
+import com.autonomousmower.control.dto.ManualRearmRequest;
 import com.autonomousmower.control.dto.MowerAttachmentCommandRequest;
 import com.autonomousmower.control.dto.ReleaseControlRequest;
 import com.autonomousmower.control.dto.ResetAfterEmergencyRequest;
@@ -88,6 +89,16 @@ public class ControlController {
             @AuthenticationPrincipal SecurityUser user
     ) {
         return ApiResponse.success(controlCommandService.manual(robotId, request, user));
+    }
+
+    @PostMapping("/manual/rearm")
+    @PreAuthorize("hasAuthority('control:write')")
+    public ApiResponse<ControlCommandResponse> rearmManual(
+            @PathVariable String robotId,
+            @Valid @RequestBody ManualRearmRequest request,
+            @AuthenticationPrincipal SecurityUser user
+    ) {
+        return ApiResponse.success(controlCommandService.rearmManual(robotId, request, user));
     }
 
     @PostMapping("/mode")

@@ -12,6 +12,12 @@ public record ManualCommandRequest(
         @DecimalMin("0.0") @DecimalMax("1.0") double speed,
         @NotBlank String idempotencyKey,
         long lockVersion,
-        Instant clientSentAt
+        Instant clientSentAt,
+        String armId,
+        String pressId
 ) {
+    public ManualCommandRequest(String action, String robotId, String direction, double speed,
+            String idempotencyKey, long lockVersion, Instant clientSentAt) {
+        this(action, robotId, direction, speed, idempotencyKey, lockVersion, clientSentAt, null, null);
+    }
 }

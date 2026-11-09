@@ -17,9 +17,10 @@ from std_msgs.msg import Bool, Int8
 
 from .command_ack import publish_command_ack
 from .autonomy import AutonomyExecution
-from .command_mapping import TwistCommand, is_stale_client_command, manual_to_twist
+from .command_mapping import TwistCommand, is_stale_client_command, manual_to_twist, parse_iso_utc
 from .config import EdgeConfig, load_config
 from .hardware_safety import publish_emergency_stop_outputs
+from .manual_serial_bridge import ManualSerialBridge
 from .mqtt_edge import MqttEdgeClient
 from .topics import MowerTopics, command_type_from_topic
 from .telemetry import build_telemetry_payload
@@ -30,7 +31,8 @@ class JetsonMowerClientNode(Node):
         super().__init__("jetson_mower_client")
         self._config = config
         self._topics = MowerTopics(config.robot_id)
-        self._mqtt = MqttEdgeClient(config, self._topics, self._handle_mqtt_message, self.get_logger().info)
+        self._mqtt = MqttEdgeClient(config, self._topics, self._handle_mqtt_message, self.get_logger().info,
+                                    on_disconnect=self._disarm_manual_serial)
         self._emergency_active = False
         self._error_observer_session = str(uuid4())
         self._mode: str | None = None
@@ -43,6 +45,14 @@ class JetsonMowerClientNode(Node):
         self._autonomy = AutonomyExecution(config.autonomy_command)
         # GPS·주행 준비 확인 어댑터가 연결되기 전에는 실행을 허용하지 않는다.
         self._autonomy_ready: bool | None = None
+        self._manual_serial = None
+        self._manual_serial_device = None
+        if config.manual_serial_port:
+            import serial
+            self._manual_serial_device = serial.Serial(
+                config.manual_serial_port, 115200, timeout=0, write_timeout=0.2, exclusive=True,
+            )
+            self._manual_serial = ManualSerialBridge(self._manual_serial_device)
 
         self._cmd_vel_publisher = self.create_publisher(Twist, config.ros.cmd_vel_topic, _cmd_vel_qos(config))
         self._mower_set_mode_publisher = self.create_publisher(Int8, config.ros.mower_set_mode_topic, 10)
@@ -54,6 +64,8 @@ class JetsonMowerClientNode(Node):
         self.create_timer(config.ros.status_publish_period_seconds, self._publish_status)
         self.create_timer(0.1, self._check_manual_timeout)
         self.create_timer(0.1, self._autonomy.poll)
+        if self._manual_serial is not None:
+            self.create_timer(0.1, self._tick_manual_serial)
 
     def start(self) -> None:
         self._mqtt.connect()
@@ -65,6 +77,8 @@ class JetsonMowerClientNode(Node):
             self._autonomy.stop()
         finally:
             self._mqtt.disconnect()
+            if self._manual_serial_device is not None:
+                self._manual_serial_device.close()
 
     def _handle_fix(self, message: NavSatFix) -> None:
         self._latest_fix = message
@@ -93,7 +107,9 @@ class JetsonMowerClientNode(Node):
             return
 
         try:
-            if command_type == "manual-command":
+            if command_type == "manual-rearm":
+                self._handle_manual_rearm(command, received_at)
+            elif command_type == "manual-command":
                 self._handle_manual(command, received_at)
             elif command_type == "stop":
                 self._handle_stop(command, received_at)
@@ -120,6 +136,26 @@ class JetsonMowerClientNode(Node):
 
         parameters = _parameters(command)
         self._stop_autonomy()
+        if self._manual_serial is not None:
+            input_time = parse_iso_utc(command.get("clientSentAt")) if isinstance(command.get("clientSentAt"), str) else None
+            input_age = (datetime.now(timezone.utc) - input_time).total_seconds() if input_time else None
+            if input_age is None or not 0 <= input_age < self._config.ros.manual_timeout_ms / 1000:
+                self._manual_serial.disarm()
+                self._publish_ack(command, "manual-command", "rejected", "manual-input-time-invalid", received_at)
+                return
+            try:
+                speed = float(parameters.get("speed", 0))
+            except (ValueError, TypeError):
+                self._manual_serial.disarm()
+                self._publish_ack(command, "manual-command", "rejected", "invalid-speed", received_at)
+                return
+            accepted = self._manual_serial.command(
+                str(parameters.get("armId") or ""), str(parameters.get("pressId") or ""),
+                str(parameters.get("direction") or "stop"), speed, time.monotonic(), input_age,
+            )
+            self._publish_ack(command, "manual-command", "accepted" if accepted else "rejected",
+                              None if accepted else "manual-not-armed", received_at)
+            return
         twist = manual_to_twist(
             parameters,
             max_linear_mps=self._config.ros.max_linear_mps,
@@ -132,23 +168,31 @@ class JetsonMowerClientNode(Node):
         self._publish_ack(command, "manual-command", "accepted", None, received_at)
 
     def _handle_stop(self, command: dict[str, Any], received_at: str) -> None:
-        self._publish_zero_twist()
+        serial_sent = True
+        if self._manual_serial is None:
+            self._publish_zero_twist()
+        else:
+            parameters = _parameters(command)
+            self._manual_serial.stop(parameters.get("armId"), parameters.get("pressId"))
+            serial_sent = self._tick_manual_serial()
         self._stop_autonomy()
         if not self._emergency_active:
             self._mode = "idle"
             self._work_state = "idle"
         self._last_manual_command_monotonic = None
-        self._publish_ack(command, "stop", "accepted", None, received_at)
+        self._publish_ack(command, "stop", "accepted" if serial_sent else "rejected",
+                          None if serial_sent else "manual-serial-failed", received_at)
         self._publish_status()
 
     def _handle_estop(self, command: dict[str, Any], received_at: str) -> None:
-        self._publish_emergency_stop_outputs()
+        serial_sent = self._publish_emergency_stop_outputs()
         self._emergency_active = True
         self._mode = "emergency"
         self._work_state = "error"
         self._last_manual_command_monotonic = None
         self._stop_autonomy()
-        self._publish_ack(command, "emergency-stop", "accepted", None, received_at)
+        self._publish_ack(command, "emergency-stop", "rejected" if serial_sent is False else "accepted",
+                          "manual-serial-failed" if serial_sent is False else None, received_at)
         self._publish_status()
 
     def _handle_mode(self, command: dict[str, Any], received_at: str) -> None:
@@ -159,11 +203,17 @@ class JetsonMowerClientNode(Node):
         if mode not in {"idle", "manual", "autonomous", "home"}:
             raise ValueError("invalid-mode")
         if mode == "autonomous":
+            if self._manual_serial is not None:
+                self._publish_ack(command, "change-mode", "rejected", "manual-serial-active", received_at)
+                return
             reason = self._autonomy.request_start(self._autonomy_ready)
             # 프로세스 생성은 실제 주행 시작 확인이나 완료 응답이 아니다.
             self._publish_ack(command, "change-mode", "accepted" if reason == "autonomy-process-started" else "rejected", reason, received_at)
             self._publish_status()
             return
+        if self._manual_serial is not None:
+            self._manual_serial.disarm()
+            self._tick_manual_serial()
         self._stop_autonomy()
         self._mode = mode
         self._work_state = "returning-home" if mode == "home" else "idle"
@@ -173,6 +223,9 @@ class JetsonMowerClientNode(Node):
     def _handle_attachment(self, command: dict[str, Any], received_at: str) -> None:
         if self._emergency_active:
             self._publish_ack(command, "mower-attachment", "rejected", "emergency-active", received_at)
+            return
+        if self._manual_serial is not None:
+            self._publish_ack(command, "mower-attachment", "rejected", "attachment-not-connected", received_at)
             return
         action = str(_parameters(command).get("attachmentAction", ""))
         if action not in {"blade-start", "blade-stop", "raise", "lower"}:
@@ -205,9 +258,17 @@ class JetsonMowerClientNode(Node):
         self._cmd_vel_publisher.publish(message)
 
     def _publish_zero_twist(self) -> None:
+        if self._manual_serial is not None:
+            self._manual_serial.disarm()
+            self._tick_manual_serial()
+            return
         self._publish_twist(TwistCommand())
 
-    def _publish_emergency_stop_outputs(self) -> None:
+    def _publish_emergency_stop_outputs(self) -> bool | None:
+        if self._manual_serial is not None:
+            # 시리얼 전환은 현장 리모컨 경로를 차단하지 않는다.
+            self._manual_serial.disarm()
+            return self._tick_manual_serial()
         # 하드웨어 브릿지 E-Stop 순서:
         # 1. 주행 속도를 먼저 0으로 만들고, 2. STM32 브릿지 상태 머신을 EMERGENCY로 전환한 뒤,
         # 3. 엔진 릴레이를 강제로 차단한다. 이후 엔진 상태를 자동 복구하면 안 된다.
@@ -219,6 +280,45 @@ class JetsonMowerClientNode(Node):
             Int8,
             Bool,
         )
+
+    def _handle_manual_rearm(self, command: dict[str, Any], received_at: str) -> None:
+        # 재전달된 오래된 재개 요청은 새 사용자 의사로 해석하지 않는다.
+        sent = command.get("clientSentAt")
+        arm_id = command.get("commandId")
+        sent_at = parse_iso_utc(sent) if isinstance(sent, str) else None
+        age = (datetime.now(timezone.utc) - sent_at).total_seconds() if sent_at is not None else None
+        if (self._emergency_active or self._manual_serial is None or not self._mqtt.is_connected()
+                or age is None or not 0 <= age <= 2
+                or not isinstance(arm_id, str) or not arm_id):
+            self._publish_ack(command, "manual-rearm", "rejected", "manual-rearm-unavailable", received_at)
+            return
+        accepted = self._manual_serial.arm(arm_id, time.monotonic())
+        self._publish_ack(command, "manual-rearm", "accepted" if accepted else "rejected",
+                          None if accepted else "remote-status-unavailable", received_at)
+        self._publish_status()
+
+    def _tick_manual_serial(self) -> bool:
+        if self._manual_serial is None:
+            return False
+        if self._manual_serial.failed:
+            return False
+        if not self._mqtt.is_connected() or self._emergency_active:
+            self._manual_serial.disarm()
+        try:
+            was_armed = self._manual_serial.armed
+            self._manual_serial.tick(time.monotonic())
+            if was_armed and not self._manual_serial.armed and self._mqtt.is_connected():
+                self._publish_status()
+            return True
+        except (OSError, ValueError):
+            self.get_logger().error("수동 시리얼 통신 실패: 재개 요청을 차단합니다.")
+            if self._mqtt.is_connected():
+                self._publish_status()
+            return False
+
+    def _disarm_manual_serial(self) -> None:
+        if self._manual_serial is not None:
+            self._manual_serial.disarm()
 
     def _publish_ack(
         self,
@@ -273,12 +373,14 @@ class JetsonMowerClientNode(Node):
 
     def _publish_status(self) -> None:
         self._autonomy.poll()
+        serial_state = None if self._manual_serial is None else (
+            "manual-serial-ready" if self._manual_serial.armed else "manual-serial-locked")
         payload = {
             "robotId": self._config.robot_id,
             "connectionState": "degraded" if self._emergency_active else "online",
             "mqttState": "connected",
             "edgeState": "emergency" if self._emergency_active else (
-                "autonomy-" + self._autonomy.state if self._autonomy.run_id is not None else self._mode or "connected"),
+                serial_state or ("autonomy-" + self._autonomy.state if self._autonomy.run_id is not None else self._mode or "connected")),
             "lastSeenAt": utc_now(),
             "stale": False,
         }

@@ -131,6 +131,7 @@ class AutonomyTest(unittest.TestCase):
         node = client.JetsonMowerClientNode.__new__(client.JetsonMowerClientNode)
         node._autonomy = AutonomyExecution([sys.executable, str(MOCK)])
         node._autonomy_ready = None
+        node._manual_serial = None
         node._emergency_active = False
         node._publish_ack = MagicMock()
         node._publish_status = MagicMock()

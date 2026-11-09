@@ -1006,3 +1006,10 @@ CPP 생성 요청의 선택적 `start:{lat,lon}`은 검토용 시작 좌표이�
 웹은 작업 구역·이동 가능 범위를 선택해 편집하고 이동 가능 범위와 진입 경로를 주황색으로 구분한다. 두 영역 중 하나라도 편집 중이면 예정 경로 생성과 AUTO 요청을 막는다. 시작 위치는 검토용 입력이며 실제 AUTO에서는 현재 GPS·측정 시각·위치 오차를 별도로 확인해야 한다.
 
 모드 요청에 선택적 planId를 추가하고 웹은 확인한 예정 경로의 ID를 AUTO 요청에 넣는다. 서버는 autonomous에서 경로 ID가 없으면 CPP_INPUT_INVALID, 기존 구역과 다르면 WORK_ZONE_CONFLICT로 거부한다. 현재 실제 주행 준비 확인 어댑터가 없어 유효 경로라도 AUTONOMY_READINESS_UNCONFIRMED(409)로 거부하고 상태 변경·MQTT 발행 전에 종료한다. 파일 준비 보고를 실제 주행 준비로 승격하지 않는다. 기존 AUTO 요청도 경로 ID 없이 시작할 수 없으므로 웹·서버·CLI·Jetson 코드를 함께 검토해 배포한다.
+# 수동 시리얼 조작 재개와 입력 식별자 (개발 중)
+
+`POST /api/control/{robotId}/manual/rearm`은 `control:write`, 현재 제어권과 `lockVersion`을 확인하고 `manual-rearm`을 기존 mode MQTT 토픽에 보낸다. 요청의 `robotId`, `idempotencyKey`, `lockVersion`, `clientSentAt`이 필요하다. HTTP 성공은 발행 접수이며 Jetson 수신이나 물리 동작 확인이 아니다. 장비의 해당 commandId `edge-ack`을 받은 뒤에만 웹 방향 버튼을 활성화한다.
+
+수동 이동과 포인터 해제 stop에는 재개 요청의 commandId인 `armId`와 해당 누름의 `pressId`를 전달한다. 새 시리얼 어댑터는 정지된 누름과 다른 재개 세대의 늦은 명령을 거부한다. 식별자가 없는 일반 정지·타임아웃은 전체 재개 상태를 해제한다. 기존 MQTT 경로의 ROS 브리지는 새 필드를 사용하지 않으며, 시리얼 모드가 명시적으로 설정되지 않은 장비는 재개 요청을 거부한다.
+
+이 기능은 실제 Jetson 배포·리모컨 개입·시리얼 단절·웹 조작 및 현장 물리 검증이 아직 완료되지 않았다. 웹의 정지·비상 정지는 현장 리모컨 자체의 구동 차단을 보장하지 않는다.

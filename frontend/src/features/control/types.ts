@@ -7,6 +7,7 @@ export type ControlCommandType =
   | 'takeover-control'
   | 'change-mode'
   | 'manual-command'
+  | 'manual-rearm'
   | 'stop'
   | 'emergency-stop'
   | 'reset-after-emergency'
@@ -24,6 +25,8 @@ export type ManualCommand = {
   idempotencyKey?: string;
   lockVersion?: number;
   clientSentAt?: string;
+  armId?: string;
+  pressId?: string;
 };
 
 export type ModeCommand = {
@@ -51,6 +54,8 @@ export type StopCommand = {
   idempotencyKey?: string;
   lockVersion?: number;
   reason?: string;
+  armId?: string;
+  pressId?: string;
 };
 
 export type ControlCommandPayload = ManualCommand | ModeCommand | MowerAttachmentCommand | StopCommand;

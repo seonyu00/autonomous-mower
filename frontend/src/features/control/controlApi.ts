@@ -92,7 +92,16 @@ export async function sendManualCommand(robotId: string, command: ManualCommand)
   return requestControlCommand(robotId, 'manual-command', `/api/control/${robotId}/manual`, commandWithDefaults);
 }
 
-export async function sendStopCommand(robotId: string, options: { allowUnselected?: boolean } = {}) {
+export async function rearmManual(robotId: string) {
+  requireCanControl(robotId);
+  return requestControlCommand(robotId, 'manual-rearm', `/api/control/${robotId}/manual/rearm`, {
+    robotId,
+    lockVersion: useControlStore.getState().getControlState(robotId).lockVersion,
+    clientSentAt: new Date().toISOString(),
+  });
+}
+
+export async function sendStopCommand(robotId: string, options: { allowUnselected?: boolean; armId?: string; pressId?: string } = {}) {
   const eligibility = canSendStopCommand(robotId, options.allowUnselected);
 
   if (!eligibility.allowed) {
@@ -106,6 +115,7 @@ export async function sendStopCommand(robotId: string, options: { allowUnselecte
     speed: 0,
     idempotencyKey: createIdempotencyKey('stop'),
     lockVersion: useControlStore.getState().getControlState(robotId).lockVersion,
+    ...(options.armId && options.pressId ? { armId: options.armId, pressId: options.pressId } : {}),
   };
   useControlStore.getState().patchControlState(robotId, {
     lastCommandPayload: command,

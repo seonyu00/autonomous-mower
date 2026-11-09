@@ -73,6 +73,7 @@ class EdgeConfig:
     ros: RosConfig
     telemetry: TelemetryConfig
     autonomy_command: tuple[str, ...] = ()
+    manual_serial_port: str | None = None
 
 
 def load_config(path: str | Path) -> EdgeConfig:
@@ -87,7 +88,15 @@ def load_config(path: str | Path) -> EdgeConfig:
         ros=_ros_config(raw.get("ros") or {}),
         telemetry=_telemetry_config(raw.get("telemetry") or {}),
         autonomy_command=_autonomy_command(raw.get("autonomy") or {}),
+        manual_serial_port=_manual_serial_port(raw.get("manual_serial") or {}),
     )
+
+
+def _manual_serial_port(raw: dict[str, Any]) -> str | None:
+    port = _optional_string(raw.get("port"))
+    if port is not None and not port.startswith("/dev/"):
+        raise ValueError("manual_serial.port는 /dev/ 아래 장치 경로여야 합니다.")
+    return port
 
 
 def _mqtt_config(raw: dict[str, Any], robot_id: str) -> MqttConfig:

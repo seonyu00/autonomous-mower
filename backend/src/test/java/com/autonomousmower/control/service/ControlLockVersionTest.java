@@ -44,12 +44,25 @@ class ControlLockVersionTest {
     @Test
     void staleVersionsNeverReachTransportOrReleaseOwnership() {
         assertConflict(() -> commands.manual("A", manual(0), owner));
+        assertConflict(() -> commands.rearmManual("A", new ManualRearmRequest("A", "arm", 0, Instant.now()), owner));
         assertConflict(() -> commands.stop("A", new StopCommandRequest("stop", "A", "stop", 0, "stop-key", 0, "test"), owner));
         assertConflict(() -> commands.changeMode("A", new ChangeModeRequest("change-mode", "A", "manual", "mode", 0), owner));
         assertConflict(() -> commands.attachment("A", new MowerAttachmentCommandRequest("mower-attachment", "A", "raise", "attachment", 0), owner));
         assertConflict(() -> locks.release("A", new ReleaseControlRequest("release", 0), owner));
         assertThat(store.stateFor("A").snapshot().lockVersion()).isEqualTo(version);
         verifyNoInteractions(mqtt);
+    }
+
+    @Test
+    void rearmRequiresOwnerAndPublishesExplicitCommand() {
+        var other = SecurityUser.from("other", "Other", RoleName.ADMIN);
+        var request = new ManualRearmRequest("A", "arm", version, Instant.now());
+        assertThatThrownBy(() -> commands.rearmManual("A", request, other)).isInstanceOf(BusinessException.class);
+        verifyNoInteractions(mqtt);
+        var result = commands.rearmManual("A", request, owner);
+        verify(mqtt).publishModeCommand(argThat(payload ->
+                payload.commandType().equals("manual-rearm") && payload.commandId().equals(result.commandId())
+                        && payload.lockVersion() == version && payload.clientSentAt() != null));
     }
 
     @Test

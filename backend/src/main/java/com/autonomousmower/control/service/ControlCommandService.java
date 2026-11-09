@@ -6,6 +6,7 @@ import com.autonomousmower.common.exception.ErrorCode;
 import com.autonomousmower.control.dto.ChangeModeRequest;
 import com.autonomousmower.control.dto.ControlCommandResponse;
 import com.autonomousmower.control.dto.ManualCommandRequest;
+import com.autonomousmower.control.dto.ManualRearmRequest;
 import com.autonomousmower.control.dto.MowerAttachmentCommandRequest;
 import com.autonomousmower.control.dto.StopCommandRequest;
 import com.autonomousmower.control.model.ControlLockSnapshot;
@@ -68,10 +69,37 @@ public class ControlCommandService {
                     user.getAdminId(),
                     requestedAt,
                     "normal",
-                    Map.of("direction", request.direction(), "speed", request.speed())
+                    manualParameters(request)
             ));
             return response;
         }
+    }
+
+    public ControlCommandResponse rearmManual(String robotId, ManualRearmRequest request, SecurityUser user) {
+        controlRobotGuard.requireKnownRobot(robotId);
+        validateRobotId(robotId, request.robotId());
+        Instant requestedAt = Instant.now();
+        ControlStateStore.MutableControlState state = controlStateStore.stateFor(robotId);
+        synchronized (state) {
+            state.requireOwner(user.getAdminId());
+            state.requireNotEmergency();
+            state.requireVersion(request.lockVersion());
+            ControlCommandResponse response = responseFactory.accepted("manual-rearm", state.snapshot(), requestedAt);
+            mqttCommandPublisher.publishModeCommand(new MqttCommandPayload(
+                    response.commandId(), robotId, response.commandType(), request.idempotencyKey(),
+                    request.lockVersion(), request.clientSentAt(), user.getAdminId(), requestedAt,
+                    "normal", Map.of()));
+            return response;
+        }
+    }
+
+    private Map<String, Object> manualParameters(ManualCommandRequest request) {
+        Map<String, Object> result = new java.util.HashMap<>();
+        result.put("direction", request.direction());
+        result.put("speed", request.speed());
+        if (request.armId() != null) result.put("armId", request.armId());
+        if (request.pressId() != null) result.put("pressId", request.pressId());
+        return result;
     }
 
     public ControlCommandResponse changeMode(String robotId, ChangeModeRequest request, SecurityUser user) {
@@ -159,7 +187,7 @@ public class ControlCommandService {
                     user.getAdminId(),
                     requestedAt,
                     "stop",
-                    Map.of("reason", request.reason() == null ? "operator-stop" : request.reason(), "speed", 0)
+                    stopParameters(request)
             ));
             return response;
         }
@@ -169,6 +197,15 @@ public class ControlCommandService {
         if (!pathRobotId.equals(payloadRobotId)) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
+    }
+
+    private Map<String, Object> stopParameters(StopCommandRequest request) {
+        Map<String, Object> result = new java.util.HashMap<>();
+        result.put("reason", request.reason() == null ? "operator-stop" : request.reason());
+        result.put("speed", 0);
+        if (request.armId() != null) result.put("armId", request.armId());
+        if (request.pressId() != null) result.put("pressId", request.pressId());
+        return result;
     }
 
     private void validateAllowed(String value, Set<String> allowedValues) {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRobotStore } from '../robots/robotStore';
-import { ControlPrecheckError, sendManualCommand, sendStopCommand } from './controlApi';
+import { ControlPrecheckError, rearmManual, sendManualCommand, sendStopCommand } from './controlApi';
 import { canControlRobot } from './controlSelectors';
 import { useAuthStore } from '../auth/authStore';
 import { useTelemetryStore } from '../telemetry/telemetryStore';
@@ -26,11 +26,16 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
   const selectedRobotId = useRobotStore((state) => state.selectedRobotId);
   const controlByRobotId = useControlStore((state) => state.controlByRobotId);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [armId, setArmId] = useState<string | null>(null);
+  const [armConfirmedAt, setArmConfirmedAt] = useState<string | null>(null);
+  const [pendingArmId, setPendingArmId] = useState<string | null>(null);
+  const [rearmInFlight, setRearmInFlight] = useState(false);
   const sessionVersion = useAuthStore((state) => state.sessionVersion);
   useAuthStore((state) => state.user);
   useAuthStore((state) => state.isAuthenticated);
   useTelemetryStore((state) => state.connectionState);
   useTelemetryStore((state) => state.protocolState);
+  const edgeStatus = useTelemetryStore((state) => selectedRobotId ? state.statusByRobotId[selectedRobotId] : undefined);
   const manualInFlight = useRef(false);
   const stopInFlight = useRef(false);
   const inputRef = useRef<{
@@ -42,8 +47,80 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
     ? controlByRobotId[selectedRobotId] ?? createDefaultControlState(selectedRobotId)
     : null;
   const eligibility = selectedRobotId ? canControlRobot(selectedRobotId) : { allowed: false, reasons: ['robot-not-selected'] };
-  const disabled = !selectedRobotId || !eligibility.allowed;
+  const disabled = !selectedRobotId || !eligibility.allowed || !armId;
   const disabledReason = eligibility.reasons[0] ? formatControlReason(eligibility.reasons[0]) : null;
+
+  useEffect(() => {
+    setArmId(null);
+    setArmConfirmedAt(null);
+    setPendingArmId(null);
+  }, [selectedRobotId, sessionVersion]);
+
+  useEffect(() => {
+    if (!eligibility.allowed) {
+      setArmId(null);
+      setArmConfirmedAt(null);
+      setPendingArmId(null);
+    }
+  }, [eligibility.allowed]);
+
+  useEffect(() => {
+    if (!pendingArmId) return;
+    const timeout = window.setTimeout(() => {
+      setPendingArmId(null);
+      setLocalError('장비의 재개 응답이 없습니다. 연결과 리모컨 상태를 확인해 주세요.');
+    }, 5000);
+    return () => window.clearTimeout(timeout);
+  }, [pendingArmId]);
+
+  const event = controlState?.lastCommandEvent;
+  useEffect(() => {
+    if (!event) return;
+    if (pendingArmId && event.commandId === pendingArmId) {
+      if (event.status === 'edge-ack' && event.edgeAckAt) {
+        setArmId(pendingArmId);
+        setArmConfirmedAt(event.edgeAckAt);
+        setPendingArmId(null);
+      } else if (event.status === 'failed' || event.status === 'rejected' || event.status === 'edge-timeout') {
+        setPendingArmId(null);
+        setLocalError('장비가 수동 조작 재개를 확인하지 못했습니다. 리모컨 상태를 확인해 주세요.');
+      }
+    }
+    if (event.commandType === 'manual-command' && event.status === 'failed' &&
+        ['manual-not-armed', 'manual-input-time-invalid', 'stale-command', 'invalid-speed'].includes(event.reason ?? '')) {
+      inputRef.current?.stop();
+      setArmId(null);
+      setArmConfirmedAt(null);
+      setLocalError('리모컨 우선 또는 연결 문제로 수동 조작이 잠겼습니다. 상태를 확인한 후 다시 재개해 주세요.');
+    }
+  }, [event, pendingArmId]);
+
+  useEffect(() => {
+    if (armId && armConfirmedAt && edgeStatus?.edgeState === 'manual-serial-locked' && edgeStatus.lastSeenAt &&
+        Date.parse(edgeStatus.lastSeenAt) >= Date.parse(armConfirmedAt)) {
+      inputRef.current?.stop();
+      setArmId(null);
+      setArmConfirmedAt(null);
+      setLocalError('리모컨 개입 또는 통신 문제로 수동 조작이 잠겼습니다. 확인 후 다시 재개해 주세요.');
+    }
+  }, [armId, armConfirmedAt, edgeStatus]);
+
+  const requestRearm = async () => {
+    if (!selectedRobotId || !eligibility.allowed || pendingArmId || rearmInFlight) return;
+    setArmId(null);
+    setArmConfirmedAt(null);
+    setLocalError(null);
+    setRearmInFlight(true);
+    try {
+      const result = await rearmManual(selectedRobotId);
+      if (!result.commandId) throw new Error('장비 응답을 확인할 수 없습니다.');
+      setPendingArmId(result.commandId);
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : '재개 요청을 처리하지 못했습니다.');
+    } finally {
+      setRearmInFlight(false);
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -56,11 +133,11 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
         ? error.reasons.map(formatControlReason).join(' ')
         : error instanceof Error ? error.message : '수동 명령을 처리하지 못했습니다.');
     };
-    const requestStop = async () => {
+    const requestStop = async (command?: ManualCommand) => {
       if (!selectedRobotId || stopInFlight.current || !currentSession()) return;
       stopInFlight.current = true;
       try {
-        await sendStopCommand(selectedRobotId, { allowUnselected: true });
+        await sendStopCommand(selectedRobotId, { allowUnselected: true, armId: command?.armId, pressId: command?.pressId });
       } catch (error) {
         reportError(error);
       } finally {
@@ -69,10 +146,11 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
     };
     const stop = (pointerId?: number) => {
       if (!input || (pointerId !== undefined && input.pointerId !== pointerId)) return;
+      const stopped = input.command;
       input = null;
       window.clearInterval(timer);
       timer = undefined;
-      void requestStop();
+      void requestStop(stopped);
     };
     const tick = async () => {
       if (!input || !selectedRobotId) return;
@@ -92,20 +170,27 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
       } finally {
         manualInFlight.current = false;
         // 먼저 보낸 이동 요청이 늦게 끝난 경우 정지를 한 번 더 시도한다.
-        if (!input) void requestStop();
+        if (!input) void requestStop(sent.command);
       }
     };
     inputRef.current = {
       start: (direction, speed, pointerId) => {
-        if (disabled || !selectedRobotId || !canControlRobot(selectedRobotId).allowed) return;
+        if (!selectedRobotId || !canControlRobot(selectedRobotId).allowed) return;
         if (direction === 'stop') {
           if (input) stop();
-          else void requestStop();
+          else {
+            setArmId(null);
+            setArmConfirmedAt(null);
+            void requestStop();
+          }
           return;
         }
+        if (disabled) return;
+        if (input) return;
         if (stopInFlight.current || (!input && manualInFlight.current)) return;
         setLocalError(null);
-        input = { command: { action: 'manual', robotId: selectedRobotId, direction, speed }, pointerId };
+        const pressId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        input = { command: { action: 'manual', robotId: selectedRobotId, direction, speed, armId: armId ?? undefined, pressId }, pointerId };
         if (timer === undefined) timer = window.setInterval(() => void tick(), INPUT_INTERVAL_MS);
         void tick();
       },
@@ -131,7 +216,7 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
       window.removeEventListener('beforeunload', stopAll);
       document.removeEventListener('visibilitychange', visibility);
     };
-  }, [selectedRobotId, disabled, sessionVersion]);
+  }, [selectedRobotId, disabled, sessionVersion, armId]);
 
   return (
     <div className={compact ? 'manual-joystick compact' : 'manual-joystick'} aria-label="수동 조이스틱 제어">
@@ -145,13 +230,18 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
         </span>
       </div>
 
+      <button type="button" onClick={() => void requestRearm()} disabled={!eligibility.allowed || Boolean(pendingArmId) || rearmInFlight}>
+        {pendingArmId ? '장비 응답 대기 중' : armId ? '수동 조작 다시 준비' : '수동 조작 재개'}
+      </button>
+      <p className="muted">리모컨 조작이 끝나고 안전을 확인한 뒤 재개하세요. 방향 버튼은 누르는 동안에만 작동합니다.</p>
+
       <div className="joystick-grid" aria-disabled={disabled}>
         {directionButtons.map((item) => (
           <button
             key={item.direction}
             className={`joystick-button ${item.direction}`}
             type="button"
-            disabled={disabled}
+            disabled={item.direction === 'stop' ? !eligibility.allowed : disabled}
             aria-label={`수동 ${item.label}`}
             onPointerDown={(event) => {
               if (event.button !== 0) return;

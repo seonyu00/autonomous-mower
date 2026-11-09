@@ -17,12 +17,13 @@ LogHandler = Callable[[str], None]
 
 class MqttEdgeClient:
     def __init__(self, config: EdgeConfig, topics: MowerTopics, on_message: MessageHandler, log: LogHandler,
-                 *, subscribe_commands: bool = True) -> None:
+                 *, subscribe_commands: bool = True, on_disconnect: Callable[[], None] | None = None) -> None:
         self._config = config
         self._topics = topics
         self._on_message = on_message
         self._log = log
         self._subscribe_commands = subscribe_commands
+        self._on_disconnect = on_disconnect
         self._client = mqtt.Client(client_id=config.mqtt.client_id, clean_session=True)
 
         if config.mqtt.username:
@@ -72,6 +73,8 @@ class MqttEdgeClient:
                 self._log(f"mqtt subscribed topic={topic} qos={qos}")
 
     def _handle_disconnect(self, _client: mqtt.Client, _userdata: Any, rc: int) -> None:
+        if self._on_disconnect is not None:
+            self._on_disconnect()
         self._log(f"mqtt disconnected rc={rc}")
 
     def _handle_message(self, _client: mqtt.Client, _userdata: Any, message: mqtt.MQTTMessage) -> None:
