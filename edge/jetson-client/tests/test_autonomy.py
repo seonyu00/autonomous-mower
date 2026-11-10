@@ -85,6 +85,7 @@ class AutonomyTest(unittest.TestCase):
     def test_estop_latches_before_process_cleanup_failure(self):
         client = load_client()
         node = client.JetsonMowerClientNode.__new__(client.JetsonMowerClientNode)
+        node._manual_challenge = MagicMock()
         node._publish_emergency_stop_outputs = MagicMock()
         node._autonomy = MagicMock()
         node._autonomy.stop.side_effect = OSError()
@@ -129,6 +130,7 @@ class AutonomyTest(unittest.TestCase):
     def test_mode_handler_uses_existing_command_and_never_accepts_missing_readiness(self):
         client = load_client()
         node = client.JetsonMowerClientNode.__new__(client.JetsonMowerClientNode)
+        node._manual_challenge = MagicMock()
         node._autonomy = AutonomyExecution([sys.executable, str(MOCK)])
         node._autonomy_ready = None
         node._manual_serial = None

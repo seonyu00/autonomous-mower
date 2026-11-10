@@ -28,6 +28,11 @@ class ManualSerialBridge:
         with self._lock:
             return self._state.armed and not self._failed
 
+    @property
+    def remote_active(self) -> bool:
+        with self._lock:
+            return self._state.remote_active or self._failed
+
     def command(self, arm_id: str, press_id: str, direction: str, speed: float, now: float, input_age: float = 0) -> bool:
         with self._lock:
             return not self._failed and self._state.command(arm_id, press_id, direction, speed, now, input_age)

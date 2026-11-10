@@ -88,7 +88,7 @@ public class ControlCommandService {
             mqttCommandPublisher.publishModeCommand(new MqttCommandPayload(
                     response.commandId(), robotId, response.commandType(), request.idempotencyKey(),
                     request.lockVersion(), request.clientSentAt(), user.getAdminId(), requestedAt,
-                    "normal", Map.of()));
+                    "normal", request.challenge() == null ? Map.of() : Map.of("challenge", request.challenge())));
             return response;
         }
     }
@@ -99,6 +99,7 @@ public class ControlCommandService {
         result.put("speed", request.speed());
         if (request.armId() != null) result.put("armId", request.armId());
         if (request.pressId() != null) result.put("pressId", request.pressId());
+        if (request.challenge() != null) result.put("challenge", request.challenge());
         return result;
     }
 

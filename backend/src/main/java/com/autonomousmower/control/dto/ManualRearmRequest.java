@@ -8,5 +8,10 @@ public record ManualRearmRequest(
         @NotBlank String robotId,
         @NotBlank String idempotencyKey,
         long lockVersion,
-        @NotNull Instant clientSentAt
-) {}
+        @NotNull Instant clientSentAt,
+        String challenge
+) {
+    public ManualRearmRequest(String robotId, String idempotencyKey, long lockVersion, Instant clientSentAt) {
+        this(robotId, idempotencyKey, lockVersion, clientSentAt, null);
+    }
+}

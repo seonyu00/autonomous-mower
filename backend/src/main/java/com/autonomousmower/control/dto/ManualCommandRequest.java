@@ -14,10 +14,16 @@ public record ManualCommandRequest(
         long lockVersion,
         Instant clientSentAt,
         String armId,
-        String pressId
+        String pressId,
+        String challenge
 ) {
     public ManualCommandRequest(String action, String robotId, String direction, double speed,
             String idempotencyKey, long lockVersion, Instant clientSentAt) {
-        this(action, robotId, direction, speed, idempotencyKey, lockVersion, clientSentAt, null, null);
+        this(action, robotId, direction, speed, idempotencyKey, lockVersion, clientSentAt, null, null, null);
+    }
+
+    public ManualCommandRequest(String action, String robotId, String direction, double speed,
+            String idempotencyKey, long lockVersion, Instant clientSentAt, String armId, String pressId) {
+        this(action, robotId, direction, speed, idempotencyKey, lockVersion, clientSentAt, armId, pressId, null);
     }
 }

@@ -1008,6 +1008,12 @@ CPP 생성 요청의 선택적 `start:{lat,lon}`은 검토용 시작 좌표이�
 모드 요청에 선택적 planId를 추가하고 웹은 확인한 예정 경로의 ID를 AUTO 요청에 넣는다. 서버는 autonomous에서 경로 ID가 없으면 CPP_INPUT_INVALID, 기존 구역과 다르면 WORK_ZONE_CONFLICT로 거부한다. 현재 실제 주행 준비 확인 어댑터가 없어 유효 경로라도 AUTONOMY_READINESS_UNCONFIRMED(409)로 거부하고 상태 변경·MQTT 발행 전에 종료한다. 파일 준비 보고를 실제 주행 준비로 승격하지 않는다. 기존 AUTO 요청도 경로 ID 없이 시작할 수 없으므로 웹·서버·CLI·Jetson 코드를 함께 검토해 배포한다.
 # 수동 시리얼 조작 재개와 입력 식별자 (개발 중)
 
+`POST /api/control/{robotId}/manual/challenge`는 `control:write`와 현재 제어권·버전을 확인하고 MQTT 발행이 완료된 뒤 Jetson의 일회용 확인값을 최대 1초 기다린다. MQTT 발행 자체의 대기 시간은 별도다. 재개 요청은 `{lockVersion,purpose:"rearm"}`, 방향 입력은 `{lockVersion,purpose:"movement",armId,pressId,direction,speed}`를 보낸다. 응답은 `{challenge}`이며 서버는 응답 직전에 제어권을 다시 확인한다. 확인값은 재개 또는 동일한 방향 입력에만 사용하고 화면이나 로그에 표시하지 않는다.
+
+웹은 재개 버튼을 누르거나 방향 버튼을 누르고 있는 동안에만 확인값을 요청한다. 방향 버튼 해제·세션 종료·제어권 상실 후 도착한 확인값은 버린다. 재개와 이동 요청에 `challenge`를 전달하면 Jetson은 발급부터 수신까지 자신의 단조 시계 경과 시간을 검사한다. 재개는 2초 미만, 이동은 350ms 미만이며 이동의 남은 입력 수명에도 그 경과 시간을 반영한다. 값은 한 번만 사용할 수 있고 로봇·사용자·제어권 버전·입력 값과 결합된다.
+
+웹·서버·Jetson은 함께 배포해야 한다. 이전 클라이언트가 확인값 없이 보내는 명령은 기존 절대 시각 검사로 처리하며, 새 웹은 확인값이 없으면 이동 명령을 보내지 않는다. 지연이 크면 안전을 위해 거부된다. 실제 장비와 종단 지연·물리 정지 검증은 미완료다.
+
 `POST /api/control/{robotId}/manual/rearm`은 `control:write`, 현재 제어권과 `lockVersion`을 확인하고 `manual-rearm`을 기존 mode MQTT 토픽에 보낸다. 요청의 `robotId`, `idempotencyKey`, `lockVersion`, `clientSentAt`이 필요하다. HTTP 성공은 발행 접수이며 Jetson 수신이나 물리 동작 확인이 아니다. 장비의 해당 commandId `edge-ack`을 받은 뒤에만 웹 방향 버튼을 활성화한다.
 
 수동 이동과 포인터 해제 stop에는 재개 요청의 commandId인 `armId`와 해당 누름의 `pressId`를 전달한다. 새 시리얼 어댑터는 정지된 누름과 다른 재개 세대의 늦은 명령을 거부한다. 식별자가 없는 일반 정지·타임아웃은 전체 재개 상태를 해제한다. 기존 MQTT 경로의 ROS 브리지는 새 필드를 사용하지 않으며, 시리얼 모드가 명시적으로 설정되지 않은 장비는 재개 요청을 거부한다.

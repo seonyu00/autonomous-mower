@@ -20,7 +20,7 @@ class ChallengeScope:
     speed: float | None = None
 
     def valid(self) -> bool:
-        if (self.purpose not in {"rearm", "movement"}
+        if (not isinstance(self.purpose, str) or self.purpose not in {"rearm", "movement"}
                 or not isinstance(self.robot_id, str) or not self.robot_id
                 or not isinstance(self.operator_id, str) or not self.operator_id
                 or not isinstance(self.lock_version, int) or isinstance(self.lock_version, bool)
@@ -30,7 +30,7 @@ class ChallengeScope:
             return all(value is None for value in (self.arm_id, self.press_id, self.direction, self.speed))
         return (isinstance(self.arm_id, str) and bool(self.arm_id)
                 and isinstance(self.press_id, str) and bool(self.press_id)
-                and self.direction in {"forward", "reverse", "left", "right"}
+                and isinstance(self.direction, str) and self.direction in {"forward", "reverse", "left", "right"}
                 and isinstance(self.speed, (float, int)) and not isinstance(self.speed, bool)
                 and 0 < self.speed <= 1)
 

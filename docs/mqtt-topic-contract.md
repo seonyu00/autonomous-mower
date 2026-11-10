@@ -36,6 +36,12 @@
 
 ## Command Payload
 
+### 수동 조작 확인값 (개발 중)
+
+서버는 기존 `commands/mode`에 QoS 0의 `manual-challenge`를 보낸다. `parameters`에 재개 목적 또는 이동 목적과 재개·누름 식별자, 방향 및 속도를 포함한다. Jetson은 기존 `commands/ack`에 QoS 1로 `{robotId,commandId,commandType:"manual-challenge",challenge}`를 발행한다. 서버는 대기 중인 동일 로봇과 요청 ID만 연결하고 확인값을 명령 이력이나 로그에 저장하지 않는다. retain은 사용하지 않는다.
+
+재개·이동 명령의 `parameters.challenge`이 존재하면 Jetson은 일회용 확인값과 발급 시 결합한 로봇·조작자·제어권 버전·입력 범위 및 발급 후 단조 시간으로 검사한다. 재개는 2초 미만, 이동은 350ms 미만이다. 정지·비상 정지·MQTT 단절 및 리모컨 활성 상태 관측 시 확인값을 무효화한다. 재개 및 이동에 확인값이 없으면 아래의 기존 시각 검사로 처리한다. 실장비 적용과 종단 지연은 미검증이다.
+
 All backend-to-edge command messages use the same envelope:
 
 ```json
@@ -62,7 +68,7 @@ Field policy:
 | `commandType` | yes | One of `manual-command`, `stop`, `emergency-stop`, `change-mode`, `mower-attachment`. |
 | `idempotencyKey` | manual/stop/mode/attachment/estop yes, deadman stop may be null | Originates from frontend REST command where available. Jetson must use `(robotId, idempotencyKey)` to ignore duplicate QoS 1 deliveries when the value is present. |
 | `lockVersion` | manual/stop/mode/attachment yes, estop/deadman may be null | Control lock version observed by backend when command was accepted. Jetson must reject stale normal commands if it tracks a newer lock version. E-Stop ignores lock version. |
-| `clientSentAt` | manual yes, others may be null | Frontend timestamp for latency/staleness checks. Manual commands older than 500 ms at Jetson receive time must be ignored and converted to a local stop. |
+| `clientSentAt` | manual yes, others may be null | 확인값이 없는 기존 수동 명령의 시각 유효성을 검사한다. 확인값을 사용하는 시리얼 수동 명령은 Jetson의 단조 시간으로 확인값의 발급 후 경과 시간을 검사한다. |
 | `requestedBy` | yes | Backend account id or `system` for server-generated deadman stop. |
 | `requestedAt` | yes | Backend acceptance/publish time. |
 | `priority` | yes | `normal`, `stop`, or `emergency`. |

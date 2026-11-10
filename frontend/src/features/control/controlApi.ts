@@ -85,19 +85,29 @@ export async function sendManualCommand(robotId: string, command: ManualCommand)
     clientSentAt: command.clientSentAt ?? new Date().toISOString(),
   };
   useControlStore.getState().recordManualInput(robotId);
+  const visibleCommand = { ...commandWithDefaults };
+  delete visibleCommand.challenge;
   useControlStore.getState().patchControlState(robotId, {
-    lastCommandPayload: commandWithDefaults,
+    lastCommandPayload: visibleCommand,
   });
 
   return requestControlCommand(robotId, 'manual-command', `/api/control/${robotId}/manual`, commandWithDefaults);
 }
 
-export async function rearmManual(robotId: string) {
+export async function requestManualChallenge(robotId: string, scope: Record<string, unknown>) {
+  requireCanControl(robotId);
+  return httpClient.post<{ challenge: string }>(`/api/control/${robotId}/manual/challenge`, {
+    ...scope, lockVersion: useControlStore.getState().getControlState(robotId).lockVersion,
+  });
+}
+
+export async function rearmManual(robotId: string, challenge?: string) {
   requireCanControl(robotId);
   return requestControlCommand(robotId, 'manual-rearm', `/api/control/${robotId}/manual/rearm`, {
     robotId,
     lockVersion: useControlStore.getState().getControlState(robotId).lockVersion,
     clientSentAt: new Date().toISOString(),
+    challenge,
   });
 }
 

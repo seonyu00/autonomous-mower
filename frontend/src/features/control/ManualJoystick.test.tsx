@@ -5,13 +5,14 @@ import { useRobotStore } from '../robots/robotStore';
 import { useTelemetryStore } from '../telemetry/telemetryStore';
 import { useControlStore } from './controlStore';
 import { ManualJoystick } from './ManualJoystick';
-import { rearmManual, sendManualCommand, sendStopCommand } from './controlApi';
+import { rearmManual, requestManualChallenge, sendManualCommand, sendStopCommand } from './controlApi';
 
 vi.mock('./controlApi', async (original) => ({
   ...await original<typeof import('./controlApi')>(),
   sendManualCommand: vi.fn(),
   sendStopCommand: vi.fn(),
   rearmManual: vi.fn(),
+  requestManualChallenge: vi.fn(),
 }));
 
 const manual = vi.mocked(sendManualCommand);
@@ -36,6 +37,7 @@ describe('ManualJoystick 입력 수명', () => {
     manual.mockReset().mockResolvedValue({} as Awaited<ReturnType<typeof sendManualCommand>>);
     stop.mockReset().mockResolvedValue({} as Awaited<ReturnType<typeof sendStopCommand>>);
     rearm.mockReset().mockResolvedValue({ commandId: 'arm-1' } as Awaited<ReturnType<typeof rearmManual>>);
+    vi.mocked(requestManualChallenge).mockReset().mockResolvedValue({ challenge: 'example' });
     // jsdom의 PointerEvent 지원 여부와 무관하게 포인터 ID를 전달한다.
     vi.stubGlobal('PointerEvent', class extends MouseEvent {
       pointerId: number;
@@ -205,6 +207,7 @@ describe('ManualJoystick 입력 수명', () => {
     render(<ManualJoystick />);
     await makeReady();
     press();
+    await advance(0);
     fireEvent.pointerUp(window, { pointerId: 1 });
     await advance(1000);
     expect(stop).toHaveBeenCalledTimes(1);
@@ -212,5 +215,18 @@ describe('ManualJoystick 입력 수명', () => {
     await advance(1000);
     expect(stop).toHaveBeenCalledTimes(2);
     expect(manual).toHaveBeenCalledTimes(1);
+  });
+
+  it('버튼을 놓은 뒤 확인값이 와도 이동을 보내지 않는다', async () => {
+    let resolve!: (result: { challenge: string }) => void;
+    render(<ManualJoystick />);
+    await makeReady();
+    vi.mocked(requestManualChallenge).mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+    press();
+    fireEvent.pointerUp(window, { pointerId: 1 });
+    await act(async () => resolve({ challenge: 'late' }));
+    await advance(500);
+    expect(manual).not.toHaveBeenCalled();
+    expect(stop).toHaveBeenCalled();
   });
 });

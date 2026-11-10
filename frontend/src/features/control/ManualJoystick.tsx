@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRobotStore } from '../robots/robotStore';
-import { ControlPrecheckError, rearmManual, sendManualCommand, sendStopCommand } from './controlApi';
+import { ControlPrecheckError, rearmManual, requestManualChallenge, sendManualCommand, sendStopCommand } from './controlApi';
 import { canControlRobot } from './controlSelectors';
 import { useAuthStore } from '../auth/authStore';
 import { useTelemetryStore } from '../telemetry/telemetryStore';
@@ -87,7 +87,7 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
       }
     }
     if (event.commandType === 'manual-command' && event.status === 'failed' &&
-        ['manual-not-armed', 'manual-input-time-invalid', 'stale-command', 'invalid-speed'].includes(event.reason ?? '')) {
+        ['manual-not-armed', 'manual-input-time-invalid', 'manual-challenge-invalid', 'stale-command', 'invalid-speed'].includes(event.reason ?? '')) {
       inputRef.current?.stop();
       setArmId(null);
       setArmConfirmedAt(null);
@@ -112,7 +112,13 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
     setLocalError(null);
     setRearmInFlight(true);
     try {
-      const result = await rearmManual(selectedRobotId);
+      const version = useControlStore.getState().getControlState(selectedRobotId).lockVersion;
+      const { challenge } = await requestManualChallenge(selectedRobotId, { purpose: 'rearm' });
+      if (useRobotStore.getState().selectedRobotId !== selectedRobotId ||
+          useAuthStore.getState().sessionVersion !== sessionVersion ||
+          useControlStore.getState().getControlState(selectedRobotId).lockVersion !== version ||
+          !canControlRobot(selectedRobotId).allowed) return;
+      const result = await rearmManual(selectedRobotId, challenge);
       if (!result.commandId) throw new Error('장비 응답을 확인할 수 없습니다.');
       setPendingArmId(result.commandId);
     } catch (error) {
@@ -163,7 +169,12 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
       const sent = input;
       manualInFlight.current = true;
       try {
-        await sendManualCommand(selectedRobotId, sent.command);
+        const { challenge } = await requestManualChallenge(selectedRobotId, {
+          purpose: 'movement', armId: sent.command.armId, pressId: sent.command.pressId,
+          direction: sent.command.direction, speed: sent.command.speed,
+        });
+        if (!alive || input !== sent || !currentSession() || !canControlRobot(selectedRobotId).allowed) return;
+        await sendManualCommand(selectedRobotId, { ...sent.command, challenge });
       } catch (error) {
         reportError(error);
         stop();

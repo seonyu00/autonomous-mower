@@ -21,6 +21,7 @@ from .command_mapping import TwistCommand, is_stale_client_command, manual_to_tw
 from .config import EdgeConfig, load_config
 from .hardware_safety import publish_emergency_stop_outputs
 from .manual_serial_bridge import ManualSerialBridge
+from .manual_challenge import ChallengeScope, ManualChallenge
 from .mqtt_edge import MqttEdgeClient
 from .topics import MowerTopics, command_type_from_topic
 from .telemetry import build_telemetry_payload
@@ -46,6 +47,7 @@ class JetsonMowerClientNode(Node):
         # GPS·주행 준비 확인 어댑터가 연결되기 전에는 실행을 허용하지 않는다.
         self._autonomy_ready: bool | None = None
         self._manual_serial = None
+        self._manual_challenge = ManualChallenge()
         self._manual_serial_device = None
         if config.manual_serial_port:
             import serial
@@ -107,7 +109,9 @@ class JetsonMowerClientNode(Node):
             return
 
         try:
-            if command_type == "manual-rearm":
+            if command_type == "manual-challenge":
+                self._handle_manual_challenge(command)
+            elif command_type == "manual-rearm":
                 self._handle_manual_rearm(command, received_at)
             elif command_type == "manual-command":
                 self._handle_manual(command, received_at)
@@ -129,16 +133,24 @@ class JetsonMowerClientNode(Node):
             self._publish_ack(command, "manual-command", "rejected", "emergency-active", received_at)
             return
 
-        if is_stale_client_command(command.get("clientSentAt"), self._config.ros.manual_timeout_ms):
+        parameters = _parameters(command)
+        token = parameters.get("challenge")
+        challenge_age = None
+        if token is not None and self._manual_serial is not None:
+            challenge_age = self._consume_challenge(command, "movement", 350_000_000)
+            if challenge_age is None:
+                self._publish_zero_twist()
+                self._publish_ack(command, "manual-command", "rejected", "manual-challenge-invalid", received_at)
+                return
+        elif is_stale_client_command(command.get("clientSentAt"), self._config.ros.manual_timeout_ms):
             self._publish_zero_twist()
             self._publish_ack(command, "manual-command", "rejected", "stale-command", received_at)
             return
 
-        parameters = _parameters(command)
         self._stop_autonomy()
         if self._manual_serial is not None:
             input_time = parse_iso_utc(command.get("clientSentAt")) if isinstance(command.get("clientSentAt"), str) else None
-            input_age = (datetime.now(timezone.utc) - input_time).total_seconds() if input_time else None
+            input_age = challenge_age if token is not None else ((datetime.now(timezone.utc) - input_time).total_seconds() if input_time else None)
             if input_age is None or not 0 <= input_age < self._config.ros.manual_timeout_ms / 1000:
                 self._manual_serial.disarm()
                 self._publish_ack(command, "manual-command", "rejected", "manual-input-time-invalid", received_at)
@@ -168,6 +180,7 @@ class JetsonMowerClientNode(Node):
         self._publish_ack(command, "manual-command", "accepted", None, received_at)
 
     def _handle_stop(self, command: dict[str, Any], received_at: str) -> None:
+        self._manual_challenge.invalidate()
         serial_sent = True
         if self._manual_serial is None:
             self._publish_zero_twist()
@@ -185,6 +198,7 @@ class JetsonMowerClientNode(Node):
         self._publish_status()
 
     def _handle_estop(self, command: dict[str, Any], received_at: str) -> None:
+        self._manual_challenge.invalidate()
         serial_sent = self._publish_emergency_stop_outputs()
         self._emergency_active = True
         self._mode = "emergency"
@@ -196,6 +210,7 @@ class JetsonMowerClientNode(Node):
         self._publish_status()
 
     def _handle_mode(self, command: dict[str, Any], received_at: str) -> None:
+        self._manual_challenge.invalidate()
         if self._emergency_active:
             self._publish_ack(command, "change-mode", "rejected", "emergency-active", received_at)
             return
@@ -287,8 +302,11 @@ class JetsonMowerClientNode(Node):
         arm_id = command.get("commandId")
         sent_at = parse_iso_utc(sent) if isinstance(sent, str) else None
         age = (datetime.now(timezone.utc) - sent_at).total_seconds() if sent_at is not None else None
+        token = _parameters(command).get("challenge")
+        valid_time = (self._consume_challenge(command, "rearm", 2_000_000_000) is not None
+                      if token is not None else age is not None and 0 <= age <= 2)
         if (self._emergency_active or self._manual_serial is None or not self._mqtt.is_connected()
-                or age is None or not 0 <= age <= 2
+                or not valid_time
                 or not isinstance(arm_id, str) or not arm_id):
             self._publish_ack(command, "manual-rearm", "rejected", "manual-rearm-unavailable", received_at)
             return
@@ -307,6 +325,8 @@ class JetsonMowerClientNode(Node):
         try:
             was_armed = self._manual_serial.armed
             self._manual_serial.tick(time.monotonic())
+            if self._manual_serial.remote_active:
+                self._manual_challenge.invalidate()
             if was_armed and not self._manual_serial.armed and self._mqtt.is_connected():
                 self._publish_status()
             return True
@@ -317,8 +337,30 @@ class JetsonMowerClientNode(Node):
             return False
 
     def _disarm_manual_serial(self) -> None:
+        self._manual_challenge.invalidate()
         if self._manual_serial is not None:
             self._manual_serial.disarm()
+
+    def _challenge_scope(self, command: dict[str, Any], purpose: str) -> ChallengeScope:
+        params = _parameters(command)
+        return ChallengeScope(purpose, command.get("robotId"), command.get("requestedBy"), command.get("lockVersion"),
+                              params.get("armId"), params.get("pressId"), params.get("direction"), params.get("speed"))
+
+    def _consume_challenge(self, command: dict[str, Any], purpose: str, max_age_ns: int) -> float | None:
+        age = self._manual_challenge.consume(_parameters(command).get("challenge"),
+                                             self._challenge_scope(command, purpose), time.monotonic_ns(), max_age_ns)
+        return None if age is None else age / 1_000_000_000
+
+    def _handle_manual_challenge(self, command: dict[str, Any]) -> None:
+        purpose = _parameters(command).get("purpose")
+        scope = self._challenge_scope(command, purpose)
+        if self._emergency_active or self._manual_serial is None or not self._mqtt.is_connected() or not scope.valid():
+            return
+        token = self._manual_challenge.issue(scope, time.monotonic_ns())
+        self._mqtt.publish_json(self._topics.command_ack, {
+            "robotId": self._config.robot_id, "commandId": command.get("commandId"),
+            "commandType": "manual-challenge", "challenge": token,
+        }, qos=1)
 
     def _publish_ack(
         self,

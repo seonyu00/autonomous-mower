@@ -7,6 +7,7 @@ from test_autonomy import load_client
 from test_manual_serial_bridge import SerialStub
 from jetson_mower_client.manual_serial_bridge import ManualSerialBridge
 from jetson_mower_client.manual_serial_protocol import encode_packet
+from jetson_mower_client.manual_challenge import ManualChallenge
 
 
 class ManualSerialClientTest(TestCase):
@@ -14,16 +15,46 @@ class ManualSerialClientTest(TestCase):
         client = load_client()
         self.node = client.JetsonMowerClientNode.__new__(client.JetsonMowerClientNode)
         self.node._manual_serial = MagicMock()
+        self.node._manual_challenge = ManualChallenge()
+        self.node._topics = MagicMock()
+        self.node._config = MagicMock()
+        self.node._config.robot_id = "robot"
         self.node._manual_serial.arm.return_value = True
         self.node._manual_serial.command.return_value = True
         self.node._mqtt = MagicMock()
         self.node._mqtt.is_connected.return_value = True
-        self.node._config = MagicMock()
         self.node._config.ros.manual_timeout_ms = 500
         self.node._publish_ack = MagicMock()
         self.node._publish_status = MagicMock()
         self.node._stop_autonomy = MagicMock()
         self.node._emergency_active = False
+
+    def test_challenge_rearm_and_move_ignore_wall_clock_and_prevent_replay(self):
+        envelope = {"robotId": "robot", "requestedBy": "operator", "lockVersion": 1}
+        self.node._handle_manual_challenge({**envelope, "commandId": "request", "parameters": {"purpose": "rearm"}})
+        token = self.node._mqtt.publish_json.call_args.args[1]["challenge"]
+        self.node._handle_manual_rearm({**envelope, "commandId": "arm", "clientSentAt": "2099-01-01T00:00:00Z",
+                                      "parameters": {"challenge": token}}, "now")
+        self.assertEqual(self.node._publish_ack.call_args.args[2], "accepted")
+        params = {"purpose": "movement", "armId": "arm", "pressId": "press", "direction": "forward", "speed": 0.5}
+        self.node._handle_manual_challenge({**envelope, "commandId": "request2", "parameters": params})
+        token = self.node._mqtt.publish_json.call_args.args[1]["challenge"]
+        command = {**envelope, "clientSentAt": "2099-01-01T00:00:00Z", "parameters": {**params, "challenge": token}}
+        self.node._handle_manual(command, "now")
+        self.assertEqual(self.node._publish_ack.call_args.args[2], "accepted")
+        self.node._handle_manual(command, "now")
+        self.assertEqual(self.node._publish_ack.call_args.args[2:4], ("rejected", "manual-challenge-invalid"))
+
+    def test_stop_invalidates_outstanding_movement_challenge(self):
+        envelope = {"robotId": "robot", "requestedBy": "operator", "lockVersion": 1}
+        params = {"purpose": "movement", "armId": "arm", "pressId": "press", "direction": "forward", "speed": 0.5}
+        self.node._handle_manual_challenge({**envelope, "commandId": "request", "parameters": params})
+        token = self.node._mqtt.publish_json.call_args.args[1]["challenge"]
+        self.node._tick_manual_serial = MagicMock(return_value=True)
+        self.node._handle_stop({"parameters": {"armId": "arm", "pressId": "press"}}, "now")
+        self.node._handle_manual({**envelope, "parameters": {**params, "challenge": token}}, "now")
+        self.assertEqual(self.node._publish_ack.call_args.args[2:4], ("rejected", "manual-challenge-invalid"))
+        self.node._manual_serial.command.assert_not_called()
 
     def test_fresh_rearm_then_manual_carries_arm_and_press_ids(self):
         command = {"commandId": "arm", "clientSentAt": datetime.now(timezone.utc).isoformat()}

@@ -16,6 +16,8 @@ import com.autonomousmower.control.dto.TakeoverControlRequest;
 import com.autonomousmower.control.model.ControlLockSnapshot;
 import com.autonomousmower.control.service.ControlCommandService;
 import com.autonomousmower.control.service.ControlLockService;
+import com.autonomousmower.control.service.ManualChallengeService;
+import java.util.Map;
 import com.autonomousmower.control.service.EmergencyStopService;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -34,15 +36,32 @@ public class ControlController {
     private final ControlLockService controlLockService;
     private final EmergencyStopService emergencyStopService;
     private final ControlCommandService controlCommandService;
+    private final ManualChallengeService challenges;
 
     public ControlController(
             ControlLockService controlLockService,
             EmergencyStopService emergencyStopService,
-            ControlCommandService controlCommandService
+            ControlCommandService controlCommandService,
+            ManualChallengeService challenges
     ) {
         this.controlLockService = controlLockService;
         this.emergencyStopService = emergencyStopService;
         this.controlCommandService = controlCommandService;
+        this.challenges = challenges;
+    }
+
+    @PostMapping("/manual/challenge")
+    @PreAuthorize("hasAuthority('control:write')")
+    public ApiResponse<Map<String, String>> challenge(@PathVariable String robotId,
+            @RequestBody Map<String, Object> request, @AuthenticationPrincipal SecurityUser user) {
+        Object version = request.get("lockVersion");
+        if (!(version instanceof Integer) && !(version instanceof Long)) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST);
+        }
+        var params = new java.util.HashMap<>(request);
+        params.remove("lockVersion");
+        String token = challenges.request(robotId, user.getAdminId(), ((Number) version).longValue(), params);
+        return ApiResponse.success(Map.of("challenge", token));
     }
 
     @GetMapping

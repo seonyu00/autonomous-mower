@@ -27,6 +27,7 @@ export type ManualCommand = {
   clientSentAt?: string;
   armId?: string;
   pressId?: string;
+  challenge?: string;
 };
 
 export type ModeCommand = {

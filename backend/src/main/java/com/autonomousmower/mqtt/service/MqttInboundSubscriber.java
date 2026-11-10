@@ -4,6 +4,7 @@ import com.autonomousmower.mqtt.dto.MqttCommandAckPayload;
 import com.autonomousmower.mqtt.dto.MqttEventPayload;
 import com.autonomousmower.mqtt.dto.MqttStatusPayload;
 import com.autonomousmower.mqtt.dto.MqttTelemetryPayload;
+import com.autonomousmower.control.service.ManualChallengeService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
@@ -32,17 +33,20 @@ public class MqttInboundSubscriber {
     private final MqttConnectOptions mqttConnectOptions;
     private final MqttInboundHandler inboundHandler;
     private final ObjectMapper objectMapper;
+    private final ManualChallengeService challenges;
 
     public MqttInboundSubscriber(
             MqttAsyncClient mqttAsyncClient,
             MqttConnectOptions mqttConnectOptions,
             MqttInboundHandler inboundHandler,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            ManualChallengeService challenges
     ) {
         this.mqttAsyncClient = mqttAsyncClient;
         this.mqttConnectOptions = mqttConnectOptions;
         this.inboundHandler = inboundHandler;
         this.objectMapper = objectMapper;
+        this.challenges = challenges;
     }
 
     @PostConstruct
@@ -138,6 +142,14 @@ public class MqttInboundSubscriber {
                     }
                 }
                 case "commands/ack" -> {
+                    var json = objectMapper.readTree(payload);
+                    if ("manual-challenge".equals(json.path("commandType").asText())) {
+                        if (sameRobot(topicRobotId, json.path("robotId").asText(), topic)) {
+                            challenges.receive(topicRobotId, json.path("commandId").asText(null),
+                                    json.path("challenge").asText(null));
+                        }
+                        break;
+                    }
                     MqttCommandAckPayload ack = objectMapper.readValue(payload, MqttCommandAckPayload.class);
                     if (sameRobot(topicRobotId, ack.robotId(), topic)) {
                         inboundHandler.handleCommandAck(ack);
@@ -146,7 +158,8 @@ public class MqttInboundSubscriber {
                 default -> log.warn("Ignoring MQTT message on unsupported inbound channel topic={}", topic);
             }
         } catch (Exception exception) {
-            log.warn("Failed to process MQTT inbound topic={} payload={}", topic, payload, exception);
+            // 역직렬화 예외에도 원문이 포함될 수 있어 예외 메시지를 기록하지 않는다.
+            log.warn("Failed to process MQTT inbound topic={} errorType={}", topic, exception.getClass().getSimpleName());
         }
     }
 
