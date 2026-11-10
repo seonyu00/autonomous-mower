@@ -76,6 +76,18 @@ public class ControlCommandService {
     }
 
     public ControlCommandResponse rearmManual(String robotId, ManualRearmRequest request, SecurityUser user) {
+        return publishManualSetup(robotId, request, user, "manual-rearm");
+    }
+
+    public ControlCommandResponse prepareManual(String robotId, ManualRearmRequest request, SecurityUser user) {
+        if (request.challenge() == null || request.challenge().isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        return publishManualSetup(robotId, request, user, "manual-prepare");
+    }
+
+    private ControlCommandResponse publishManualSetup(String robotId, ManualRearmRequest request,
+            SecurityUser user, String commandType) {
         controlRobotGuard.requireKnownRobot(robotId);
         validateRobotId(robotId, request.robotId());
         Instant requestedAt = Instant.now();
@@ -84,7 +96,7 @@ public class ControlCommandService {
             state.requireOwner(user.getAdminId());
             state.requireNotEmergency();
             state.requireVersion(request.lockVersion());
-            ControlCommandResponse response = responseFactory.accepted("manual-rearm", state.snapshot(), requestedAt);
+            ControlCommandResponse response = responseFactory.accepted(commandType, state.snapshot(), requestedAt);
             mqttCommandPublisher.publishModeCommand(new MqttCommandPayload(
                     response.commandId(), robotId, response.commandType(), request.idempotencyKey(),
                     request.lockVersion(), request.clientSentAt(), user.getAdminId(), requestedAt,

@@ -3,6 +3,7 @@ package com.autonomousmower.control.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
 import com.autonomousmower.control.entity.CommandExecution;
@@ -159,6 +160,34 @@ class CommandExecutionServiceTest {
         assertThat(execution.getCompletedAt()).isNull();
         assertThat(execution.markTimedOut(Instant.now().plusSeconds(60))).isFalse();
         assertThat(execution.getStatus()).isEqualTo(CommandExecutionStatus.ACKED);
+    }
+
+    @Test
+    void preparationTimeoutDoesNotAcceptLateCompletion() {
+        var execution = new CommandExecution("prep", robot, "manual-prepare", "key", "operator", Instant.now(), Instant.now());
+        execution.applyAck(CommandExecutionStatus.EXECUTING, null, "edge", null, Instant.now());
+        assertThat(execution.markPreparationTimedOut(Instant.now())).isTrue();
+        assertThat(execution.applyAck(CommandExecutionStatus.COMPLETED, null, "edge", null, Instant.now())).isFalse();
+        assertThat(execution.getReason()).isEqualTo("manual-preparation-timeout");
+    }
+
+    @Test
+    void schedulerExpiresExecutingPreparationAndPublishesTimeout() {
+        Instant now = Instant.parse("2026-05-31T01:00:00Z");
+        var execution = new CommandExecution("prep", robot, "manual-prepare", "key", "operator",
+                now.minusSeconds(36), now.minusSeconds(36));
+        execution.applyAck(CommandExecutionStatus.EXECUTING, null, "edge", null, now.minusSeconds(35));
+        doReturn(List.of()).when(commandExecutionRepository).findByStatusInAndSentAtBefore(
+                List.of(CommandExecutionStatus.SENT), now.minusSeconds(5));
+        doReturn(List.of(execution)).when(commandExecutionRepository).findByStatusInAndSentAtBefore(
+                List.of(CommandExecutionStatus.EXECUTING), now.minusSeconds(35));
+
+        commandExecutionService.markTimedOutCommands();
+
+        assertThat(execution.getStatus()).isEqualTo(CommandExecutionStatus.TIMED_OUT);
+        ArgumentCaptor<ControlEventMessage> event = ArgumentCaptor.forClass(ControlEventMessage.class);
+        verify(realtimePublisher).publishControlEvent(event.capture());
+        assertThat(event.getValue().status()).isEqualTo("edge-timeout");
     }
 
     private MqttCommandAckPayload ack(String robotId, String status) {

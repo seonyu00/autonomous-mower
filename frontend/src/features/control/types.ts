@@ -8,6 +8,7 @@ export type ControlCommandType =
   | 'change-mode'
   | 'manual-command'
   | 'manual-rearm'
+  | 'manual-prepare'
   | 'stop'
   | 'emergency-stop'
   | 'reset-after-emergency'

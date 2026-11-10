@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRobotStore } from '../robots/robotStore';
-import { ControlPrecheckError, rearmManual, requestManualChallenge, sendManualCommand, sendStopCommand } from './controlApi';
+import { ControlPrecheckError, prepareManual, rearmManual, requestManualChallenge, sendManualCommand, sendStopCommand } from './controlApi';
 import { canControlRobot } from './controlSelectors';
 import { useAuthStore } from '../auth/authStore';
 import { useTelemetryStore } from '../telemetry/telemetryStore';
@@ -29,7 +29,11 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
   const [armId, setArmId] = useState<string | null>(null);
   const [armConfirmedAt, setArmConfirmedAt] = useState<string | null>(null);
   const [pendingArmId, setPendingArmId] = useState<string | null>(null);
+  const [pendingPrepareId, setPendingPrepareId] = useState<string | null>(null);
   const [rearmInFlight, setRearmInFlight] = useState(false);
+  const setupGeneration = useRef(0);
+  const setup = useRef<{ robotId: string; sessionVersion: number; lockVersion: number } | null>(null);
+  const cancelSetupRef = useRef<() => void>(() => {});
   const sessionVersion = useAuthStore((state) => state.sessionVersion);
   useAuthStore((state) => state.user);
   useAuthStore((state) => state.isAuthenticated);
@@ -50,14 +54,44 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
   const disabled = !selectedRobotId || !eligibility.allowed || !armId;
   const disabledReason = eligibility.reasons[0] ? formatControlReason(eligibility.reasons[0]) : null;
 
+  cancelSetupRef.current = () => {
+    const previous = setup.current;
+    setup.current = null;
+    setupGeneration.current += 1;
+    setPendingPrepareId(null);
+    setPendingArmId(null);
+    setRearmInFlight(false);
+    if (previous && previous.sessionVersion === useAuthStore.getState().sessionVersion) {
+      void sendStopCommand(previous.robotId, { allowUnselected: true }).catch(() => {
+        setLocalError('준비 취소의 장비 수신을 확인하지 못했습니다. 다시 재개하기 전에 상태를 확인해 주세요.');
+      });
+    }
+  };
+
   useEffect(() => {
+    const cancel = () => cancelSetupRef.current();
+    const visibility = () => { if (document.visibilityState === 'hidden') cancel(); };
+    window.addEventListener('blur', cancel);
+    window.addEventListener('pagehide', cancel);
+    document.addEventListener('visibilitychange', visibility);
+    return () => {
+      cancel();
+      window.removeEventListener('blur', cancel);
+      window.removeEventListener('pagehide', cancel);
+      document.removeEventListener('visibilitychange', visibility);
+    };
+  }, []);
+
+  useEffect(() => {
+    cancelSetupRef.current();
     setArmId(null);
     setArmConfirmedAt(null);
     setPendingArmId(null);
-  }, [selectedRobotId, sessionVersion]);
+  }, [selectedRobotId, sessionVersion, controlState?.lockVersion]);
 
   useEffect(() => {
     if (!eligibility.allowed) {
+      cancelSetupRef.current();
       setArmId(null);
       setArmConfirmedAt(null);
       setPendingArmId(null);
@@ -65,9 +99,18 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
   }, [eligibility.allowed]);
 
   useEffect(() => {
+    if (!pendingPrepareId) return;
+    const timeout = window.setTimeout(() => {
+      cancelSetupRef.current();
+      setLocalError('수동 조작 준비 시간이 초과됐습니다. 연결과 리모컨 상태를 확인해 주세요.');
+    }, 30000);
+    return () => window.clearTimeout(timeout);
+  }, [pendingPrepareId]);
+
+  useEffect(() => {
     if (!pendingArmId) return;
     const timeout = window.setTimeout(() => {
-      setPendingArmId(null);
+      cancelSetupRef.current();
       setLocalError('장비의 재개 응답이 없습니다. 연결과 리모컨 상태를 확인해 주세요.');
     }, 5000);
     return () => window.clearTimeout(timeout);
@@ -76,12 +119,49 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
   const event = controlState?.lastCommandEvent;
   useEffect(() => {
     if (!event) return;
+    if (pendingPrepareId && event.commandId === pendingPrepareId) {
+      if (event.status === 'completed') {
+        setPendingPrepareId(null);
+        const context = setup.current;
+        const generation = setupGeneration.current;
+        if (context) {
+          setRearmInFlight(true);
+          void (async () => {
+            const stillCurrent = () => setupGeneration.current === generation && setup.current === context &&
+              useAuthStore.getState().sessionVersion === context.sessionVersion &&
+              useRobotStore.getState().selectedRobotId === context.robotId &&
+              useControlStore.getState().getControlState(context.robotId).lockVersion === context.lockVersion &&
+              canControlRobot(context.robotId).allowed;
+            try {
+              const { challenge } = await requestManualChallenge(context.robotId, { purpose: 'rearm' });
+              if (!stillCurrent()) return;
+              const result = await rearmManual(context.robotId, challenge);
+              if (!stillCurrent()) return;
+              if (!result.commandId) throw new Error('장비 응답을 확인할 수 없습니다.');
+              setPendingArmId(result.commandId);
+            } catch (error) {
+              if (stillCurrent()) {
+                cancelSetupRef.current();
+                setLocalError(error instanceof Error ? error.message : '재개 요청을 처리하지 못했습니다.');
+              }
+            } finally {
+              if (setupGeneration.current === generation) setRearmInFlight(false);
+            }
+          })();
+        }
+      } else if (['failed', 'rejected', 'edge-timeout'].includes(event.status)) {
+        cancelSetupRef.current();
+        setLocalError('수동 조작을 준비하지 못했습니다. 시리얼 포트와 리모컨 상태를 확인해 주세요.');
+      }
+    }
     if (pendingArmId && event.commandId === pendingArmId) {
       if (event.status === 'edge-ack' && event.edgeAckAt) {
         setArmId(pendingArmId);
         setArmConfirmedAt(event.edgeAckAt);
         setPendingArmId(null);
+        setup.current = null;
       } else if (event.status === 'failed' || event.status === 'rejected' || event.status === 'edge-timeout') {
+        cancelSetupRef.current();
         setPendingArmId(null);
         setLocalError('장비가 수동 조작 재개를 확인하지 못했습니다. 리모컨 상태를 확인해 주세요.');
       }
@@ -93,7 +173,7 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
       setArmConfirmedAt(null);
       setLocalError('리모컨 우선 또는 연결 문제로 수동 조작이 잠겼습니다. 상태를 확인한 후 다시 재개해 주세요.');
     }
-  }, [event, pendingArmId]);
+  }, [event, pendingArmId, pendingPrepareId]);
 
   useEffect(() => {
     if (armId && armConfirmedAt && edgeStatus?.edgeState === 'manual-serial-locked' && edgeStatus.lastSeenAt &&
@@ -106,25 +186,31 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
   }, [armId, armConfirmedAt, edgeStatus]);
 
   const requestRearm = async () => {
-    if (!selectedRobotId || !eligibility.allowed || pendingArmId || rearmInFlight) return;
+    if (!selectedRobotId || !eligibility.allowed || pendingArmId || pendingPrepareId || rearmInFlight) return;
     setArmId(null);
     setArmConfirmedAt(null);
     setLocalError(null);
     setRearmInFlight(true);
+    const generation = ++setupGeneration.current;
     try {
       const version = useControlStore.getState().getControlState(selectedRobotId).lockVersion;
+      setup.current = { robotId: selectedRobotId, sessionVersion, lockVersion: version };
       const { challenge } = await requestManualChallenge(selectedRobotId, { purpose: 'rearm' });
-      if (useRobotStore.getState().selectedRobotId !== selectedRobotId ||
+      if (setupGeneration.current !== generation || useRobotStore.getState().selectedRobotId !== selectedRobotId ||
           useAuthStore.getState().sessionVersion !== sessionVersion ||
           useControlStore.getState().getControlState(selectedRobotId).lockVersion !== version ||
           !canControlRobot(selectedRobotId).allowed) return;
-      const result = await rearmManual(selectedRobotId, challenge);
+      const result = await prepareManual(selectedRobotId, challenge);
+      if (setupGeneration.current !== generation) return;
       if (!result.commandId) throw new Error('장비 응답을 확인할 수 없습니다.');
-      setPendingArmId(result.commandId);
+      setPendingPrepareId(result.commandId);
     } catch (error) {
-      setLocalError(error instanceof Error ? error.message : '재개 요청을 처리하지 못했습니다.');
+      if (setupGeneration.current === generation) {
+        cancelSetupRef.current();
+        setLocalError(error instanceof Error ? error.message : '재개 요청을 처리하지 못했습니다.');
+      }
     } finally {
-      setRearmInFlight(false);
+      if (setupGeneration.current === generation) setRearmInFlight(false);
     }
   };
 
@@ -188,6 +274,7 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
       start: (direction, speed, pointerId) => {
         if (!selectedRobotId || !canControlRobot(selectedRobotId).allowed) return;
         if (direction === 'stop') {
+          cancelSetupRef.current();
           if (input) stop();
           else {
             setArmId(null);
@@ -241,9 +328,13 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
         </span>
       </div>
 
-      <button type="button" onClick={() => void requestRearm()} disabled={!eligibility.allowed || Boolean(pendingArmId) || rearmInFlight}>
-        {pendingArmId ? '장비 응답 대기 중' : armId ? '수동 조작 다시 준비' : '수동 조작 재개'}
+      <button type="button" onClick={() => void requestRearm()} disabled={!eligibility.allowed || Boolean(pendingArmId) || Boolean(pendingPrepareId) || rearmInFlight}>
+        {pendingPrepareId || rearmInFlight ? '수동 조작 준비 중' : pendingArmId ? '장비 응답 대기 중' : armId ? '수동 조작 다시 준비' : '수동 조작 재개'}
       </button>
+      {pendingPrepareId || rearmInFlight || pendingArmId ? <>
+        <p className="muted">장비를 준비하고 있습니다. 현장 안전을 확인한 뒤 리모컨 방향을 잠깐 조작했다 놓아 주세요.</p>
+        <button type="button" onClick={() => cancelSetupRef.current()}>준비 취소</button>
+      </> : null}
       <p className="muted">리모컨 조작이 끝나고 안전을 확인한 뒤 재개하세요. 방향 버튼은 누르는 동안에만 작동합니다.</p>
 
       <div className="joystick-grid" aria-disabled={disabled}>

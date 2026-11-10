@@ -74,6 +74,7 @@ class EdgeConfig:
     telemetry: TelemetryConfig
     autonomy_command: tuple[str, ...] = ()
     manual_serial_port: str | None = None
+    manual_serial_on_demand: bool = False
 
 
 def load_config(path: str | Path) -> EdgeConfig:
@@ -89,6 +90,7 @@ def load_config(path: str | Path) -> EdgeConfig:
         telemetry=_telemetry_config(raw.get("telemetry") or {}),
         autonomy_command=_autonomy_command(raw.get("autonomy") or {}),
         manual_serial_port=_manual_serial_port(raw.get("manual_serial") or {}),
+        manual_serial_on_demand=_manual_serial_on_demand(raw.get("manual_serial") or {}),
     )
 
 
@@ -97,6 +99,13 @@ def _manual_serial_port(raw: dict[str, Any]) -> str | None:
     if port is not None and not port.startswith("/dev/"):
         raise ValueError("manual_serial.port는 /dev/ 아래 장치 경로여야 합니다.")
     return port
+
+
+def _manual_serial_on_demand(raw: dict[str, Any]) -> bool:
+    enabled = raw.get("on_demand", False)
+    if not isinstance(enabled, bool) or (enabled and not _manual_serial_port(raw)):
+        raise ValueError("manual_serial.on_demand는 장치 포트가 지정된 boolean 값이어야 합니다.")
+    return enabled
 
 
 def _mqtt_config(raw: dict[str, Any], robot_id: str) -> MqttConfig:

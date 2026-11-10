@@ -2,12 +2,14 @@ from datetime import datetime, timedelta, timezone
 from unittest import TestCase
 from unittest.mock import MagicMock
 import time
+import threading
 
 from test_autonomy import load_client
 from test_manual_serial_bridge import SerialStub
 from jetson_mower_client.manual_serial_bridge import ManualSerialBridge
 from jetson_mower_client.manual_serial_protocol import encode_packet
 from jetson_mower_client.manual_challenge import ManualChallenge
+from jetson_mower_client.manual_serial_session import ManualSerialSession
 
 
 class ManualSerialClientTest(TestCase):
@@ -16,6 +18,8 @@ class ManualSerialClientTest(TestCase):
         self.node = client.JetsonMowerClientNode.__new__(client.JetsonMowerClientNode)
         self.node._manual_serial = MagicMock()
         self.node._manual_challenge = ManualChallenge()
+        self.node._manual_setup_lock = threading.RLock()
+        self.node._pending_manual_prepare = None
         self.node._topics = MagicMock()
         self.node._config = MagicMock()
         self.node._config.robot_id = "robot"
@@ -28,6 +32,37 @@ class ManualSerialClientTest(TestCase):
         self.node._publish_status = MagicMock()
         self.node._stop_autonomy = MagicMock()
         self.node._emergency_active = False
+
+    def test_prepare_requires_fresh_challenge_and_never_arms_by_itself(self):
+        envelope = {"robotId": "robot", "requestedBy": "operator", "lockVersion": 1}
+        self.node._handle_manual_challenge({**envelope, "commandId": "nonce", "parameters": {"purpose": "rearm"}})
+        token = self.node._mqtt.publish_json.call_args.args[1]["challenge"]
+        self.node._handle_manual_prepare({**envelope, "commandId": "prepare", "parameters": {"challenge": token}}, "now")
+        self.assertEqual(self.node._publish_ack.call_args.args[2], "executing")
+        self.node._manual_serial.failed = False
+        self.node._manual_serial.ready_to_arm.return_value = True
+        self.node._tick_manual_serial()
+        self.assertEqual(self.node._publish_ack.call_args.args[2], "completed")
+        self.node._manual_serial.arm.assert_not_called()
+        self.node._handle_manual_prepare({**envelope, "commandId": "replay", "parameters": {"challenge": token}}, "now")
+        self.assertEqual(self.node._publish_ack.call_args.args[2], "rejected")
+
+    def test_idle_gateway_preserves_prepare_nonce_without_opening_serial(self):
+        port = SerialStub()
+        port.close = MagicMock()
+        opener = MagicMock(return_value=port)
+        self.node._manual_serial = ManualSerialSession("/dev/test", opener)
+        envelope = {"robotId": "robot", "requestedBy": "operator", "lockVersion": 1}
+        self.node._handle_manual_challenge({**envelope, "commandId": "nonce", "parameters": {"purpose": "rearm"}})
+        token = self.node._mqtt.publish_json.call_args.args[1]["challenge"]
+        self.node._tick_manual_serial()
+        opener.assert_not_called()
+        self.node._handle_manual_prepare({**envelope, "commandId": "prepare", "parameters": {"challenge": token}}, "now")
+        opener.assert_called_once()
+        self.assertEqual(self.node._publish_ack.call_args.args[2], "executing")
+        self.node._handle_stop({"parameters": {}}, "now")
+        self.assertFalse(self.node._manual_serial.has_port)
+        self.assertIsNone(self.node._pending_manual_prepare)
 
     def test_challenge_rearm_and_move_ignore_wall_clock_and_prevent_replay(self):
         envelope = {"robotId": "robot", "requestedBy": "operator", "lockVersion": 1}
@@ -78,7 +113,11 @@ class ManualSerialClientTest(TestCase):
         self.node._publish_status = MagicMock()
         self.node._handle_mode({"parameters": {"mode": "idle"}}, "now")
         self.node._manual_serial.disarm.assert_called_once()
+        self.node._manual_serial.disarm.reset_mock()
+        self.node._pending_manual_prepare = ({"commandId": "prepare"}, "now", time.monotonic() + 30)
         self.node._handle_mode({"parameters": {"mode": "autonomous"}}, "now")
+        self.node._manual_serial.disarm.assert_called_once()
+        self.assertIsNone(self.node._pending_manual_prepare)
         self.assertEqual(self.node._publish_ack.call_args.args[2:4], ("rejected", "manual-serial-active"))
 
     def test_attachment_does_not_claim_blade_control(self):

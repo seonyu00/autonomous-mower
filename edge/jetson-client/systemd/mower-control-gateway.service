@@ -1,0 +1,18 @@
+[Unit]
+Description=예초기 상태 전송 및 웹 수동 조작 준비 대기
+Conflicts=mower-telemetry.service
+After=mower-telemetry.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=%h/autonomous-mower/edge/jetson-client
+ExecStart=/bin/bash %h/autonomous-mower/edge/jetson-client/scripts/run-control-gateway.sh
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=10
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

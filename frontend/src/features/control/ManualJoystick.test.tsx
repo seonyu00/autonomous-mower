@@ -5,7 +5,7 @@ import { useRobotStore } from '../robots/robotStore';
 import { useTelemetryStore } from '../telemetry/telemetryStore';
 import { useControlStore } from './controlStore';
 import { ManualJoystick } from './ManualJoystick';
-import { rearmManual, requestManualChallenge, sendManualCommand, sendStopCommand } from './controlApi';
+import { prepareManual, rearmManual, requestManualChallenge, sendManualCommand, sendStopCommand } from './controlApi';
 
 vi.mock('./controlApi', async (original) => ({
   ...await original<typeof import('./controlApi')>(),
@@ -13,6 +13,7 @@ vi.mock('./controlApi', async (original) => ({
   sendStopCommand: vi.fn(),
   rearmManual: vi.fn(),
   requestManualChallenge: vi.fn(),
+  prepareManual: vi.fn(),
 }));
 
 const manual = vi.mocked(sendManualCommand);
@@ -22,6 +23,11 @@ const press = (label = '전진') => fireEvent.pointerDown(screen.getByLabelText(
 const advance = async (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 const makeReady = async (robotId = TEST_ROBOT_ID) => {
   fireEvent.click(screen.getByRole('button', { name: '수동 조작 재개' }));
+  await act(async () => {});
+  act(() => useControlStore.getState().patchControlState(robotId, { lastCommandEvent: {
+    robotId, commandId: 'prepare-1', commandType: 'manual-prepare', status: 'completed', reason: null,
+    requestedBy: 'admin', serverTimestamp: new Date().toISOString(), edgeAckAt: new Date().toISOString(),
+  } }));
   await act(async () => {});
   act(() => useControlStore.getState().patchControlState(robotId, { lastCommandEvent: {
     robotId, commandId: 'arm-1', commandType: 'manual-rearm', status: 'edge-ack', reason: null,
@@ -38,6 +44,7 @@ describe('ManualJoystick 입력 수명', () => {
     stop.mockReset().mockResolvedValue({} as Awaited<ReturnType<typeof sendStopCommand>>);
     rearm.mockReset().mockResolvedValue({ commandId: 'arm-1' } as Awaited<ReturnType<typeof rearmManual>>);
     vi.mocked(requestManualChallenge).mockReset().mockResolvedValue({ challenge: 'example' });
+    vi.mocked(prepareManual).mockReset().mockResolvedValue({ commandId: 'prepare-1' } as Awaited<ReturnType<typeof prepareManual>>);
     // jsdom의 PointerEvent 지원 여부와 무관하게 포인터 ID를 전달한다.
     vi.stubGlobal('PointerEvent', class extends MouseEvent {
       pointerId: number;
@@ -58,6 +65,42 @@ describe('ManualJoystick 입력 수명', () => {
     press();
     await advance(0);
     expect(manual).toHaveBeenCalledTimes(1);
+  });
+
+  it('준비 완료 전에는 재개하지 않고 준비 취소 후 늦은 완료를 버린다', async () => {
+    render(<ManualJoystick />);
+    fireEvent.click(screen.getByRole('button', { name: '수동 조작 재개' }));
+    await act(async () => {});
+    expect(prepareManual).toHaveBeenCalledOnce();
+    expect(rearm).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('수동 전진')).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '준비 취소' }));
+    act(() => useControlStore.getState().patchControlState(TEST_ROBOT_ID, { lastCommandEvent: {
+      robotId: TEST_ROBOT_ID, commandId: 'prepare-1', commandType: 'manual-prepare', status: 'completed', reason: null,
+      requestedBy: 'admin', serverTimestamp: new Date().toISOString(), edgeAckAt: new Date().toISOString(),
+    } }));
+    await act(async () => {});
+    expect(rearm).not.toHaveBeenCalled();
+    expect(stop).toHaveBeenCalled();
+    expect(screen.getByLabelText('수동 전진')).toBeDisabled();
+  });
+
+  it('준비 중 제어권 버전이 바뀌면 취소하고 늦은 완료를 버린다', async () => {
+    render(<ManualJoystick />);
+    fireEvent.click(screen.getByRole('button', { name: '수동 조작 재개' }));
+    await act(async () => {});
+    act(() => {
+      const state = useControlStore.getState();
+      state.patchControlState(TEST_ROBOT_ID, { lockVersion: state.getControlState(TEST_ROBOT_ID).lockVersion + 1 });
+    });
+    act(() => useControlStore.getState().patchControlState(TEST_ROBOT_ID, { lastCommandEvent: {
+      robotId: TEST_ROBOT_ID, commandId: 'prepare-1', commandType: 'manual-prepare', status: 'completed', reason: null,
+      requestedBy: 'admin', serverTimestamp: new Date().toISOString(), edgeAckAt: new Date().toISOString(),
+    } }));
+    await act(async () => {});
+    expect(rearm).not.toHaveBeenCalled();
+    expect(stop).toHaveBeenCalled();
+    expect(screen.getByLabelText('수동 전진')).toBeDisabled();
   });
 
   it('누름마다 다른 식별자를 쓰고 해제 시 같은 식별자로 정지한다', async () => {

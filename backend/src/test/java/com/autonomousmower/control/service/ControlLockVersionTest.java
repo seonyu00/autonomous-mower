@@ -66,6 +66,19 @@ class ControlLockVersionTest {
     }
 
     @Test
+    void preparationRequiresChallengeAndCurrentOwnerBeforePublishing() {
+        var other = SecurityUser.from("other", "Other", RoleName.ADMIN);
+        var request = new ManualRearmRequest("A", "prepare", version, Instant.now(), "one-use-token");
+        assertThatThrownBy(() -> commands.prepareManual("A", request, other)).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> commands.prepareManual("A",
+                new ManualRearmRequest("A", "missing", version, Instant.now()), owner)).isInstanceOf(BusinessException.class);
+        verifyNoInteractions(mqtt);
+        commands.prepareManual("A", request, owner);
+        verify(mqtt).publishModeCommand(argThat(payload -> payload.commandType().equals("manual-prepare")
+                && payload.parameters().get("challenge").equals("one-use-token") && payload.lockVersion() == version));
+    }
+
+    @Test
     void acceptedCommandAndTransportUseTheSameRobotMonitorAndVersion() {
         doAnswer(call -> {
             assertThat(Thread.holdsLock(store.stateFor("A"))).isTrue();

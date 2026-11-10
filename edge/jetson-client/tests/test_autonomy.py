@@ -132,6 +132,7 @@ class AutonomyTest(unittest.TestCase):
         client = load_client()
         node = client.JetsonMowerClientNode.__new__(client.JetsonMowerClientNode)
         node._manual_challenge = MagicMock()
+        node._pending_manual_prepare = None
         node._publish_emergency_stop_outputs = MagicMock()
         node._autonomy = MagicMock()
         node._autonomy.stop.side_effect = OSError()
@@ -177,6 +178,7 @@ class AutonomyTest(unittest.TestCase):
         client = load_client()
         node = client.JetsonMowerClientNode.__new__(client.JetsonMowerClientNode)
         node._manual_challenge = MagicMock()
+        node._pending_manual_prepare = None
         node._autonomy = AutonomyExecution([sys.executable, str(MOCK)])
         node._autonomy_ready = None
         node._manual_serial = None

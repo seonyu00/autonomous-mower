@@ -120,6 +120,16 @@ public class ControlController {
         return ApiResponse.success(controlCommandService.rearmManual(robotId, request, user));
     }
 
+    @PostMapping("/manual/prepare")
+    @PreAuthorize("hasAuthority('control:write')")
+    public ApiResponse<ControlCommandResponse> prepareManual(
+            @PathVariable String robotId,
+            @Valid @RequestBody ManualRearmRequest request,
+            @AuthenticationPrincipal SecurityUser user
+    ) {
+        return ApiResponse.success(controlCommandService.prepareManual(robotId, request, user));
+    }
+
     @PostMapping("/mode")
     @PreAuthorize("hasAuthority('control:write')")
     public ApiResponse<ControlCommandResponse> mode(

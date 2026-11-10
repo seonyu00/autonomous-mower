@@ -18,6 +18,11 @@ class ManualSerialBridge:
         with self._lock:
             return not self._failed and self._state.arm(arm_id, now)
 
+    def ready_to_arm(self, now: float) -> bool:
+        with self._lock:
+            return (not self._failed and self._state.remote_probe_seen and not self._state.remote_active
+                    and self._state._status_fresh(now))
+
     @property
     def failed(self) -> bool:
         with self._lock:

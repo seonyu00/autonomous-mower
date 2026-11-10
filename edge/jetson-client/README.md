@@ -2,7 +2,45 @@
 
 Jetson Orin Nano에서 Spring Boot 백엔드의 MQTT command topic을 구독하고 ROS 2 topic으로 전달하는 Phase 1 Edge Client입니다.
 
-현재 Phase 1은 MQTT command 검증, ROS 2 제어 출력, command ACK, telemetry/status 발행, 로컬 데드맨 스위치와 E-Stop 상태 처리를 제공한다. STM32 USB CDC serial 처리는 이 패키지에서 하지 않습니다. `/cmd_vel`을 구독하는 별도 Jetson bridge node가 STM32 NUCLEO-F439ZI(`/dev/ttyACM0`, 115200bps)로 전달한다고 가정합니다.
+현재 클라이언트는 MQTT command 검증, ROS 2 제어 출력, command ACK, telemetry/status 발행, 로컬 데드맨 스위치와 E-Stop 상태 처리를 제공한다. 기본 ROS 방식은 `/cmd_vel`을 구독하는 별도 bridge node를 사용한다. `manual_serial.port`를 설정하면 이 패키지의 STM32 USB CDC 시리얼 어댑터를 사용하며, 웹 준비 요청으로 포트를 여는 방식은 아래 관제 대기를 따른다.
+
+## 웹 버튼에서 수동 제어 준비 — PC 구현, 장비 적용 전
+
+예전 시험 서비스를 매번 수동 실행하는 대신, `mower-control-gateway.service` 하나가 상태 전송과 MQTT 명령 수신을 담당하도록 구성했다. 프로세스 시작만으로 시리얼 포트를 열지 않는다. 웹의 `수동 조작 재개`가 인증·제어권·일회용 확인값 검사를 거친 `manual-prepare`를 보낸 뒤에만 제어 포트를 연다. 기존 `monitor.py`와 `mower-telemetry.service`는 상태 전용 방식으로 그대로 남긴다.
+
+1. 재개 클릭 후 최대 30초 동안 준비한다. 포트를 연 이후 현장 리모컨 개입과 해제를 새로 확인해야 한다. 담당자가 리모컨을 잠깐 조작했다 놓고 유지 시간 약 5초가 지난 중립 진단을 기다린다. **리모컨 조작은 실제 이동을 일으킬 수 있으므로 격리 시험에서 함께 확인한다.**
+2. 준비 완료는 이동 명령이 아니다. 웹이 새 확인값으로 재개 요청을 하고 장비 수신 확인 후 방향 버튼을 켠다. 준비 완료 후 재개까지의 장비 대기 한도는 2초다.
+3. 별도로 방향 버튼을 누르고 있는 동안만 이동한다. 기존 ±100 출력 한도·350ms 입력 수명·리모컨 우선을 유지한다. 일반 정지·취소·단절·준비 만료 또는 리모컨 개입으로 재개가 풀리면 포트를 닫는다. 포인터 해제는 기존 누름 식별자의 정지를 보내며 서버 데드맨 정지도 유지한다.
+
+장비의 비공개 `config.yaml`에 다음을 설정한다. 포트는 실제 연결을 확인해 지정한다. 기본 `on_demand: false`는 기존 실행 방식과 호환되며 새 실행기는 `true`가 아니면 종료한다.
+
+```yaml
+manual_serial:
+  port: /dev/ttyACM0
+  on_demand: true
+```
+
+전제는 pyserial과 `fuser`(Ubuntu `psmisc`) 설치, 포트 접근 권한이다. 점유 프로그램이 있거나 확인할 수 없으면 준비를 거부한다. 개방 전후 `fuser`, pyserial exclusive와 Linux `TIOCEXCL`을 사용한다. 현장 방향키 시험·ROS 시리얼 브리지와 동시에 사용하지 않는다. 기존 센서 전용 서비스와 같은 MQTT ID로 동시에 실행하지 않는다.
+
+아래는 **현장 담당자와 바퀴·날 격리를 확인한 뒤 적용할 절차**이며 이번 PC 작업에서 실행하지 않았다. 저장소 배치가 `~/autonomous-mower`와 다르면 unit 경로부터 조정한다. 새 웹·서버·장비 코드를 함께 적용하고 비공개 설정은 보존한다.
+
+```bash
+systemctl --user disable --now mower-telemetry.service
+mkdir -p ~/.config/systemd/user
+cp ~/autonomous-mower/edge/jetson-client/systemd/mower-control-gateway.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now mower-control-gateway.service
+journalctl --user -u mower-control-gateway.service -n 50 --no-pager
+```
+
+unit의 `Conflicts`로 동시 실행을 막는다. 이전 서비스를 disable하는 것은 재부팅 때 두 서비스가 함께 시작되는 것을 막기 위해서다. 로그인 전 자동 실행 여부는 기존 사용자 linger 설정에 따르며 이 절차에서 바꾸지 않는다. 정상 대기 때 포트 미점유, 웹 준비와 리모컨 확인, 별도 방향 누름·해제 정지를 최소 한 번 현장에서 검증한다. 재시작은 재개·이동을 복원하지 않는다. 웹 정지·비상 정지는 현장 리모컨 구동까지 차단한다는 뜻이 아니다.
+
+기존 상태 전용 방식으로 돌아가려면 다음과 같이 전환한다. 자동 복구로 두 서비스를 함께 띄우지 않는다.
+
+```bash
+systemctl --user disable --now mower-control-gateway.service
+systemctl --user enable --now mower-telemetry.service
+```
 
 ## 대상 환경
 

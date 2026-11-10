@@ -138,6 +138,14 @@ public class CommandExecution {
         return true;
     }
 
+    public boolean markPreparationTimedOut(Instant timeoutAt) {
+        if (!"manual-prepare".equals(commandType) || status != CommandExecutionStatus.EXECUTING) return false;
+        this.status = CommandExecutionStatus.TIMED_OUT;
+        this.timeoutAt = timeoutAt;
+        this.reason = "manual-preparation-timeout";
+        return true;
+    }
+
     public String getCommandId() {
         return commandId;
     }

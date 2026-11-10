@@ -5,6 +5,11 @@ edge_node_id: jetson-MOWER-01
 autonomy:
   command: []
 
+# 실제 적용은 장비와 포트 소유권을 확인한 뒤 별도로 진행한다.
+manual_serial:
+  port:
+  on_demand: false
+
 mqtt:
   broker_url: mqtt://localhost:1883
   username:

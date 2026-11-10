@@ -111,6 +111,15 @@ export async function rearmManual(robotId: string, challenge?: string) {
   });
 }
 
+export async function prepareManual(robotId: string, challenge: string) {
+  requireCanControl(robotId);
+  return requestControlCommand(robotId, 'manual-prepare', `/api/control/${robotId}/manual/prepare`, {
+    robotId, challenge,
+    lockVersion: useControlStore.getState().getControlState(robotId).lockVersion,
+    clientSentAt: new Date().toISOString(),
+  });
+}
+
 export async function sendStopCommand(robotId: string, options: { allowUnselected?: boolean; armId?: string; pressId?: string } = {}) {
   const eligibility = canSendStopCommand(robotId, options.allowUnselected);
 

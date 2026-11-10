@@ -113,6 +113,11 @@ public class CommandExecutionService {
         )) {
             if (execution.markTimedOut(now)) publish(execution);
         }
+        // 준비 중 연결이 끊겨 최종 응답이 없어도 실행 중 상태를 무한히 남기지 않는다.
+        for (CommandExecution execution : commandExecutionRepository.findByStatusInAndSentAtBefore(
+                List.of(CommandExecutionStatus.EXECUTING), now.minusSeconds(35))) {
+            if (execution.markPreparationTimedOut(now)) publish(execution);
+        }
     }
 
     private CommandExecutionStatus mapAckStatus(String status) {

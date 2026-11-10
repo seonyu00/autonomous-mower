@@ -598,6 +598,8 @@ Backend 주요 파일:
 
 ### Manual Joystick
 
+2026-11-11 PC 구현: `수동 조작 재개`에서 `manual-prepare`를 요청하고 준비 완료 후 새 일회용 확인값으로 재개한다. 준비 중 방향 입력 잠금·취소·제어권 버전 변경과 늦은 완료 폐기를 제공한다. `ManualSerialSession`은 명시적인 준비 때만 포트를 열며, 새 리모컨 개입·해제 확인과 준비/재개 만료를 적용한다. `scripts/run-control-gateway.sh`와 `systemd/mower-control-gateway.service`가 상태 전송·명령 수신 대기를 제공한다. 실제 서비스 설치·배포·현장 재시험은 미수행이다. 실행·복구는 [Jetson README](../edge/jetson-client/README.md), 계약은 [API 계약](api-contract.md#수동-시리얼-조작-재개와-입력-식별자-개발-중), 다음 단계는 [로드맵](learning/12-development-roadmap.md)을 따른다.
+
 Frontend 주요 파일:
 
 - `frontend/src/features/control/ManualJoystick.tsx`

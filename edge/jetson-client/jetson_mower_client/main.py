@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import time
+import threading
 from uuid import uuid4
 from collections import OrderedDict
 from datetime import datetime, timezone
@@ -22,6 +23,7 @@ from .command_mapping import TwistCommand, is_stale_client_command, manual_to_tw
 from .config import EdgeConfig, load_config
 from .hardware_safety import publish_emergency_stop_outputs
 from .manual_serial_bridge import ManualSerialBridge
+from .manual_serial_session import ManualSerialSession
 from .manual_challenge import ChallengeScope, ManualChallenge
 from .mqtt_edge import MqttEdgeClient
 from .topics import MowerTopics, command_type_from_topic
@@ -50,7 +52,11 @@ class JetsonMowerClientNode(Node):
         self._manual_serial = None
         self._manual_challenge = ManualChallenge()
         self._manual_serial_device = None
-        if config.manual_serial_port:
+        self._manual_setup_lock = threading.RLock()
+        self._pending_manual_prepare = None
+        if config.manual_serial_on_demand:
+            self._manual_serial = ManualSerialSession(config.manual_serial_port)
+        elif config.manual_serial_port:
             import serial
             self._manual_serial_device = serial.Serial(
                 config.manual_serial_port, 115200, timeout=0, write_timeout=0.2, exclusive=True,
@@ -91,6 +97,10 @@ class JetsonMowerClientNode(Node):
         self._latest_imu = message
 
     def _handle_mqtt_message(self, topic: str, command: dict[str, Any] | None, raw_payload: bytes) -> None:
+        with self._manual_setup_lock:
+            self._dispatch_mqtt_message(topic, command, raw_payload)
+
+    def _dispatch_mqtt_message(self, topic: str, command: dict[str, Any] | None, raw_payload: bytes) -> None:
         received_at = utc_now()
         if command is None:
             self.get_logger().warning(f"invalid mqtt payload topic={topic} bytes={len(raw_payload)}")
@@ -112,6 +122,8 @@ class JetsonMowerClientNode(Node):
         try:
             if command_type == "manual-challenge":
                 self._handle_manual_challenge(command)
+            elif command_type == "manual-prepare":
+                self._handle_manual_prepare(command, received_at)
             elif command_type == "manual-rearm":
                 self._handle_manual_rearm(command, received_at)
             elif command_type == "manual-command":
@@ -181,6 +193,7 @@ class JetsonMowerClientNode(Node):
         self._publish_ack(command, "manual-command", "accepted", None, received_at)
 
     def _handle_stop(self, command: dict[str, Any], received_at: str) -> None:
+        self._cancel_manual_prepare("manual-preparation-cancelled")
         self._manual_challenge.invalidate()
         serial_sent = True
         if self._manual_serial is None:
@@ -199,6 +212,7 @@ class JetsonMowerClientNode(Node):
         self._publish_status()
 
     def _handle_estop(self, command: dict[str, Any], received_at: str) -> None:
+        self._cancel_manual_prepare("emergency-active")
         self._manual_challenge.invalidate()
         serial_sent = self._publish_emergency_stop_outputs()
         self._emergency_active = True
@@ -211,7 +225,10 @@ class JetsonMowerClientNode(Node):
         self._publish_status()
 
     def _handle_mode(self, command: dict[str, Any], received_at: str) -> None:
+        self._cancel_manual_prepare("manual-preparation-cancelled")
         self._manual_challenge.invalidate()
+        if self._manual_serial is not None:
+            self._manual_serial.disarm()
         if self._emergency_active:
             self._publish_ack(command, "change-mode", "rejected", "emergency-active", received_at)
             return
@@ -228,7 +245,6 @@ class JetsonMowerClientNode(Node):
             self._publish_status()
             return
         if self._manual_serial is not None:
-            self._manual_serial.disarm()
             self._tick_manual_serial()
         self._stop_autonomy()
         self._mode = mode
@@ -274,6 +290,7 @@ class JetsonMowerClientNode(Node):
         self._cmd_vel_publisher.publish(message)
 
     def _publish_zero_twist(self) -> None:
+        self._cancel_manual_prepare("manual-preparation-cancelled")
         if self._manual_serial is not None:
             self._manual_serial.disarm()
             self._tick_manual_serial()
@@ -317,6 +334,10 @@ class JetsonMowerClientNode(Node):
         self._publish_status()
 
     def _tick_manual_serial(self) -> bool:
+        with self._manual_setup_lock:
+            return self._tick_manual_serial_locked()
+
+    def _tick_manual_serial_locked(self) -> bool:
         if self._manual_serial is None:
             return False
         if self._manual_serial.failed:
@@ -326,21 +347,61 @@ class JetsonMowerClientNode(Node):
         try:
             was_armed = self._manual_serial.armed
             self._manual_serial.tick(time.monotonic())
-            if self._manual_serial.remote_active:
+            if self._pending_manual_prepare is not None:
+                command, received_at, deadline = self._pending_manual_prepare
+                if time.monotonic() >= deadline or (isinstance(self._manual_serial, ManualSerialSession)
+                                                      and self._manual_serial.phase in {"closed", "failed", "timed-out"}):
+                    self._manual_serial.disarm()
+                    self._cancel_manual_prepare("manual-preparation-timeout")
+                elif self._manual_serial.ready_to_arm(time.monotonic()):
+                    self._pending_manual_prepare = None
+                    self._publish_ack(command, "manual-prepare", "completed", None, received_at)
+                    self._publish_status()
+            if self._manual_serial.remote_active and (not isinstance(self._manual_serial, ManualSerialSession)
+                                                       or self._manual_serial.has_port):
                 self._manual_challenge.invalidate()
             if was_armed and not self._manual_serial.armed and self._mqtt.is_connected():
+                self._manual_challenge.invalidate()
                 self._publish_status()
             return True
         except (OSError, ValueError):
+            self._cancel_manual_prepare("manual-serial-failed")
             self.get_logger().error("수동 시리얼 통신 실패: 재개 요청을 차단합니다.")
             if self._mqtt.is_connected():
                 self._publish_status()
             return False
 
     def _disarm_manual_serial(self) -> None:
-        self._manual_challenge.invalidate()
-        if self._manual_serial is not None:
-            self._manual_serial.disarm()
+        with self._manual_setup_lock:
+            self._manual_challenge.invalidate()
+            self._cancel_manual_prepare("manual-disconnected")
+            if self._manual_serial is not None:
+                self._manual_serial.disarm()
+
+    def _cancel_manual_prepare(self, reason: str) -> None:
+        pending = self._pending_manual_prepare
+        self._pending_manual_prepare = None
+        if pending is not None and self._mqtt.is_connected():
+            command, received_at, _ = pending
+            self._publish_ack(command, "manual-prepare", "rejected", reason, received_at)
+
+    def _handle_manual_prepare(self, command: dict[str, Any], received_at: str) -> None:
+        if (self._emergency_active or self._manual_serial is None or not self._mqtt.is_connected()
+                or self._consume_challenge(command, "rearm", 2_000_000_000) is None):
+            self._publish_ack(command, "manual-prepare", "rejected", "manual-preparation-unavailable", received_at)
+            return
+        self._cancel_manual_prepare("manual-preparation-superseded")
+        self._publish_ack(command, "manual-prepare", "executing", None, received_at)
+        try:
+            if isinstance(self._manual_serial, ManualSerialSession):
+                self._manual_serial.prepare(time.monotonic())
+            else:
+                self._manual_serial.disarm()
+        except (OSError, ValueError, subprocess.SubprocessError):
+            self._publish_ack(command, "manual-prepare", "rejected", "manual-port-busy-or-unverified", received_at)
+            return
+        self._pending_manual_prepare = (command, received_at, time.monotonic() + 30)
+        self._publish_status()
 
     def _challenge_scope(self, command: dict[str, Any], purpose: str) -> ChallengeScope:
         params = _parameters(command)
@@ -418,6 +479,8 @@ class JetsonMowerClientNode(Node):
         self._autonomy.poll()
         serial_state = None if self._manual_serial is None else (
             "manual-serial-ready" if self._manual_serial.armed else "manual-serial-locked")
+        if self._pending_manual_prepare is not None:
+            serial_state = "manual-preparing"
         payload = {
             "robotId": self._config.robot_id,
             "connectionState": "degraded" if self._emergency_active else "online",
@@ -460,12 +523,15 @@ def utc_now() -> str:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Jetson mower MQTT/ROS 2 edge client")
     parser.add_argument("--config", default="config.yaml", help="Path to config.yaml")
+    parser.add_argument("--require-on-demand", action="store_true", help="요청 시에만 시리얼을 여는 설정 확인")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
+    if args.require_on_demand and not config.manual_serial_on_demand:
+        raise ValueError("관제 수신 대기는 manual_serial.on_demand: true 설정이 필요합니다.")
 
     rclpy.init()
     node = JetsonMowerClientNode(config)
