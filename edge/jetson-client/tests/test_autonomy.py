@@ -30,6 +30,21 @@ def load_client():
 
 
 class AutonomyTest(unittest.TestCase):
+    def test_main_uses_idempotent_ros_shutdown_after_cleanup(self):
+        client = load_client()
+        ros = MagicMock()
+        node = MagicMock()
+        config = MagicMock()
+        with patch.object(client, "rclpy", ros), \
+                patch.object(client, "parse_args", return_value=MagicMock(config="config.yaml")), \
+                patch.object(client, "load_config", return_value=config), \
+                patch.object(client, "JetsonMowerClientNode", return_value=node):
+            client.main()
+        node.stop.assert_called_once()
+        node.destroy_node.assert_called_once()
+        ros.try_shutdown.assert_called_once()
+        ros.shutdown.assert_not_called()
+
     def test_config_rejects_shell_text_and_relative_executable(self):
         self.assertEqual(_autonomy_command({}), ())
         for command in ["bash run.sh", ["run.sh"], [sys.executable, 1]]:

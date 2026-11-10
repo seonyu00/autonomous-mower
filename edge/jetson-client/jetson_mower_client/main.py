@@ -474,7 +474,8 @@ def main() -> None:
     finally:
         node.stop()
         node.destroy_node()
-        rclpy.shutdown()
+        # 종료 신호로 ROS가 먼저 종료된 경우에도 정리 중 오류를 내지 않는다.
+        rclpy.try_shutdown()
 
 
 if __name__ == "__main__":
