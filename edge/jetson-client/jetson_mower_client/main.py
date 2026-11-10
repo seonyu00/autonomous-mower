@@ -10,6 +10,7 @@ from typing import Any
 
 import rclpy
 from geometry_msgs.msg import Twist
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Imu, NavSatFix
@@ -471,6 +472,9 @@ def main() -> None:
     try:
         node.start()
         rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        # 종료 신호로 ROS 실행기가 멈춘 경우에도 정상 정리 경로를 따른다.
+        pass
     finally:
         node.stop()
         node.destroy_node()

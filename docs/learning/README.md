@@ -42,6 +42,8 @@
 
 상세한 프로젝트 입문 설명은 [`docs/ONBOARDING.md`](../ONBOARDING.md), 현재 코드 기준 인벤토리는 [`docs/project-inventory.md`](../project-inventory.md)를 함께 참고한다.
 
+다른 채팅이나 팀원이 실제 장비의 폴더·서비스와 마지막 확인 상태를 찾을 때는 [Jetson 장비 경로와 연결 인계](../project-inventory.md#jetson-장비-경로와-연결-인계)를 먼저 본다. 실제 상태는 접속할 때마다 다시 확인한다.
+
 ## 문서 역할
 
 내용을 추가하기 전에 기존 문서의 목적과 중복 여부를 먼저 확인한다.

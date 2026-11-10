@@ -12,10 +12,11 @@ MOCK = Path(__file__).parent / "fixtures/autonomy_mock.py"
 
 
 def load_client():
-    names = ["rclpy", "rclpy.node", "rclpy.qos", "geometry_msgs", "geometry_msgs.msg",
+    names = ["rclpy", "rclpy.node", "rclpy.qos", "rclpy.executors", "geometry_msgs", "geometry_msgs.msg",
              "sensor_msgs", "sensor_msgs.msg", "std_msgs", "std_msgs.msg"]
     modules = {name: ModuleType(name) for name in names}
     modules["rclpy.node"].Node = object
+    modules["rclpy.executors"].ExternalShutdownException = type("ExternalShutdownException", (Exception,), {})
     for name in ("DurabilityPolicy", "HistoryPolicy", "QoSProfile", "ReliabilityPolicy"):
         setattr(modules["rclpy.qos"], name, MagicMock())
     for module, types in [("geometry_msgs.msg", ["Twist"]), ("sensor_msgs.msg", ["Imu", "NavSatFix"]), ("std_msgs.msg", ["Bool", "Int8"])]:
@@ -30,6 +31,36 @@ def load_client():
 
 
 class AutonomyTest(unittest.TestCase):
+    def test_main_cleans_up_after_external_shutdown_or_interrupt(self):
+        client = load_client()
+        for exception in (client.ExternalShutdownException(), KeyboardInterrupt()):
+            with self.subTest(exception=type(exception).__name__):
+                ros = MagicMock()
+                ros.spin.side_effect = exception
+                node = MagicMock()
+                with patch.object(client, "rclpy", ros), \
+                        patch.object(client, "parse_args", return_value=MagicMock(config="config.yaml")), \
+                        patch.object(client, "load_config", return_value=MagicMock()), \
+                        patch.object(client, "JetsonMowerClientNode", return_value=node):
+                    client.main()
+                node.stop.assert_called_once()
+                node.destroy_node.assert_called_once()
+                ros.try_shutdown.assert_called_once()
+
+    def test_main_does_not_hide_unexpected_spin_error(self):
+        client = load_client()
+        ros = MagicMock()
+        ros.spin.side_effect = ValueError("unexpected")
+        node = MagicMock()
+        with patch.object(client, "rclpy", ros), \
+                patch.object(client, "parse_args", return_value=MagicMock(config="config.yaml")), \
+                patch.object(client, "load_config", return_value=MagicMock()), \
+                patch.object(client, "JetsonMowerClientNode", return_value=node), \
+                self.assertRaisesRegex(ValueError, "unexpected"):
+            client.main()
+        node.stop.assert_called_once()
+        ros.try_shutdown.assert_called_once()
+
     def test_main_uses_idempotent_ros_shutdown_after_cleanup(self):
         client = load_client()
         ros = MagicMock()
