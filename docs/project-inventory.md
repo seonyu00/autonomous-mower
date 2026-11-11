@@ -13,6 +13,8 @@
 
 ### 2026-11-11 비전 관측 지도 저장·조회 준비
 
+**2026-11-12 웹 연결 확인:** 격리 PostGIS와 실제 인증 HTTP를 사용하는 시험 서버에 내부 관측을 저장하고, Mock을 끈 관제 웹의 실제 네이버 지도에서 현재 영역 2개·오래된 위험·위험 이력 1건과 오버레이 해제를 확인했다. 외부 장비 전송과 실제 좌표 변환·센서 정확도는 미검증이다. 재사용 가능한 격리 시험은 `VisionWebIntegrationTest`이며 상세 조건은 개발 로그를 따른다.
+
 `backend/src/main/java/com/autonomousmower/vision/VisionMapService.java`와 V19가 내부 관측의 부분 겹침·최신 영역 보존, 최초 수신 후 위험 이력 30일 보관과 정리를 제공한다. 공개 API는 `robots:read`의 GET `/api/robots/{robotId}/vision-map`뿐이다. `frontend/src/features/map/visionObservations.ts`, `components/VisionMapControls.tsx`와 네이버 지도 오버레이가 분류·5분 경과·위험 이력 페이지를 표시한다. 테스트용 관측은 격리 DB 내부 입력에서만 사용했고 실제 Jetson 수신·깊이/9축 좌표 투영·CPP 반영은 미연결이다. 계약은 [API 문서](api-contract.md#비전-관측-지도-조회--2026-11-11), 다음 단계는 로컬 로드맵, 검증 결과는 개발 로그를 따른다.
 
 **관제 대기 설치 갱신: 2026-11-11 07시대 한국 시간.** 현장 격리 확인 후 커밋 `7b4da6d`를 `~/.local/share/mower-control-gateway/releases/7b4da6d/edge/jetson-client/`에 별도 배치했다. `mower-control-gateway.service`는 active·enabled이고 `Linger=yes`이며, 기존 `mower-telemetry.service`는 inactive·disabled다. MQTT 연결·명령 구독 요청과 대기 중 포트 미점유를 확인했다. PC 백엔드는 새 준비 API가 포함된 JAR로 갱신해 health `UP`을 확인했다. 새 서비스의 웹 준비·물리 출력·재부팅은 미검증이다. 설치·복구·줄바꿈 문제와 설정 보존은 [Jetson README](../edge/jetson-client/README.md)의 실제 설치 기록을 따른다. 아래 01시대 관찰은 당시 상태로 보존한다.
