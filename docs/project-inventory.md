@@ -11,6 +11,10 @@
 
 ## Jetson 장비 경로와 연결 인계
 
+### 2026-11-11 비전 관측 지도 저장·조회 준비
+
+`backend/src/main/java/com/autonomousmower/vision/VisionMapService.java`와 V19가 내부 관측의 부분 겹침·최신 영역 보존, 최초 수신 후 위험 이력 30일 보관과 정리를 제공한다. 공개 API는 `robots:read`의 GET `/api/robots/{robotId}/vision-map`뿐이다. `frontend/src/features/map/visionObservations.ts`, `components/VisionMapControls.tsx`와 네이버 지도 오버레이가 분류·5분 경과·위험 이력 페이지를 표시한다. 테스트용 관측은 격리 DB 내부 입력에서만 사용했고 실제 Jetson 수신·깊이/9축 좌표 투영·CPP 반영은 미연결이다. 계약은 [API 문서](api-contract.md#비전-관측-지도-조회--2026-11-11), 다음 단계는 로컬 로드맵, 검증 결과는 개발 로그를 따른다.
+
 **확인 시각: 2026-11-11 01:36 한국 시간.** 아래는 해당 시점에 실제 Jetson을 읽기 전용으로 확인한 기록이다. 파일·서비스·포트 상태는 바뀔 수 있으므로 다른 채팅이나 작업에서 사용하기 전에 다시 확인한다. `~`는 Jetson 로그인 사용자의 홈 디렉터리이며 비밀번호와 토큰은 기록하지 않는다. 전체 변경 이력은 [개발 로그](development-log.md), 다음 작업의 순서와 차단 조건은 Git에서 제외된 로컬 `docs/learning/12-development-roadmap.md`를 따른다.
 
 ### 장비의 주요 폴더와 파일

@@ -8,6 +8,7 @@ import {
   MAX_OPERATIONAL_MAP_ZOOM,
 } from '../mapDefaults';
 import { loadNaverMaps, subscribeNaverMapsAuthFailure } from '../naverMapsLoader';
+import { visionColors, visionPolygons, type VisionRegion } from '../visionObservations';
 
 type NaverOperationalMapProps = {
   clientId: string;
@@ -24,6 +25,7 @@ type NaverOperationalMapProps = {
   plannedRoute: LngLat[];
   completedRoute: LngLat[];
   editing: boolean;
+  visionRegions?: VisionRegion[];
   onAddVertex: (position: LngLat) => void;
   onMoveVertex: (index: number, position: LngLat) => void;
   onError: (message: string) => void;
@@ -43,6 +45,7 @@ export function NaverOperationalMap({
   plannedRoute,
   completedRoute,
   editing,
+  visionRegions,
   onAddVertex,
   onMoveVertex,
   onError,
@@ -53,6 +56,16 @@ export function NaverOperationalMap({
   const mapRef = useRef<naver.maps.Map | null>(null);
   const [mapsApi, setMapsApi] = useState<typeof naver.maps | null>(null);
   const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    if (!mapsApi || !mapRef.current || editing) return;
+    const overlays = (visionRegions ?? []).flatMap(region => visionPolygons(region).map(shape =>
+      new mapsApi.Polygon({ map: mapRef.current!, paths: shape.coordinates.map(ring => ring.map(p => toLatLng(mapsApi, p))),
+        fillColor: visionColors[region.state], fillOpacity: region.stale ? 0.1 : 0.35,
+        strokeColor: visionColors[region.state], strokeWeight: region.stale ? 1 : 2,
+        clickable: false, zIndex: 3 })));
+    return () => overlays.forEach(overlay => overlay.setMap(null));
+  }, [mapsApi, visionRegions, editing]);
 
   useEffect(() => {
     onErrorRef.current = onError;

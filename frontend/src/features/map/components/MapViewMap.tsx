@@ -22,6 +22,8 @@ import {
 import { useCppPreview, previewMarkers } from '../cppPreview';
 import { CppPreviewControls } from './CppPreviewControls';
 import { NaverOperationalMap } from './NaverOperationalMap';
+import { useVisionObservations } from '../visionObservations';
+import { VisionMapControls } from './VisionMapControls';
 
 const emptyDraftVertices: LngLat[] = [];
 
@@ -78,6 +80,11 @@ export function MapViewMap() {
     ? draftVerticesByRobotId[scopeId!] ?? emptyDraftVertices
     : emptyDraftVertices;
   const storedWorkZone = selectedRobotId ? zonesByRobotId[selectedRobotId] : undefined;
+  const [visionEnabled, setVisionEnabled] = useState(false);
+  const zoneVersion = useZoneStore(state => selectedRobotId ? state.versionsByRobotId[selectedRobotId] : null);
+  const visionAvailable = !!storedWorkZone && !editingWorkZone && !sampleMode && zoneVersion != null;
+  const vision = useVisionObservations(selectedRobotId, zoneVersion, visionEnabled && visionAvailable);
+  const visibleVision = visionEnabled && visionAvailable && !vision.isError ? vision.data : undefined;
   const displayedWorkZone = editingWorkZone
     ? closePolygonVertices(draftVertices)
     : area === 'travel' ? travelZone : storedWorkZone;
@@ -121,6 +128,7 @@ export function MapViewMap() {
         transitRoute={preview.transitPath}
         completedRoute={completedRoute}
         editing={editingWorkZone && mapReady}
+        visionRegions={visibleVision?.regions}
         onAddVertex={(position) => {
           if (selectedRobotId && useZoneStore.getState().mapReady) {
             addDraftVertex(scopeId!, position);
@@ -167,6 +175,9 @@ export function MapViewMap() {
           </div>
         ) : null}
         <CppPreviewControls preview={preview} />
+        <VisionMapControls enabled={visionEnabled} onToggle={setVisionEnabled} data={visibleVision}
+          loading={vision.isPending} error={vision.isError} available={visionAvailable} mapReady={mapReady}
+          onNextHistory={vision.nextHistory} onLatestHistory={vision.latestHistory} />
       </div>
       <span className={livePositionAvailable ? 'map-data-source-chip live' : 'map-data-source-chip sample'}>
         {sourceLabel}

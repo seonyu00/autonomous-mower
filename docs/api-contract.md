@@ -1,5 +1,16 @@
 # API 및 실시간 계약
 
+## 비전 관측 지도 조회 — 2026-11-11
+
+`GET /api/robots/{robotId}/vision-map?version=<WORK_ZONE_VERSION>&before=<HISTORY_CURSOR>`는 `robots:read` 권한으로 조회한다. `before`는 선택 사항이다. 등록 로봇과 현재 작업 구역 버전을 검사하고 구역 변경 시 충돌을 반환한다. 응답은 `robotId`, `version`, `serverTime`, `regions`, `dangerHistory`, `nextHistoryCursor`다. 위험 이력은 ID 내림차순 100건씩이며 다음 페이지에는 `nextHistoryCursor`를 `before`로 보낸다. 이전 구역 버전의 위험 이력도 버전을 함께 반환하지만 현재 지도 영역에는 섞지 않는다.
+
+영역은 `id`, `observationId`, `version`, `state`, `source`, `observedAt`, `receivedAt`, GeoJSON `geometry`와 `stale`을 가진다. 좌표 순서는 경도·위도(WGS84), geometry는 Polygon 또는 MultiPolygon이다. 분류는 `MOW_NOW`(예초 가능 후보), `DANGEROUS`(위험), `DEFERRED_MOWABLE`(예초 보류), `NOT_MOWABLE`(예초 불가), `UNKNOWN`(미확인)이다. 관측 시각부터 5분 이상 지나면 `stale=true`로 반환한다. 이는 주행 허용·위험 해제·실제 예초 면적 판단이 아니다.
+
+`VisionMapService.record`는 내부 입력이며 HTTP 쓰기 API와 실제 MQTT·Jetson 입력은 추가하지 않았다. 구역 버전과 좌표 유효성을 검사하고 작업 구역으로 잘라 저장한다. 같은 관측 ID·내용의 재전송은 최초 수신 시각을 갱신하지 않는다. 같은 ID의 다른 내용은 거부한다. 겹친 범위만 최신 관측으로 교체하고 늦게 도착한 과거 관측은 최신 영역을 덮어쓰지 않는다. 관측 시각이 같으면 먼저 저장된 영역을 유지한다. 미래 시각·완전히 범위 밖 입력은 거부한다. 실제 입력 연결 전에 측정 시계·좌표 보정과 출처 인증 계약을 확인해야 한다.
+
+위험 원본 영역은 최초 서버 수신부터 30일 동안 이력으로 조회하고 이후 즉시 조회에서 제외한다. 매시간 정리 작업이 만료 원본 영역을 삭제한다. 현재 지도에 남은 최신 위험 영역은 별도이며 30일 만료로 지우지 않고 오래된 정보로 표시한다. 위험 외 분류는 현재 지도에 필요한 영역만 유지한다. 덮인 일반 관측과 만료된 위험은 분류·출처·시각도 지우고 ID·버전·지문 등 중복 방지용 최소 정보만 남긴다. 이 식별 정보의 용량 관리와 실제 비전 입력 빈도는 외부 수신기를 연결하기 전에 확인해야 한다.
+
+웹은 관측 표시를 켠 동안 조회 완료 후 1초 간격으로 다시 읽는다. 화면에는 최근 관측·오래됨·미관측·조회 실패와 위험 이력을 구분하며, 실패·구역 편집·샘플 모드·버전 변경 때 이전 오버레이를 숨긴다. 실제 데이터가 없으면 예시로 대체하지 않는다. 개발 검증은 내부 입력과 격리 DB에서만 수행한다. CPP·AUTO·예초 면적 계산에는 연결하지 않았다.
 이 문서는 `SRS.md`, `docs/frontend-masterplan.md`, `docs/development-log.md`와 현재 프론트엔드 구현을 기준으로 Spring Boot 백엔드가 우선 맞춰야 할 REST/STOMP/WebRTC signalling 계약을 정의한다.
 
 SRS에 endpoint 경로와 signalling 방식은 상세 명시되어 있지 않다. 따라서 `/api/...`, `/topic/...`, WebRTC REST signalling 경로는 프론트엔드 구현과 masterplan에 맞춘 **추정 계약**이다. 백엔드 구현 중 변경이 필요하면 이 문서를 먼저 갱신한 뒤 프론트엔드 타입을 맞춘다.
