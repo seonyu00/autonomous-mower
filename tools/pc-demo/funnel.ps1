@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param([ValidateSet('Start', 'Stop', 'Status')][string]$Action = 'Status')
 $ErrorActionPreference = 'Stop'
 if (-not (Get-Command tailscale -ErrorAction SilentlyContinue)) { throw 'Tailscale CLI를 찾을 수 없습니다.' }

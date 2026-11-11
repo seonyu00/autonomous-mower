@@ -15,6 +15,8 @@
 
 `backend/src/main/java/com/autonomousmower/vision/VisionMapService.java`와 V19가 내부 관측의 부분 겹침·최신 영역 보존, 최초 수신 후 위험 이력 30일 보관과 정리를 제공한다. 공개 API는 `robots:read`의 GET `/api/robots/{robotId}/vision-map`뿐이다. `frontend/src/features/map/visionObservations.ts`, `components/VisionMapControls.tsx`와 네이버 지도 오버레이가 분류·5분 경과·위험 이력 페이지를 표시한다. 테스트용 관측은 격리 DB 내부 입력에서만 사용했고 실제 Jetson 수신·깊이/9축 좌표 투영·CPP 반영은 미연결이다. 계약은 [API 문서](api-contract.md#비전-관측-지도-조회--2026-11-11), 다음 단계는 로컬 로드맵, 검증 결과는 개발 로그를 따른다.
 
+**관제 대기 설치 갱신: 2026-11-11 07시대 한국 시간.** 현장 격리 확인 후 커밋 `7b4da6d`를 `~/.local/share/mower-control-gateway/releases/7b4da6d/edge/jetson-client/`에 별도 배치했다. `mower-control-gateway.service`는 active·enabled이고 `Linger=yes`이며, 기존 `mower-telemetry.service`는 inactive·disabled다. MQTT 연결·명령 구독 요청과 대기 중 포트 미점유를 확인했다. PC 백엔드는 새 준비 API가 포함된 JAR로 갱신해 health `UP`을 확인했다. 새 서비스의 웹 준비·물리 출력·재부팅은 미검증이다. 설치·복구·줄바꿈 문제와 설정 보존은 [Jetson README](../edge/jetson-client/README.md)의 실제 설치 기록을 따른다. 아래 01시대 관찰은 당시 상태로 보존한다.
+
 **확인 시각: 2026-11-11 01:36 한국 시간.** 아래는 해당 시점에 실제 Jetson을 읽기 전용으로 확인한 기록이다. 파일·서비스·포트 상태는 바뀔 수 있으므로 다른 채팅이나 작업에서 사용하기 전에 다시 확인한다. `~`는 Jetson 로그인 사용자의 홈 디렉터리이며 비밀번호와 토큰은 기록하지 않는다. 전체 변경 이력은 [개발 로그](development-log.md), 다음 작업의 순서와 차단 조건은 Git에서 제외된 로컬 `docs/learning/12-development-roadmap.md`를 따른다.
 
 ### 장비의 주요 폴더와 파일
@@ -602,7 +604,7 @@ Backend 주요 파일:
 
 ### Manual Joystick
 
-2026-11-11 PC 구현: `수동 조작 재개`에서 `manual-prepare`를 요청하고 준비 완료 후 새 일회용 확인값으로 재개한다. 준비 중 방향 입력 잠금·취소·제어권 버전 변경과 늦은 완료 폐기를 제공한다. `ManualSerialSession`은 명시적인 준비 때만 포트를 열며, 새 리모컨 개입·해제 확인과 준비/재개 만료를 적용한다. `scripts/run-control-gateway.sh`와 `systemd/mower-control-gateway.service`가 상태 전송·명령 수신 대기를 제공한다. 실제 서비스 설치·배포·현장 재시험은 미수행이다. 실행·복구는 [Jetson README](../edge/jetson-client/README.md), 계약은 [API 계약](api-contract.md#수동-시리얼-조작-재개와-입력-식별자-개발-중), 다음 단계는 [로드맵](learning/12-development-roadmap.md)을 따른다.
+2026-11-11 구현·설치: `수동 조작 재개`에서 `manual-prepare`를 요청하고 준비 완료 후 새 일회용 확인값으로 재개한다. 준비 중 방향 입력 잠금·취소·제어권 버전 변경과 늦은 완료 폐기를 제공한다. `ManualSerialSession`은 명시적인 준비 때만 포트를 열며, 새 리모컨 개입·해제 확인과 준비/재개 만료를 적용한다. `scripts/run-control-gateway.sh`와 `systemd/mower-control-gateway.service`가 상태 전송·명령 수신 대기를 제공한다. 장비의 별도 배포 폴더에 설치하고 서비스 시작·자동 실행·MQTT 연결·대기 중 포트 미점유를 확인했으며, 새 서비스의 웹 재개·물리 동작과 재부팅 시험은 미수행이다. 실행·복구는 [Jetson README](../edge/jetson-client/README.md), 계약은 [API 계약](api-contract.md#수동-시리얼-조작-재개와-입력-식별자-개발-중), 다음 단계는 [로드맵](learning/12-development-roadmap.md)을 따른다.
 
 Frontend 주요 파일:
 

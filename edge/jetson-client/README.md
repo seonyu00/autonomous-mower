@@ -4,7 +4,7 @@ Jetson Orin Nano에서 Spring Boot 백엔드의 MQTT command topic을 구독하�
 
 현재 클라이언트는 MQTT command 검증, ROS 2 제어 출력, command ACK, telemetry/status 발행, 로컬 데드맨 스위치와 E-Stop 상태 처리를 제공한다. 기본 ROS 방식은 `/cmd_vel`을 구독하는 별도 bridge node를 사용한다. `manual_serial.port`를 설정하면 이 패키지의 STM32 USB CDC 시리얼 어댑터를 사용하며, 웹 준비 요청으로 포트를 여는 방식은 아래 관제 대기를 따른다.
 
-## 웹 버튼에서 수동 제어 준비 — PC 구현, 장비 적용 전
+## 웹 버튼에서 수동 제어 준비
 
 예전 시험 서비스를 매번 수동 실행하는 대신, `mower-control-gateway.service` 하나가 상태 전송과 MQTT 명령 수신을 담당하도록 구성했다. 프로세스 시작만으로 시리얼 포트를 열지 않는다. 웹의 `수동 조작 재개`가 인증·제어권·일회용 확인값 검사를 거친 `manual-prepare`를 보낸 뒤에만 제어 포트를 연다. 기존 `monitor.py`와 `mower-telemetry.service`는 상태 전용 방식으로 그대로 남긴다.
 
@@ -22,7 +22,7 @@ manual_serial:
 
 전제는 pyserial과 `fuser`(Ubuntu `psmisc`) 설치, 포트 접근 권한이다. 점유 프로그램이 있거나 확인할 수 없으면 준비를 거부한다. 개방 전후 `fuser`, pyserial exclusive와 Linux `TIOCEXCL`을 사용한다. 현장 방향키 시험·ROS 시리얼 브리지와 동시에 사용하지 않는다. 기존 센서 전용 서비스와 같은 MQTT ID로 동시에 실행하지 않는다.
 
-아래는 **현장 담당자와 바퀴·날 격리를 확인한 뒤 적용할 절차**이며 이번 PC 작업에서 실행하지 않았다. 저장소 배치가 `~/autonomous-mower`와 다르면 unit 경로부터 조정한다. 새 웹·서버·장비 코드를 함께 적용하고 비공개 설정은 보존한다.
+아래는 **현장 담당자와 바퀴·날 격리를 확인한 뒤 적용할 절차**의 예시다. 홈 저장소를 직접 실행하는 배치이며, 아래 실제 설치 기록의 별도 배포 폴더를 사용할 때는 unit 경로를 바꿔야 한다. 새 웹·서버·장비 코드를 함께 적용하고 비공개 설정은 보존한다.
 
 ```bash
 systemctl --user disable --now mower-telemetry.service
@@ -41,6 +41,18 @@ unit의 `Conflicts`로 동시 실행을 막는다. 이전 서비스를 disable�
 systemctl --user disable --now mower-control-gateway.service
 systemctl --user enable --now mower-telemetry.service
 ```
+
+### 2026-11-11 실제 설치 기록
+
+사용자가 바퀴·날 격리와 현장 담당자 동행을 확인한 뒤 설치했다. Jetson 홈 저장소에 현장 수정본이 있어 직접 덮어쓰지 않고 `~/.local/share/mower-control-gateway/releases/7b4da6d/edge/jetson-client/`에 해당 커밋을 배치했다. 실제 사용자 unit의 작업·실행 경로도 이 폴더로 지정했다. 기존 비공개 설정을 배포 폴더에 복사해 권한 600으로 보관하고 `manual_serial.on_demand: true`와 `/dev/serial/by-id/<STM32_DEVICE>`를 설정했다. 기존 설정 원본과 팀 ROS 작업 공간은 보존했다.
+
+`mower-control-gateway.service`가 active·enabled이며 사용자 `Linger=yes`를 확인했다. 부팅 후 로그인 없이 사용자 서비스가 시작되는 설정이다. 기존 `mower-telemetry.service`는 중지·자동 실행 해제했다. MQTT 연결과 명령 토픽 구독 요청 5개, 대기 중 STM32 포트 미점유, 기존 GPS·카메라·영상 서비스의 실행 유지를 확인했다. 실제 재부팅이나 새 서비스의 웹 재개·물리 동작은 시험하지 않았다. GPS 전용 드라이버의 부팅 자동 실행 설정은 이번에 바꾸지 않았다.
+
+기존 PC 백엔드 JAR에는 준비 API가 없어 최신 코드를 별도로 빌드한 뒤 기존 실행 설정으로 교체·재시작하고 health `UP`을 확인했다. DB·MQTT 컨테이너와 공개 경로 설정은 유지했다. 웹은 새 준비 흐름이 포함된 버전이어야 하며 화면 새로고침만으로 배포 버전이 검증된 것은 아니다.
+
+첫 배포는 Windows의 `core.autocrlf=true`가 `git archive` 출력의 실행 스크립트를 CRLF로 바꿔 시작에 실패했다. 기존 상태 서비스를 복구한 뒤 배포 스크립트를 LF로 정규화해 해결했다. 아카이브를 만들 때는 `git -c core.autocrlf=false archive ...`를 사용하고, 저장소에는 해당 실행기의 `text eol=lf` 규칙을 추가했다. `bash -n`만으로는 `set -eo pipefail` 인수 뒤 CR 문자를 발견하지 못하므로 실제 파일 바이트와 실행 결과도 확인한다.
+
+장비의 `~/.local/share/mower-control-gateway/installation.json`에는 배포 경로·이전 서비스 상태·설정 원본 해시·실행기 해시를, `verification.json`에는 설치 확인 결과를 기록했다. 같은 폴더의 `before-<설치시각>/`에는 이전 상태 서비스 unit을 보관했다. 비밀번호나 토큰은 이 기록에 넣지 않았다. 복구는 위의 새 서비스 중지·비활성화와 기존 상태 서비스 활성화 절차를 따른다. PC에서 이후 코드를 푸시해도 이 배포본이 자동 갱신되지는 않는다.
 
 ## 대상 환경
 

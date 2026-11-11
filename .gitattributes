@@ -1,1 +1,2 @@
 edge/jetson-client/scripts/prepare-web-work-zone.sh text eol=lf
+edge/jetson-client/scripts/run-control-gateway.sh text eol=lf
