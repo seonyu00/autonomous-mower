@@ -1,5 +1,7 @@
 # MQTT Topic 계약
 
+상태 메시지의 선택적 `manualLockReason`은 `edgeState=manual-serial-locked`의 원인 진단 문자열이다. 기존 토픽·상태값과 필수 필드는 유지한다. 원인 부재는 정상·안전을 뜻하지 않으며 구버전은 해당 필드를 보내지 않을 수 있다. 지원 값과 웹 처리는 [API 및 실시간 계약](api-contract.md)의 수동 잠금 원인 절을 따른다.
+
 이 문서는 Spring Boot 백엔드와 Jetson Edge Client 사이의 MQTT 통합 계약이다.
 
 현재 `edge/jetson-client/`와 `tools/edge-mock-client/`가 이 계약을 기준으로 구현되어 있다. 백엔드, Jetson Edge Client, Edge Mock의 topic, QoS, payload를 변경할 때는 이 문서와 각 구현을 함께 갱신해야 한다.

@@ -121,7 +121,8 @@ public class TelemetryReceptionService {
                 edge != null ? edge.edgeState() : "unknown",
                 edge != null ? edge.lastSeenAt() : state.lastReceivedAt,
                 delayed || (edge != null && edge.stale()),
-                reception
+                reception,
+                edge != null ? edge.manualLockReason() : null
         );
     }
 

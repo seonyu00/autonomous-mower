@@ -37,6 +37,7 @@ class ManualSerialSession:
         self._bridge = None
         self.phase = "closed"
         self._deadline = None
+        self._lock_reason = "not-armed"
 
     def prepare(self, now: float) -> None:
         with self._lock:
@@ -50,6 +51,11 @@ class ManualSerialSession:
     def failed(self) -> bool:
         with self._lock:
             return self._bridge is not None and self._bridge.failed
+
+    @property
+    def lock_reason(self):
+        with self._lock:
+            return self._bridge.lock_reason if self._bridge is not None else self._lock_reason
 
     @property
     def has_port(self) -> bool:
@@ -96,6 +102,7 @@ class ManualSerialSession:
             try:
                 if self._bridge is not None:
                     self._bridge.disarm()
+                    self._lock_reason = self._bridge.lock_reason
                     self._bridge.tick(time.monotonic())
             finally:
                 if self._port is not None:

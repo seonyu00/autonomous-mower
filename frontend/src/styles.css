@@ -638,6 +638,9 @@ button {
   padding-top: 12px;
 }
 
+.manual-joystick { align-content: start; }
+.command-feedback-slot { height: 4.5rem; overflow-y: auto; overflow-wrap: anywhere; }
+
 .command-section {
   background: #0d151b;
   border: 1px solid #23313b;

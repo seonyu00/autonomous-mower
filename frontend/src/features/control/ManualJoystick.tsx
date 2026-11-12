@@ -181,7 +181,20 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
       inputRef.current?.stop();
       setArmId(null);
       setArmConfirmedAt(null);
-      setLocalError('리모컨 개입 또는 통신 문제로 수동 조작이 잠겼습니다. 확인 후 다시 재개해 주세요.');
+      const reasons: Record<string, string> = {
+        'remote-active': '리모컨 개입이 감지됐습니다.',
+        'serial-status-timeout': 'STM32 상태 수신이 중단됐습니다.',
+        'serial-error': 'STM32 시리얼 통신 오류가 발생했습니다.',
+        'serial-loop-delayed': '장비의 시리얼 처리 주기가 지연됐습니다.',
+        'serial-backlog': '과거 STM32 진단이 쌓여 현재 상태를 확인할 수 없습니다.',
+        'serial-invalid': 'STM32 진단 데이터 형식이 올바르지 않습니다.',
+        'input-timeout': '웹 이동 입력이 제한 시간 안에 도착하지 않았습니다.',
+        'input-expired': '웹 이동 입력의 유효시간이 지났습니다.',
+        'stop-requested': '장비가 정지 요청으로 수동 조작을 잠갔습니다.',
+        'state-reset': '장비의 수동 준비 상태가 해제됐습니다.',
+        'invalid-speed': '장비가 유효하지 않은 이동 입력을 거부했습니다.',
+      };
+      setLocalError(`${reasons[edgeStatus.manualLockReason ?? ''] ?? '장비가 수동 조작 잠금을 보고했습니다. 원인은 확인되지 않았습니다.'} 확인 후 다시 재개해 주세요.`);
     }
   }, [armId, armConfirmedAt, edgeStatus]);
 

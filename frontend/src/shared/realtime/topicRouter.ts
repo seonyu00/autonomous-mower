@@ -145,6 +145,7 @@ function isRobotStatus(value: unknown): value is RobotStatus {
     isString(value.mqttState) &&
     isString(value.wssState) &&
     isString(value.edgeState) &&
+    (value.manualLockReason === undefined || isNullableString(value.manualLockReason)) &&
     isNullableString(value.lastSeenAt) &&
     (value.telemetryReception === undefined || isTelemetryReception(value.telemetryReception)) &&
     typeof value.stale === 'boolean'

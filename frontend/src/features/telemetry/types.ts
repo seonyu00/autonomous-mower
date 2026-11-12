@@ -32,6 +32,7 @@ export type RobotStatus = {
   mqttState: 'connected' | 'degraded' | 'disconnected';
   wssState: 'connected' | 'degraded' | 'disconnected';
   edgeState: string;
+  manualLockReason?: string | null;
   lastSeenAt: string | null;
   telemetryReception?: TelemetryReception;
   stale: boolean;

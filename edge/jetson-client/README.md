@@ -44,6 +44,8 @@ systemctl --user enable --now mower-telemetry.service
 
 ### 2026-11-11 실제 설치 기록
 
+**2026-11-12 갱신:** 바퀴·날 격리와 담당자 동행 확인 후 커밋 `6a2ffa6`을 `~/.local/share/mower-control-gateway/releases/6a2ffa6/edge/jetson-client/`에 배치하고 기존 비공개 설정을 복사했다. 기존 unit은 `~/.local/share/mower-control-gateway/mower-control-gateway.before-6a2ffa6.service`에 보관했다. 관제 서비스의 새 실행 경로·MQTT 연결 및 구독 요청과 대기 중 시리얼 포트 미점유를 확인했다. 이동 명령, 웹 재개와 물리 정지·리모컨 우선은 시험하지 않았다. 이전 버전 복구 시 백업 unit을 복원하고 사용자 systemd를 재적용해야 하며 실제 장비 상태를 먼저 확인한다.
+
 사용자가 바퀴·날 격리와 현장 담당자 동행을 확인한 뒤 설치했다. Jetson 홈 저장소에 현장 수정본이 있어 직접 덮어쓰지 않고 `~/.local/share/mower-control-gateway/releases/7b4da6d/edge/jetson-client/`에 해당 커밋을 배치했다. 실제 사용자 unit의 작업·실행 경로도 이 폴더로 지정했다. 기존 비공개 설정을 배포 폴더에 복사해 권한 600으로 보관하고 `manual_serial.on_demand: true`와 `/dev/serial/by-id/<STM32_DEVICE>`를 설정했다. 기존 설정 원본과 팀 ROS 작업 공간은 보존했다.
 
 `mower-control-gateway.service`가 active·enabled이며 사용자 `Linger=yes`를 확인했다. 부팅 후 로그인 없이 사용자 서비스가 시작되는 설정이다. 기존 `mower-telemetry.service`는 중지·자동 실행 해제했다. MQTT 연결과 명령 토픽 구독 요청 5개, 대기 중 STM32 포트 미점유, 기존 GPS·카메라·영상 서비스의 실행 유지를 확인했다. 실제 재부팅이나 새 서비스의 웹 재개·물리 동작은 시험하지 않았다. GPS 전용 드라이버의 부팅 자동 실행 설정은 이번에 바꾸지 않았다.

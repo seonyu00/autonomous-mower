@@ -5,6 +5,20 @@ from jetson_mower_client.manual_serial_state import ManualSerialState
 
 
 class ManualSerialStateTest(unittest.TestCase):
+    def test_lock_reasons_distinguish_remote_input_and_status_timeout(self):
+        state = ManualSerialState()
+        state.observe("Remote active: 0 (hold remaining=0ms)", 1)
+        state.arm("arm", 1)
+        state.command("arm", "press", "forward", 0.5, 1)
+        state.packet(1.4)
+        self.assertEqual(state.lock_reason, "input-timeout")
+        state.observe("Remote active: 1 (hold remaining=5000ms)", 2)
+        self.assertEqual(state.lock_reason, "remote-active")
+        state.observe("Remote active: 0 (hold remaining=0ms)", 2)
+        state.arm("new-arm", 2)
+        state.packet(5)
+        self.assertEqual(state.lock_reason, "serial-status-timeout")
+
     def test_requires_fresh_clear_remote_status_and_explicit_arm(self):
         state = ManualSerialState()
         self.assertFalse(state.arm("attempt", 0))

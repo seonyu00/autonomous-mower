@@ -143,10 +143,11 @@ describe('ManualJoystick 입력 수명', () => {
     await makeReady();
     act(() => useTelemetryStore.getState().upsertStatus({
       robotId: TEST_ROBOT_ID, connectionState: 'online', mqttState: 'connected', wssState: 'connected',
-      edgeState: 'manual-serial-locked', lastSeenAt: new Date(Date.now() + 1000).toISOString(), stale: false,
+      edgeState: 'manual-serial-locked', manualLockReason: 'remote-active', lastSeenAt: new Date(Date.now() + 1000).toISOString(), stale: false,
     }));
     expect(screen.getByLabelText('수동 전진')).toBeDisabled();
     expect(screen.getByRole('button', { name: '수동 조작 재개' })).toBeEnabled();
+    expect(screen.getByText(/리모컨 개입이 감지됐습니다/)).toBeInTheDocument();
   });
 
   it('누르는 동안 500ms 이후에도 최신 방향을 반복한다', async () => {

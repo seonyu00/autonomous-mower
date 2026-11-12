@@ -16,6 +16,7 @@ _REMOTE_PACKET = encode_packet(0, 1500, 1500)
 @dataclass
 class ManualSerialState:
     armed: bool = False
+    lock_reason: str = "not-armed"
     remote_active: bool = True
     remote_seen_at: float | None = None
     input_at: float | None = None
@@ -32,7 +33,7 @@ class ManualSerialState:
         self.remote_seen_at = now
         self.remote_active = match.group(1) == "1" or int(match.group(2)) > 0
         if self.remote_active:
-            self.disarm()
+            self.disarm("remote-active")
         return True
 
     def arm(self, arm_id: str, now: float) -> bool:
@@ -42,6 +43,7 @@ class ManualSerialState:
         if self.remote_active or not self._status_fresh(now):
             return False
         self.armed = True
+        self.lock_reason = ""
         self.arm_id = arm_id
         self.press_id = None
         self.retired_presses.clear()
@@ -49,7 +51,11 @@ class ManualSerialState:
         self.wheels = (1500, 1500)
         return True
 
-    def disarm(self) -> None:
+    def disarm(self, reason: str | None = None) -> None:
+        if reason is not None:
+            self.lock_reason = reason
+        elif self.armed:
+            self.lock_reason = "state-reset"
         self.armed = False
         self.arm_id = None
         self.press_id = None
@@ -59,10 +65,10 @@ class ManualSerialState:
 
     def command(self, arm_id: str, press_id: str, direction: str, speed: float, now: float, input_age: float = 0) -> bool:
         if not self.armed or self.remote_active or not self._status_fresh(now):
-            self.disarm()
+            self.disarm("remote-active" if self.remote_active else "serial-status-timeout" if self.armed else None)
             return False
         if not 0 <= input_age < _INPUT_TIMEOUT:
-            self.disarm()
+            self.disarm("input-expired")
             return False
         if arm_id != self.arm_id or not press_id or press_id in self.retired_presses:
             return False
@@ -71,7 +77,7 @@ class ManualSerialState:
         try:
             wheels = manual_wheels(direction, speed)
         except (TypeError, ValueError):
-            self.disarm()
+            self.disarm("invalid-speed")
             return False
         self.press_id = press_id
         self.wheels = wheels
@@ -80,7 +86,7 @@ class ManualSerialState:
 
     def stop(self, arm_id: str | None, press_id: str | None) -> None:
         if arm_id != self.arm_id or not press_id:
-            self.disarm()
+            self.disarm("stop-requested")
             return
         # 완료된 누름을 기억해 지연된 반복 명령으로 다시 출발하지 않게 한다.
         self.retired_presses.add(press_id)
@@ -93,11 +99,11 @@ class ManualSerialState:
 
     def packet(self, now: float) -> bytes:
         if not self._status_fresh(now):
-            self.disarm()
+            self.disarm("serial-status-timeout" if self.armed else None)
         if self.remote_active or not self.armed or self.input_at is None:
             return _REMOTE_PACKET
         if now - self.input_at >= _INPUT_TIMEOUT:
-            self.disarm()
+            self.disarm("input-timeout")
             return _REMOTE_PACKET
         return encode_packet(1, *self.wheels)
 

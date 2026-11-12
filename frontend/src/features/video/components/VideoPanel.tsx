@@ -5,6 +5,7 @@ import { useAuthStore } from '../../auth/authStore';
 import { useRobotStore } from '../../robots/robotStore';
 import { createDefaultVideoSession, useVideoStore } from '../videoStore';
 import { WebRTCClient } from '../WebRtcClient';
+import { acquireVideoClient, retainVideoClient } from '../retainedVideoClient';
 import { captureVideoFrame } from '../captureVideoFrame';
 import { uploadManualSnapshot } from '../snapshotApi';
 
@@ -27,10 +28,11 @@ export function VideoPanel() {
   const hasActiveStream = Boolean(session && activeVideoStates.includes(session.connectionState));
 
   useEffect(() => {
-    const client = new WebRTCClient();
+    if (!selectedRobotId) return;
+    const client = acquireVideoClient(selectedRobotId, sessionVersion);
     clientRef.current = client;
     return () => {
-      void client.stopStream();
+      retainVideoClient(client);
       if (clientRef.current === client) clientRef.current = null;
     };
   }, [selectedRobotId, sessionVersion]);
@@ -42,27 +44,6 @@ export function VideoPanel() {
   }, [canUseVideo, hasActiveStream, selectedRobotId]);
 
   useEffect(() => {
-    const stopCurrentStream = () => {
-      void clientRef.current?.stopStream();
-    };
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        stopCurrentStream();
-      }
-    };
-
-    window.addEventListener('pagehide', stopCurrentStream);
-    window.addEventListener('beforeunload', stopCurrentStream);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener('pagehide', stopCurrentStream);
-      window.removeEventListener('beforeunload', stopCurrentStream);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
-
-  useEffect(() => {
     const video = videoRef.current;
     const stream = session?.stream;
     if (!video || !stream || !selectedRobotId) return;
@@ -72,6 +53,7 @@ export function VideoPanel() {
     let lastFrame = 0;
     let lastMediaTime = -1;
     const current = () => active && useAuthStore.getState().sessionVersion === sessionVersion
+      && document.visibilityState !== 'hidden'
       && useRobotStore.getState().selectedRobotId === selectedRobotId
       && useVideoStore.getState().getSession(selectedRobotId).stream === stream;
     const received = () => {

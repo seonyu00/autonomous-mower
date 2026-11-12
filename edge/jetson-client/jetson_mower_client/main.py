@@ -488,6 +488,7 @@ class JetsonMowerClientNode(Node):
             "edgeState": "emergency" if self._emergency_active else (
                 serial_state or ("autonomy-" + self._autonomy.state if self._autonomy.run_id is not None else self._mode or "connected")),
             "lastSeenAt": utc_now(),
+            "manualLockReason": getattr(self._manual_serial, "lock_reason", None) if serial_state == "manual-serial-locked" else None,
             "stale": False,
         }
         self._mqtt.publish_json(self._topics.status, payload, qos=1)

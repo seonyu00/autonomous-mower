@@ -16,6 +16,16 @@ import org.mockito.ArgumentCaptor;
 
 class TelemetryReceptionServiceTest {
 
+    @Test
+    void forwardsManualLockReasonWithoutChangingLegacyState() {
+        service.recordStatus(new MqttStatusPayload("A", "online", "connected", "manual-serial-locked",
+                start, false, "input-timeout"));
+        ArgumentCaptor<RobotStatusMessage> captor = ArgumentCaptor.forClass(RobotStatusMessage.class);
+        verify(publisher).publishStatus(captor.capture());
+        assertThat(captor.getValue().manualLockReason()).isEqualTo("input-timeout");
+        assertThat(captor.getValue().edgeState()).isEqualTo("manual-serial-locked");
+    }
+
     private final Instant start = Instant.parse("2026-09-10T00:00:00Z");
     private Instant now;
     private RealtimePublisher publisher;

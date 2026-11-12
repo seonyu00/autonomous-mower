@@ -29,6 +29,11 @@ class ManualSerialBridge:
             return self._failed
 
     @property
+    def lock_reason(self) -> str:
+        with self._lock:
+            return "serial-error" if self._failed else self._state.lock_reason
+
+    @property
     def armed(self) -> bool:
         with self._lock:
             return self._state.armed and not self._failed
@@ -56,13 +61,13 @@ class ManualSerialBridge:
                 return
             try:
                 if self._last_tick is None or now - self._last_tick >= 2.5 or now < self._last_tick:
-                    self._state.disarm()
+                    self._state.disarm("initializing" if self._last_tick is None else "serial-loop-delayed")
                     self._state.remote_seen_at = None
                     self._buffer.clear()
                     self._serial.reset_input_buffer()
                 self._last_tick = now
                 if self._serial.in_waiting > 4096:
-                    self._state.disarm()
+                    self._state.disarm("serial-backlog")
                     self._state.remote_seen_at = None
                     self._buffer.clear()
                     self._serial.reset_input_buffer()
@@ -70,7 +75,7 @@ class ManualSerialBridge:
                 self._buffer.extend(data)
                 if len(self._buffer) > 4096:
                     self._buffer.clear()
-                    self._state.disarm()
+                    self._state.disarm("serial-invalid")
                 lines = []
                 while b"\n" in self._buffer:
                     line, _, remainder = self._buffer.partition(b"\n")
@@ -78,7 +83,7 @@ class ManualSerialBridge:
                     lines.append(line.decode("ascii", errors="replace"))
                 if sum(line.startswith("Remote active:") for line in lines) > 1:
                     # 쌓인 과거 진단을 현재 장비 상태로 해석하지 않는다.
-                    self._state.disarm()
+                    self._state.disarm("serial-backlog")
                     self._state.remote_seen_at = None
                 else:
                     for line in lines:

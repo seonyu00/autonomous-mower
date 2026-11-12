@@ -104,7 +104,7 @@ public class MqttInboundPersistenceService {
             return false;
         }
 
-        StatusSignature signature = new StatusSignature(payload.connectionState(), payload.mqttState(), payload.edgeState(), payload.stale());
+        StatusSignature signature = new StatusSignature(payload.connectionState(), payload.mqttState(), payload.edgeState(), payload.stale(), payload.manualLockReason());
         if (signature.equals(lastStatuses.get(payload.robotId()))) return true;
 
         robotEventRepository.save(new RobotEvent(
@@ -112,10 +112,10 @@ public class MqttInboundPersistenceService {
                 robot.get(),
                 payload.stale() ? "warning" : "info",
                 "status-update",
-                "Edge status: connection=%s, mqtt=%s, edge=%s".formatted(
+                "Edge status: connection=%s, mqtt=%s, edge=%s, manualLockReason=%s".formatted(
                         payload.connectionState(),
                         payload.mqttState(),
-                        payload.edgeState()
+                        payload.edgeState(), payload.manualLockReason()
                 ),
                 toUtcLocal(observedAt),
                 "mqtt-status"
@@ -145,7 +145,7 @@ public class MqttInboundPersistenceService {
         return true;
     }
 
-    private record StatusSignature(String connection, String mqtt, String edge, boolean stale) {}
+    private record StatusSignature(String connection, String mqtt, String edge, boolean stale, String manualLockReason) {}
 
     private Optional<Robot> knownRobot(String robotId, String payloadType) {
         Optional<Robot> robot = robotRepository.findById(robotId).filter(Robot::isEnabled);

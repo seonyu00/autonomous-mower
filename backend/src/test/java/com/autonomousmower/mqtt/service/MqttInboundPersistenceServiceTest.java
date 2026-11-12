@@ -29,6 +29,24 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class MqttInboundPersistenceServiceTest {
 
+    @Test
+    void changedLockReasonIsStoredEvenWhenLockedStateIsUnchanged() {
+        when(robotRepository.findById("MOWER-01")).thenReturn(Optional.of(robot));
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            for (String reason : new String[]{"remote-active", "input-timeout"}) {
+                assertThat(persistenceService.persist(InboundRecord.status(new MqttStatusPayload("MOWER-01",
+                        "online", "connected", "manual-serial-locked", Instant.now(), false, reason), Instant.now()))).isTrue();
+                TransactionSynchronizationManager.getSynchronizations().forEach(s -> s.afterCommit());
+            }
+            ArgumentCaptor<RobotEvent> captor = ArgumentCaptor.forClass(RobotEvent.class);
+            verify(robotEventRepository, times(2)).save(captor.capture());
+            assertThat(captor.getAllValues().get(1).getMessage()).contains("input-timeout");
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
     @Mock
     private RobotRepository robotRepository;
 

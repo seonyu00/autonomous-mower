@@ -138,12 +138,14 @@ export function GeneralControlCommands({ compact = false }: GeneralControlComman
         </div>
       </div>
 
+      <div className="command-feedback-slot command-disabled-reason" role="status">
       {compact && disabledReason ? <p id={disabledReasonId} className="compact-disabled-reason command-disabled-reason">{disabledReason}</p> : null}
       {!compact && disabled && eligibility.reasons.length > 0 ? (
         <p className="warning-line">{eligibility.reasons.map(formatControlReason).join(' ')}</p>
       ) : null}
       {localError ? <p className="warning-line">{localError}</p> : null}
       {!compact && controlState?.commandError ? <p className="warning-line">{controlState.commandError}</p> : null}
+      </div>
     </section>
   );
 }

@@ -1,5 +1,11 @@
 # API 및 실시간 계약
 
+## 수동 잠금 원인과 영상 화면 이탈 — 2026-11-12
+
+실시간 로봇 상태에 선택적 문자열 `manualLockReason`을 추가한다. 기존 `edgeState=manual-serial-locked`는 유지한다. 현재 지원하는 원인은 `remote-active`, `serial-status-timeout`, `serial-error`, `serial-loop-delayed`, `serial-backlog`, `serial-invalid`, `input-timeout`, `input-expired`, `stop-requested`다. 원인 필드가 없거나 지원하지 않는 값은 원인 미확인으로 표시하고 재개를 자동 허용하지 않는다. 상태 이벤트에는 수신한 원인도 기록한다.
+
+영상의 3분 유예는 동일 로그인·로봇의 프런트 WebRTC 연결 수명 정책이다. 탭 숨김과 SPA 화면 이동에 적용하며 직접 종료·로그아웃·권한 상실·로봇 전환·브라우저 종료에는 적용하지 않는다. 새 API나 MediaMTX 서버 유예 정책을 추가하지 않는다. 브라우저의 백그라운드 실행 제한으로 정확한 종료 시각을 보장하지 않으며 복귀 시에도 경과 시간을 검사한다.
+
 ## 비전 관측 지도 조회 — 2026-11-11
 
 `GET /api/robots/{robotId}/vision-map?version=<WORK_ZONE_VERSION>&before=<HISTORY_CURSOR>`는 `robots:read` 권한으로 조회한다. `before`는 선택 사항이다. 등록 로봇과 현재 작업 구역 버전을 검사하고 구역 변경 시 충돌을 반환한다. 응답은 `robotId`, `version`, `serverTime`, `regions`, `dangerHistory`, `nextHistoryCursor`다. 위험 이력은 ID 내림차순 100건씩이며 다음 페이지에는 `nextHistoryCursor`를 `before`로 보낸다. 이전 구역 버전의 위험 이력도 버전을 함께 반환하지만 현재 지도 영역에는 섞지 않는다.

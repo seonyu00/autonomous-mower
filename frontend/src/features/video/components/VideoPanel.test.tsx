@@ -6,6 +6,7 @@ import { useVideoStore } from '../videoStore';
 import { useAuthStore } from '../../auth/authStore';
 import { env } from '../../../shared/config/env';
 import { VideoPanel } from './VideoPanel';
+import { stopRetainedVideo } from '../retainedVideoClient';
 
 const clients = vi.hoisted(() => [] as Array<{ startStream: ReturnType<typeof vi.fn>; stopStream: ReturnType<typeof vi.fn> }>);
 vi.mock('../WebRtcClient', () => ({
@@ -42,6 +43,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  stopRetainedVideo();
   vi.clearAllTimers();
   vi.useRealTimers();
   Reflect.deleteProperty(HTMLVideoElement.prototype, 'requestVideoFrameCallback');
@@ -114,6 +116,9 @@ it('종료 시 프레임 콜백·타이머·페이지 이벤트를 정리한다'
   unmount();
   expect(video.srcObject).toBeNull();
   expect(frameCallbacks.size).toBe(0);
+  expect(clients[0].stopStream).not.toHaveBeenCalled();
+  act(() => vi.advanceTimersByTime(180000));
+  expect(clients[0].stopStream).toHaveBeenCalled();
   expect(vi.getTimerCount()).toBe(0);
   expect(removeWindow).toHaveBeenCalledWith('pagehide', expect.any(Function));
   expect(removeWindow).toHaveBeenCalledWith('beforeunload', expect.any(Function));
@@ -128,6 +133,54 @@ it('새 로그인 세션에서는 새 클라이언트를 사용한다', () => {
   start();
   expect(clients[0].stopStream).toHaveBeenCalled();
   expect(clients[1].startStream).toHaveBeenCalledWith('MOWER-01');
+});
+
+it('웹 내부 화면에서 3분 안에 돌아오면 같은 영상 연결을 사용한다', () => {
+  const view = render(<VideoPanel />);
+  start();
+  const stream = supplyStream();
+  view.unmount();
+  act(() => vi.advanceTimersByTime(179000));
+  render(<VideoPanel />);
+  expect(clients).toHaveLength(1);
+  expect(clients[0].stopStream).not.toHaveBeenCalled();
+  expect((screen.getByLabelText('로봇 실시간 카메라 스트림') as HTMLVideoElement).srcObject).toBe(stream);
+  act(() => vi.advanceTimersByTime(2000));
+  expect(clients[0].stopStream).not.toHaveBeenCalled();
+});
+
+it('숨김은 3분 유예하고 복귀하면 종료 예약을 취소한다', () => {
+  render(<VideoPanel />);
+  start(); supplyStream();
+  const visibility = vi.spyOn(document, 'visibilityState', 'get');
+  visibility.mockReturnValue('hidden');
+  fireEvent(document, new Event('visibilitychange'));
+  act(() => vi.advanceTimersByTime(179000));
+  expect(clients[0].stopStream).not.toHaveBeenCalled();
+  visibility.mockReturnValue('visible');
+  fireEvent(document, new Event('visibilitychange'));
+  act(() => vi.advanceTimersByTime(2000));
+  expect(clients[0].stopStream).not.toHaveBeenCalled();
+  visibility.mockReturnValue('hidden');
+  fireEvent(document, new Event('visibilitychange'));
+  act(() => vi.advanceTimersByTime(180000));
+  expect(clients[0].stopStream).toHaveBeenCalled();
+  visibility.mockRestore();
+});
+
+it('화면을 떠난 유예 중에도 로그아웃하면 즉시 종료한다', () => {
+  const view = render(<VideoPanel />);
+  start(); supplyStream(); view.unmount();
+  act(() => useAuthStore.setState({ isAuthenticated: false }));
+  expect(clients[0].stopStream).toHaveBeenCalled();
+});
+
+it('유예 중 연결을 잃었으면 복귀할 때 재연결을 요청한다', () => {
+  const view = render(<VideoPanel />);
+  start(); supplyStream(); view.unmount();
+  act(() => useVideoStore.getState().patchSession('MOWER-01', { connectionState: 'disconnected', stream: null }));
+  render(<VideoPanel />);
+  expect((clients[0] as unknown as { reconnect: ReturnType<typeof vi.fn> }).reconnect).toHaveBeenCalledWith('MOWER-01');
 });
 
 it('샘플 연결을 실제 프레임 수신으로 표시하지 않는다', () => {
