@@ -119,7 +119,7 @@ body:has(.map-console-page) { overflow: auto; }
 .map-console-controls .manual-joystick.compact .joystick-button { font-size: 11px; }
 .map-console-controls .general-control-commands.compact .command-actions button { min-height: 36px; }
 .compact-recovery, .compact-control-error, .control-debug-details, .control-debug-details[open] { position: static; width: auto; max-height: none; grid-column: 1 / -1; }
-.control-command-feedback { grid-column: 1 / -1; min-width: 0; overflow-wrap: anywhere; }
+.control-command-feedback { grid-column: 1 / -1; min-width: 0; min-height: 3.2em; overflow-wrap: anywhere; }
 .control-command-feedback .save-note { color: var(--accent-strong); }
 .control-command-feedback .warning-line { color: var(--danger); }
 .control-command-feedback p { margin: 0; font-size: 14px; line-height: 1.6; }

@@ -34,10 +34,12 @@ export function GeneralControlCommands({ compact = false }: GeneralControlComman
     ? controlByRobotId[selectedRobotId] ?? createDefaultControlState(selectedRobotId)
     : null;
   const eligibility = selectedRobotId ? canControlRobot(selectedRobotId) : { allowed: false, reasons: ['robot-not-selected'] };
-  const disabled = !selectedRobotId || !eligibility.allowed || Boolean(controlState?.pendingCommand);
+  const disabled = !selectedRobotId || !eligibility.allowed || Boolean(controlState?.pendingCommand) || Boolean(controlState?.manualInteracting);
   const disabledReason = eligibility.reasons[0]
     ? formatControlReason(eligibility.reasons[0])
-    : controlState?.pendingCommand
+    : controlState?.manualInteracting
+      ? '수동 방향 조작 중입니다'
+      : controlState?.pendingCommand
       ? '이전 명령 처리를 기다리고 있습니다'
       : null;
 

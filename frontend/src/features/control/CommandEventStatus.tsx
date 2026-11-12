@@ -20,6 +20,9 @@ export function CommandEventStatus({ robotId }: { robotId: string }) {
   }
 
   const failed = event.status === 'rejected' || event.status === 'edge-timeout' || event.status === 'failed';
+  if (!failed && event.commandType === 'manual-command') {
+    return <p className="save-note">수동 명령 상태 · 실제 동작 미확인</p>;
+  }
 
   return (
     <p className={failed ? 'warning-line' : 'save-note'}>

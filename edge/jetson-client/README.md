@@ -44,6 +44,8 @@ systemctl --user enable --now mower-telemetry.service
 
 ### 2026-11-11 실제 설치 기록
 
+**2026-11-12 수동 잠금 진단 갱신:** 사용자에게 바퀴·날 격리와 담당자 동행을 확인받고 커밋 `7971263`을 `~/.local/share/mower-control-gateway/releases/7971263/edge/jetson-client/`에 별도 설치했다. 기존 비공개 설정을 보존했으며 이전 unit은 `~/.local/share/mower-control-gateway/mower-control-gateway.before-7971263.service`에 백업했다. 새 서비스 실행, MQTT 연결과 구독 요청, 대기 중 시리얼 포트 미점유 및 수동 상태·세션 단위 시험 12개를 확인했다. 웹 요청, 원인 진단 종단 전달과 실제 장비 출력은 미검증이다. 백엔드와 웹에도 해당 버전이 적용되어야 새 원인 표시가 가능하다.
+
 **2026-11-12 갱신:** 바퀴·날 격리와 담당자 동행 확인 후 커밋 `6a2ffa6`을 `~/.local/share/mower-control-gateway/releases/6a2ffa6/edge/jetson-client/`에 배치하고 기존 비공개 설정을 복사했다. 기존 unit은 `~/.local/share/mower-control-gateway/mower-control-gateway.before-6a2ffa6.service`에 보관했다. 관제 서비스의 새 실행 경로·MQTT 연결 및 구독 요청과 대기 중 시리얼 포트 미점유를 확인했다. 이동 명령, 웹 재개와 물리 정지·리모컨 우선은 시험하지 않았다. 이전 버전 복구 시 백업 unit을 복원하고 사용자 systemd를 재적용해야 하며 실제 장비 상태를 먼저 확인한다.
 
 사용자가 바퀴·날 격리와 현장 담당자 동행을 확인한 뒤 설치했다. Jetson 홈 저장소에 현장 수정본이 있어 직접 덮어쓰지 않고 `~/.local/share/mower-control-gateway/releases/7b4da6d/edge/jetson-client/`에 해당 커밋을 배치했다. 실제 사용자 unit의 작업·실행 경로도 이 폴더로 지정했다. 기존 비공개 설정을 배포 폴더에 복사해 권한 600으로 보관하고 `manual_serial.on_demand: true`와 `/dev/serial/by-id/<STM32_DEVICE>`를 설정했다. 기존 설정 원본과 팀 ROS 작업 공간은 보존했다.

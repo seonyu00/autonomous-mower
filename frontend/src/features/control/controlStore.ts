@@ -27,6 +27,7 @@ export function createDefaultControlState(robotId: string): ControlState {
     mode: 'idle',
     emergency: false,
     manualActive: false,
+    manualInteracting: false,
     lastInputAt: null,
     pendingCommand: null,
     commandError: null,

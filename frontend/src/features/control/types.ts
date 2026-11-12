@@ -98,6 +98,7 @@ export type ControlState = {
   mode: ControlMode;
   emergency: boolean;
   manualActive: boolean;
+  manualInteracting: boolean;
   lastInputAt: string | null;
   pendingCommand: PendingCommand | null;
   commandError: string | null;

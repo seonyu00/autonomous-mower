@@ -5,6 +5,7 @@ import { useRobotStore } from '../robots/robotStore';
 import { useTelemetryStore } from '../telemetry/telemetryStore';
 import { useControlStore } from './controlStore';
 import { ManualJoystick } from './ManualJoystick';
+import { GeneralControlCommands } from './GeneralControlCommands';
 import { prepareManual, rearmManual, requestManualChallenge, sendManualCommand, sendStopCommand } from './controlApi';
 
 vi.mock('./controlApi', async (original) => ({
@@ -136,6 +137,23 @@ describe('ManualJoystick 입력 수명', () => {
     expect(manual).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: '수동 조작 재개' })).toBeEnabled();
     expect(screen.getByLabelText('수동 전진')).toBeDisabled();
+    expect(screen.getByText(/수동 준비 상태가 해제돼/)).toBeInTheDocument();
+  });
+
+  it('방향을 누르는 동안 다른 명령은 요청 상태가 변해도 일관되게 차단한다', async () => {
+    render(<><GeneralControlCommands compact /><ManualJoystick /></>);
+    await makeReady();
+    press();
+    await advance(0);
+    expect(screen.getByRole('button', { name: 'AUTO' })).toBeDisabled();
+    expect(screen.getByText('수동 방향 조작 중입니다')).toBeInTheDocument();
+    act(() => useControlStore.getState().setPendingCommand(TEST_ROBOT_ID, { id: 'movement', type: 'manual-command', requestedAt: new Date().toISOString() }));
+    expect(screen.getByRole('button', { name: 'AUTO' })).toBeDisabled();
+    act(() => useControlStore.getState().setPendingCommand(TEST_ROBOT_ID, null));
+    expect(screen.getByRole('button', { name: 'AUTO' })).toBeDisabled();
+    fireEvent.pointerUp(window, { pointerId: 1 });
+    await advance(0);
+    expect(screen.getByRole('button', { name: 'AUTO' })).toBeEnabled();
   });
 
   it('장비가 리모컨 개입으로 잠겼다고 알리면 버튼을 비활성화한다', async () => {

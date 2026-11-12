@@ -171,7 +171,14 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
       inputRef.current?.stop();
       setArmId(null);
       setArmConfirmedAt(null);
-      setLocalError('리모컨 우선 또는 연결 문제로 수동 조작이 잠겼습니다. 상태를 확인한 후 다시 재개해 주세요.');
+      const reasons: Record<string, string> = {
+        'manual-not-armed': '장비의 수동 준비 상태가 해제돼 이동 명령이 거부됐습니다.',
+        'manual-input-time-invalid': '이동 입력의 유효시간을 확인하지 못했습니다.',
+        'manual-challenge-invalid': '이동 명령의 확인값이 유효하지 않거나 만료됐습니다.',
+        'stale-command': '이동 명령의 유효시간이 지났습니다.',
+        'invalid-speed': '장비가 유효하지 않은 속도를 거부했습니다.',
+      };
+      setLocalError(`${reasons[event.reason ?? ''] ?? '이동 명령이 거부됐습니다. 원인은 확인되지 않았습니다.'} 확인 후 다시 재개해 주세요.`);
     }
   }, [event, pendingArmId, pendingPrepareId]);
 
@@ -247,6 +254,9 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
         reportError(error);
       } finally {
         stopInFlight.current = false;
+        if (!input && !manualInFlight.current && currentSession()) {
+          useControlStore.getState().patchControlState(selectedRobotId, { manualInteracting: false });
+        }
       }
     };
     const stop = (pointerId?: number) => {
@@ -302,6 +312,7 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
         setLocalError(null);
         const pressId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
         input = { command: { action: 'manual', robotId: selectedRobotId, direction, speed, armId: armId ?? undefined, pressId }, pointerId };
+        useControlStore.getState().patchControlState(selectedRobotId, { manualInteracting: true });
         if (timer === undefined) timer = window.setInterval(() => void tick(), INPUT_INTERVAL_MS);
         void tick();
       },

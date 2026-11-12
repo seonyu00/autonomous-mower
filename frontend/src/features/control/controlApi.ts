@@ -221,7 +221,7 @@ async function requestControlCommand(
   const isCurrentSession = () => useAuthStore.getState().sessionVersion === sessionVersion;
   const requestedAt = new Date().toISOString();
   const pendingCommand = {
-    id: `${commandType}-${requestedAt}`,
+    id: createIdempotencyKey(`pending-${commandType}`),
     type: commandType,
     requestedAt,
   };
@@ -252,7 +252,9 @@ async function requestControlCommand(
     if (isCurrentSession()) useControlStore.getState().setCommandError(robotId, error instanceof Error ? error.message : '제어 명령을 처리하지 못했습니다.');
     throw error;
   } finally {
-    if (isCurrentSession()) useControlStore.getState().setPendingCommand(robotId, null);
+    if (isCurrentSession() && useControlStore.getState().getControlState(robotId).pendingCommand?.id === pendingCommand.id) {
+      useControlStore.getState().setPendingCommand(robotId, null);
+    }
   }
 }
 

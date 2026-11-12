@@ -18,6 +18,29 @@ describe('control command prechecks', () => {
     holdControl();
   });
 
+  it('늦은 이동 응답은 진행 중인 정지 요청의 대기 표시를 지우지 않는다', async () => {
+    const previousMock = env.enableMockControl;
+    env.enableMockControl = false;
+    let finishMove!: (value: unknown) => void;
+    let finishStop!: (value: unknown) => void;
+    const post = vi.spyOn(httpClient, 'post')
+      .mockImplementationOnce(() => new Promise(resolve => { finishMove = resolve; }))
+      .mockImplementationOnce(() => new Promise(resolve => { finishStop = resolve; }));
+    try {
+      const move = sendManualCommand(TEST_ROBOT_ID, { action: 'manual', robotId: TEST_ROBOT_ID, direction: 'forward', speed: 0.5 });
+      const stop = sendStopCommand(TEST_ROBOT_ID);
+      finishMove({ accepted: true });
+      await move;
+      expect(useControlStore.getState().getControlState(TEST_ROBOT_ID).pendingCommand?.type).toBe('stop');
+      finishStop({ accepted: true });
+      await stop;
+      expect(useControlStore.getState().getControlState(TEST_ROBOT_ID).pendingCommand).toBeNull();
+    } finally {
+      post.mockRestore();
+      env.enableMockControl = previousMock;
+    }
+  });
+
   it('일반 명령과 제어권 반납에 현재 lockVersion을 전달한다', async () => {
     const previousMock = env.enableMockControl;
     env.enableMockControl = false;
