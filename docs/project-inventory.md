@@ -13,6 +13,10 @@
 
 ### 2026-11-11 비전 관측 지도 저장·조회 준비
 
+**2026-11-12 사람 위치 표시 준비:** `VisionPersonPointAdapter`는 이미 검증된 WGS84 사람 위치 후보를 반경 1m의 지도 표시용 다각형으로 바꾼다. 현재 외부 수신기나 기존 저장 서비스에 연결되지 않은 내부 코드다. 입력 플래그만으로 센서 시간 정합·보정·위치 정확도를 검증하지 않으며 지도 표시와 CPP에 자동 반영되지 않는다. 팀원의 실제 출력과 좌표 유효성 기준을 확인한 후 연결해야 한다.
+
+**팀원 관측 입력 준비:** `edge/jetson-client/jetson_mower_client/vision_observation.py`는 팀원 노드의 실험용 `0.1-experimental` JSON을 해석해 카메라 위치 후보, 깊이 없음, 잘못된 좌표, 사람 없음과 카메라·비전 시간 초과를 구분한다. 이 코드는 ROS 구독·지도 변환·전송에 연결되지 않았다. `valid_3d`와 검증되지 않은 ROS 촬영 시각만으로 위치 정확도나 센서 간 시간 정합을 보장하지 않는다.
+
 **2026-11-12 웹 연결 확인:** 격리 PostGIS와 실제 인증 HTTP를 사용하는 시험 서버에 내부 관측을 저장하고, Mock을 끈 관제 웹의 실제 네이버 지도에서 현재 영역 2개·오래된 위험·위험 이력 1건과 오버레이 해제를 확인했다. 외부 장비 전송과 실제 좌표 변환·센서 정확도는 미검증이다. 재사용 가능한 격리 시험은 `VisionWebIntegrationTest`이며 상세 조건은 개발 로그를 따른다.
 
 `backend/src/main/java/com/autonomousmower/vision/VisionMapService.java`와 V19가 내부 관측의 부분 겹침·최신 영역 보존, 최초 수신 후 위험 이력 30일 보관과 정리를 제공한다. 공개 API는 `robots:read`의 GET `/api/robots/{robotId}/vision-map`뿐이다. `frontend/src/features/map/visionObservations.ts`, `components/VisionMapControls.tsx`와 네이버 지도 오버레이가 분류·5분 경과·위험 이력 페이지를 표시한다. 테스트용 관측은 격리 DB 내부 입력에서만 사용했고 실제 Jetson 수신·깊이/9축 좌표 투영·CPP 반영은 미연결이다. 계약은 [API 문서](api-contract.md#비전-관측-지도-조회--2026-11-11), 다음 단계는 로컬 로드맵, 검증 결과는 개발 로그를 따른다.

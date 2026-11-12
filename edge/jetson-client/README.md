@@ -318,6 +318,8 @@ python -m unittest discover -s edge/jetson-client/tests -p test_autonomy.py -v
 
 기존 Jetson의 `mower_test.sh`는 5×5m 시험용 원본으로 보존한다. 새 `scripts/prepare-web-work-zone.sh`와 `jetson_mower_client/web_work_zone.py`는 웹 저장 구역을 별도 JSON으로 준비한다. 주행 스크립트의 복사본이나 자동 출발 실행기가 아니며 ROS·시리얼·카메라·기존 구역 파일을 조작하지 않는다. 실제 다각형 주행 경로와 비전 지도 표시의 연결은 후속 작업이다.
 
+팀원 YOLO의 실험 출력에 대한 내부 해석기는 `jetson_mower_client/vision_observation.py`다. `parse_frame`은 사람의 카메라 좌표 후보와 깊이 없음·잘못된 입력·사람 없음을 구분하며 `parse_status`는 수신된 카메라·비전 시간 초과를 분리한다. `0.1-experimental`과 `camera_color_optical_frame`만 처리하고 촬영 시각은 검증되지 않은 ROS 헤더 값으로 보존한다. ROS 구독과 heartbeat 미수신 감시, GPS 지도 변환·서버 전송·기존 저장 서비스 연결은 없다. 3D 매칭 성공만으로 실제 위치 정확도나 안전을 보증하지 않는다.
+
 필요한 의존성은 별도 가상 환경에서 `python -m pip install -r requirements-work-zone.txt`로 설치한다. 다각형 검증에는 Shapely를 사용하며 Jetson의 Python·시스템 패키지 호환성은 실제 적용 전에 확인한다. 기존 상태 전송 클라이언트만 실행할 때는 기존 `requirements.txt`를 사용한다.
 
 기존 작업 구역 조회 API 응답 파일을 사용하려면 패키지 디렉터리에서 다음과 같이 실행한다.
