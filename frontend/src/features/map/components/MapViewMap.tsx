@@ -9,6 +9,8 @@ import { mockRouteByRobotId } from '../mockMapData';
 import {
   appendRoutePosition,
   calculateHeadingDegrees,
+  calculateDisplayHeadingDegrees,
+  smoothDisplayPosition,
   splitRouteByProgress,
 } from '../routeGeometry';
 import { useZoneStore } from '../zoneStore';
@@ -26,11 +28,14 @@ import { useVisionObservations } from '../visionObservations';
 import { VisionMapControls } from './VisionMapControls';
 
 const emptyDraftVertices: LngLat[] = [];
+const emptySessionRoute: LngLat[] = [];
 
 export function MapViewMap() {
   const preview = useCppPreview();
   const [mapError, setMapError] = useState<string | null>(null);
   const [sessionRoutes, setSessionRoutes] = useState<Record<string, LngLat[]>>({});
+  const [displayHeading, setDisplayHeading] = useState<{ robotId: string; value: number | null } | null>(null);
+  const displaySamples = useRef<{ robotId: string; receivedAt: number; samples: LngLat[]; position: LngLat } | null>(null);
 
   const selectedRobotId = useRobotStore((state) => state.selectedRobotId);
   const telemetry = useTelemetryStore((state) =>
@@ -64,16 +69,18 @@ export function MapViewMap() {
     () => splitRouteByProgress(sampleRoute?.geometry.coordinates ?? [], 0.38),
     [sampleRoute],
   );
-  const sessionRoute = selectedRobotId ? sessionRoutes[selectedRobotId] ?? [] : [];
+  const sessionRoute = selectedRobotId ? sessionRoutes[selectedRobotId] ?? emptySessionRoute : emptySessionRoute;
   const completedRoute = livePositionAvailable ? sessionRoute : sampleRouteSegments.completed;
   const plannedRoute = sampleRouteSegments.planned;
-  const headingDegrees = calculateHeadingDegrees(completedRoute);
+  const headingDegrees = livePositionAvailable
+    ? (displayHeading?.robotId === selectedRobotId ? displayHeading.value : null)
+    : calculateHeadingDegrees(completedRoute);
   const markerPosition = useMemo(
     () =>
       livePositionAvailable && telemetry
-        ? ([telemetry.longitude, telemetry.latitude] as LngLat)
+        ? (sessionRoute.at(-1) ?? [telemetry.longitude, telemetry.latitude] as LngLat)
         : sampleRouteSegments.completed.at(-1),
-    [livePositionAvailable, sampleRouteSegments.completed, telemetry],
+    [livePositionAvailable, sampleRouteSegments.completed, sessionRoute, telemetry],
   );
   const editingWorkZone = selectedRobotId ? Boolean(editingByRobotId[scopeId!]) : false;
   const draftVertices = selectedRobotId
@@ -88,7 +95,7 @@ export function MapViewMap() {
   const displayedWorkZone = editingWorkZone
     ? closePolygonVertices(draftVertices)
     : area === 'travel' ? travelZone : storedWorkZone;
-  const sourceLabel = sampleMode ? '샘플 운용 데이터' : livePositionAvailable ? 'GPS 위치' : '위치 수신 대기';
+  const sourceLabel = sampleMode ? '샘플 운용 데이터' : livePositionAvailable ? 'GPS 위치 · 표시 평균' : '위치 수신 대기';
   const positionStatus = !positionAvailable
     ? 'GPS 미수신'
     : sampleMode
@@ -101,13 +108,22 @@ export function MapViewMap() {
 
   useEffect(() => {
     if (!selectedRobotId || !telemetry || !livePositionAvailable) {
+      displaySamples.current = null;
       return;
     }
 
     const position: LngLat = [telemetry.longitude, telemetry.latitude];
+    const receivedAt = Date.parse(telemetry.lastReceivedAt);
+    const previous = displaySamples.current;
+    const continuous = previous?.robotId === selectedRobotId && Number.isFinite(receivedAt)
+      && receivedAt > previous.receivedAt && receivedAt - previous.receivedAt < 3000;
+    const filtered = smoothDisplayPosition(continuous ? previous.samples : [], position);
+    displaySamples.current = { robotId: selectedRobotId, receivedAt, samples: filtered.samples, position: filtered.position };
+    setDisplayHeading({ robotId: selectedRobotId,
+      value: continuous ? calculateDisplayHeadingDegrees([previous.position, filtered.position]) : null });
     setSessionRoutes((current) => ({
       ...current,
-      [selectedRobotId]: appendRoutePosition(current[selectedRobotId] ?? [], position),
+      [selectedRobotId]: appendRoutePosition(continuous ? current[selectedRobotId] ?? [] : [], filtered.position),
     }));
   }, [livePositionAvailable, selectedRobotId, telemetry]);
 
@@ -179,7 +195,8 @@ export function MapViewMap() {
           loading={vision.isPending} error={vision.isError} available={visionAvailable} mapReady={mapReady}
           onNextHistory={vision.nextHistory} onLatestHistory={vision.latestHistory} />
       </div>
-      <span className={livePositionAvailable ? 'map-data-source-chip live' : 'map-data-source-chip sample'}>
+      <span className={livePositionAvailable ? 'map-data-source-chip live' : 'map-data-source-chip sample'}
+        title={livePositionAvailable ? '최근 좌표 평균으로 실제 위치보다 늦거나 다를 수 있습니다.' : undefined}>
         {sourceLabel}
       </span>
       <div className="map-operation-strip" aria-label="지도 운용 정보">
@@ -188,7 +205,7 @@ export function MapViewMap() {
           <strong>{selectedRobotId ?? '로봇 없음'}</strong>
         </div>
         <div className="map-operation-item">
-          <span>현재 좌표</span>
+          <span>수신 좌표</span>
           <strong>
             {telemetry && positionAvailable
               ? `${telemetry.latitude.toFixed(5)}, ${telemetry.longitude.toFixed(5)}`

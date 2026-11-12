@@ -1,6 +1,28 @@
 import type { LngLat } from './geojson';
 
 const MAX_SESSION_ROUTE_POINTS = 500;
+const DISPLAY_WINDOW_SIZE = 3;
+const MIN_HEADING_DISTANCE_METERS = 1;
+
+// 관제 화면 표시 전용 평균이다. 장비 위치 추정이나 저장 좌표에는 사용하지 않는다.
+export function smoothDisplayPosition(samples: readonly LngLat[], position: LngLat) {
+  const previous = samples.at(-1);
+  const continuous = previous && Math.abs(previous[0] - position[0]) <= 180 ? samples : [];
+  const nextSamples = [...continuous, position].slice(-DISPLAY_WINDOW_SIZE);
+  const sum = nextSamples.reduce((acc, point) => [acc[0] + point[0], acc[1] + point[1]], [0, 0]);
+  return { samples: nextSamples, position: [sum[0] / nextSamples.length, sum[1] / nextSamples.length] as LngLat };
+}
+
+export function calculateDisplayHeadingDegrees(route: readonly LngLat[]) {
+  if (route.length < 2) return null;
+  const from = route[route.length - 2];
+  const to = route[route.length - 1];
+  const latitude = (from[1] + to[1]) * Math.PI / 360;
+  const east = (to[0] - from[0]) * Math.PI / 180 * Math.cos(latitude) * 6_371_008.8;
+  const north = (to[1] - from[1]) * Math.PI / 180 * 6_371_008.8;
+  if (Math.hypot(east, north) < MIN_HEADING_DISTANCE_METERS) return null;
+  return calculateHeadingDegrees([from, to]);
+}
 
 export function splitRouteByProgress(
   coordinates: readonly (readonly number[])[],

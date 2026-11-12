@@ -177,9 +177,31 @@ describe('MapViewMap', () => {
       });
     });
 
-    expect(await screen.findByText('GPS 위치')).toBeInTheDocument();
+    expect(await screen.findByText('GPS 위치 · 표시 평균')).toBeInTheDocument();
     expect(screen.getByText(/GPS 방향/)).toBeInTheDocument();
     expect(screen.getByText('세션 완료 경로')).toBeInTheDocument();
+  });
+
+  it('표시 평균은 작은 흔들림을 줄이고 수신 중단 후 이전 좌표를 섞지 않는다', () => {
+    const original = useTelemetryStore.getState().telemetryByRobotId[TEST_ROBOT_ID];
+    const update = (longitude: number, second: number) => useTelemetryStore.getState().upsertTelemetry({
+      ...original, latitude: 37, longitude, lastReceivedAt: `2026-11-12T12:00:${String(second).padStart(2, '0')}Z`,
+    });
+    useTelemetryStore.setState({ dataSource: 'real', telemetryByRobotId: {} });
+    render(<MapViewMap />);
+    act(() => update(127, 0));
+    act(() => update(127.000003, 1));
+    expect((naverMapMock.props?.markerPosition as number[])[0]).toBeCloseTo(127.0000015, 8);
+    expect(naverMapMock.props?.headingDegrees).toBeNull();
+    act(() => update(127.001, 2));
+    expect(naverMapMock.props?.headingDegrees).not.toBeNull();
+    act(() => update(127.001, 3));
+    act(() => update(127.001, 4));
+    act(() => update(127.001, 5));
+    expect(naverMapMock.props?.headingDegrees).toBeNull();
+    act(() => update(127.002, 10));
+    expect(naverMapMock.props?.markerPosition).toEqual([127.002, 37]);
+    expect(naverMapMock.props?.headingDegrees).toBeNull();
   });
 
   it('Mock 연결의 유효 좌표는 실제 GPS가 아니라 샘플 데이터로 표시한다', async () => {

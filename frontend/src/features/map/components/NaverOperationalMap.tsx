@@ -285,12 +285,12 @@ export function NaverOperationalMap({
     const marker = new mapsApi.Marker({
       map,
       position: toLatLng(mapsApi, markerPosition),
-      title: livePositionAvailable ? `${robotId} 실제 위치` : `${robotId} 샘플 위치`,
+      title: livePositionAvailable ? `${robotId} GPS 표시 평균` : `${robotId} 샘플 위치`,
       icon: {
         content: createRobotMarker(
           robotId,
             livePositionAvailable ? robotMode ?? 'unknown' : 'sample',
-          headingDegrees ?? 0,
+          headingDegrees,
         ),
         anchor: { x: 12, y: 12 },
       },
@@ -338,12 +338,14 @@ function createVertexMarker(index: number) {
   return element;
 }
 
-function createRobotMarker(robotId: string, mode: string, headingDegrees: number) {
+function createRobotMarker(robotId: string, mode: string, headingDegrees: number | null) {
   const element = document.createElement('div');
   element.className = `maplibre-robot-marker ${mode}`;
   element.setAttribute('aria-label', `${robotId} 위치`);
-  element.style.setProperty('--marker-heading', `${headingDegrees}deg`);
-  element.append(document.createElement('i'));
+  if (headingDegrees !== null) {
+    element.style.setProperty('--marker-heading', `${headingDegrees}deg`);
+    element.append(document.createElement('i'));
+  }
   return element;
 }
 
