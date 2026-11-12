@@ -30,7 +30,11 @@ public class DeadmanService {
     }
 
     public void recordCommand(String robotId, Instant commandAt) {
-        controlStateStore.stateFor(robotId).recordCommand(commandAt);
+        recordCommand(robotId, commandAt, null, null);
+    }
+
+    public void recordCommand(String robotId, Instant commandAt, String armId, String pressId) {
+        controlStateStore.stateFor(robotId).recordCommand(commandAt, armId, pressId);
         trackedRobots.add(robotId);
     }
 
@@ -48,22 +52,24 @@ public class DeadmanService {
 
     public boolean evaluateTimeout(String robotId, Instant now, Duration timeout) {
         ControlStateStore.MutableControlState state = controlStateStore.stateFor(robotId);
-        if (!state.shouldIssueDeadmanStop(now, timeout)) {
-            return false;
+        synchronized (state) {
+            if (!state.shouldIssueDeadmanStop(now, timeout)) {
+                return false;
+            }
+            state.markDeadmanStopIssued(now);
+            mqttCommandPublisher.publishStopCommand(new MqttCommandPayload(
+                    UUID.randomUUID().toString(),
+                    robotId,
+                    "stop",
+                    null,
+                    null,
+                    null,
+                    "system",
+                    now,
+                    "stop",
+                    Map.of("reason", "deadman-timeout", "speed", 0)
+            ));
+            return true;
         }
-        state.markDeadmanStopIssued(now);
-        mqttCommandPublisher.publishStopCommand(new MqttCommandPayload(
-                UUID.randomUUID().toString(),
-                robotId,
-                "stop",
-                null,
-                null,
-                null,
-                "system",
-                now,
-                "stop",
-                Map.of("reason", "deadman-timeout", "speed", 0)
-        ));
-        return true;
     }
 }

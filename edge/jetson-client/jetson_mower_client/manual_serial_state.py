@@ -24,15 +24,12 @@ class ManualSerialState:
     press_id: str | None = None
     retired_presses: set[str] = field(default_factory=set)
     seen_arms: set[str] = field(default_factory=set)
-    remote_probe_seen: bool = False
 
     def observe(self, line: str, now: float) -> bool:
         match = _REMOTE_STATUS.fullmatch(line.strip())
         if match is None:
             return False
         self.remote_seen_at = now
-        if match.group(1) == "1":
-            self.remote_probe_seen = True
         self.remote_active = match.group(1) == "1" or int(match.group(2)) > 0
         if self.remote_active:
             self.disarm()
@@ -42,7 +39,7 @@ class ManualSerialState:
         if not arm_id or arm_id in self.seen_arms or len(self.seen_arms) >= 1024:
             return False
         self.seen_arms.add(arm_id)
-        if not self.remote_probe_seen or self.remote_active or not self._status_fresh(now):
+        if self.remote_active or not self._status_fresh(now):
             return False
         self.armed = True
         self.arm_id = arm_id
@@ -96,7 +93,6 @@ class ManualSerialState:
 
     def packet(self, now: float) -> bytes:
         if not self._status_fresh(now):
-            self.remote_probe_seen = False
             self.disarm()
         if self.remote_active or not self.armed or self.input_at is None:
             return _REMOTE_PACKET

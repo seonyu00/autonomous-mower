@@ -34,6 +34,8 @@ public class ControlStateStore {
         private String reason;
         private Instant updatedAt = Instant.now();
         private Instant lastCommandAt;
+        private String lastArmId;
+        private String lastPressId;
         private boolean stopIssuedForTimeout;
 
         MutableControlState(String robotId) {
@@ -134,8 +136,22 @@ public class ControlStateStore {
         }
 
         public synchronized void recordCommand(Instant now) {
+            recordCommand(now, null, null);
+        }
+
+        public synchronized void recordCommand(Instant now, String armId, String pressId) {
             lastCommandAt = now;
+            lastArmId = armId;
+            lastPressId = pressId;
             stopIssuedForTimeout = false;
+        }
+
+        public synchronized void recordStop(String armId, String pressId) {
+            // 이전 누름의 늦은 정지가 현재 누름의 데드맨 감시를 해제하지 않게 한다.
+            if (armId == null && pressId == null || armId != null && pressId != null
+                    && armId.equals(lastArmId) && pressId.equals(lastPressId)) {
+                lastCommandAt = null;
+            }
         }
 
         public synchronized boolean shouldIssueDeadmanStop(Instant now, Duration timeout) {

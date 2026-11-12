@@ -263,15 +263,14 @@ export function ControlPanel({ compact = false }: ControlPanelProps) {
         ) : null}
       </section>
 
+      <GeneralControlCommands />
+      <ManualJoystick />
       {controlState?.pendingCommand ? (
         <p className="save-note">대기 중인 명령: {controlState.pendingCommand.type}</p>
       ) : null}
       {selectedRobotId ? <CommandEventStatus robotId={selectedRobotId} /> : null}
       {controlState?.commandError ? <p className="warning-line">{controlState.commandError}</p> : null}
       {actionError ? <p className="warning-line">{actionError}</p> : null}
-
-      <GeneralControlCommands />
-      <ManualJoystick />
     </div>
   );
 }

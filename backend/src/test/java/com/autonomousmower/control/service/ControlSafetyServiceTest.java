@@ -14,6 +14,7 @@ import com.autonomousmower.control.dto.ClaimControlRequest;
 import com.autonomousmower.control.dto.ControlCommandResponse;
 import com.autonomousmower.control.dto.EmergencyStopRequest;
 import com.autonomousmower.control.dto.ManualCommandRequest;
+import com.autonomousmower.control.dto.StopCommandRequest;
 import com.autonomousmower.control.dto.ReleaseControlRequest;
 import com.autonomousmower.control.dto.ResetAfterEmergencyRequest;
 import com.autonomousmower.control.dto.TakeoverControlRequest;
@@ -211,5 +212,42 @@ class ControlSafetyServiceTest {
         verify(mqttCommandPublisher).publishStopCommand(any());
         org.mockito.Mockito.verifyNoInteractions(realtimePublisher);
         assertThat(deadmanService.evaluateTimeout("MOWER-01", commandAt.plusSeconds(1), Duration.ofMillis(500))).isFalse();
+    }
+
+    @Test
+    void releasedPressDoesNotScheduleAnotherDisarmingStop() {
+        var state = stateStore.stateFor("MOWER-01");
+        state.claim("operator", "Operator", "manual", Instant.now());
+        Instant now = Instant.now();
+        deadmanService.recordCommand("MOWER-01", now, "arm", "press");
+        controlCommandService.stop("MOWER-01", new StopCommandRequest("stop", "MOWER-01", "stop", 0,
+                "release", state.snapshot().lockVersion(), "pointer-release", "arm", "press"), operator);
+        assertThat(deadmanService.evaluateTimeout("MOWER-01", now.plusSeconds(1), Duration.ofMillis(500))).isFalse();
+        verify(mqttCommandPublisher).publishStopCommand(any());
+    }
+
+    @Test
+    void lateReleaseCannotDisableNewPressWatchdog() {
+        var state = stateStore.stateFor("MOWER-01");
+        state.claim("operator", "Operator", "manual", Instant.now());
+        Instant now = Instant.now();
+        deadmanService.recordCommand("MOWER-01", now, "arm", "new-press");
+        controlCommandService.stop("MOWER-01", new StopCommandRequest("stop", "MOWER-01", "stop", 0,
+                "release", state.snapshot().lockVersion(), "pointer-release", "arm", "old-press"), operator);
+        assertThat(deadmanService.evaluateTimeout("MOWER-01", now.plusSeconds(1), Duration.ofMillis(500))).isTrue();
+    }
+
+    @Test
+    void failedStopPublishKeepsMovementWatchdog() {
+        var state = stateStore.stateFor("MOWER-01");
+        state.claim("operator", "Operator", "manual", Instant.now());
+        Instant now = Instant.now();
+        deadmanService.recordCommand("MOWER-01", now, "arm", "press");
+        org.mockito.Mockito.doThrow(new IllegalStateException("publish failed"))
+                .when(mqttCommandPublisher).publishStopCommand(any());
+        assertThatThrownBy(() -> controlCommandService.stop("MOWER-01", new StopCommandRequest("stop", "MOWER-01", "stop", 0,
+                "release", state.snapshot().lockVersion(), "pointer-release", "arm", "press"), operator))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(state.shouldIssueDeadmanStop(now.plusSeconds(1), Duration.ofMillis(500))).isTrue();
     }
 }

@@ -56,7 +56,7 @@ public class ControlCommandService {
             state.requireOwner(user.getAdminId());
             state.requireNotEmergency();
             state.requireVersion(request.lockVersion());
-            deadmanService.recordCommand(robotId, requestedAt);
+            deadmanService.recordCommand(robotId, requestedAt, request.armId(), request.pressId());
             ControlLockSnapshot snapshot = state.snapshot();
             ControlCommandResponse response = responseFactory.accepted("manual-command", snapshot, requestedAt);
             mqttCommandPublisher.publishManualCommand(new MqttCommandPayload(
@@ -187,7 +187,6 @@ public class ControlCommandService {
         synchronized (state) {
             state.requireVersion(request.lockVersion());
             state.requireOwner(user.getAdminId());
-            deadmanService.recordCommand(robotId, requestedAt);
             ControlLockSnapshot snapshot = state.snapshot();
             ControlCommandResponse response = responseFactory.accepted("stop", snapshot, requestedAt);
             mqttCommandPublisher.publishStopCommand(new MqttCommandPayload(
@@ -202,6 +201,8 @@ public class ControlCommandService {
                     "stop",
                     stopParameters(request)
             ));
+            // 정지 발행에 실패하면 기존 이동 입력의 데드맨 감시를 유지한다.
+            state.recordStop(request.armId(), request.pressId());
             return response;
         }
     }

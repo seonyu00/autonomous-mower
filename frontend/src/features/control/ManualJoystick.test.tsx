@@ -74,6 +74,9 @@ describe('ManualJoystick 입력 수명', () => {
     expect(prepareManual).toHaveBeenCalledOnce();
     expect(rearm).not.toHaveBeenCalled();
     expect(screen.getByLabelText('수동 전진')).toBeDisabled();
+    const grid = screen.getByLabelText('수동 전진').parentElement!;
+    const preparation = screen.getByText(/장비의 연결과 중립 상태를 확인/);
+    expect(grid.compareDocumentPosition(preparation) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '준비 취소' }));
     act(() => useControlStore.getState().patchControlState(TEST_ROBOT_ID, { lastCommandEvent: {
       robotId: TEST_ROBOT_ID, commandId: 'prepare-1', commandType: 'manual-prepare', status: 'completed', reason: null,
@@ -112,9 +115,12 @@ describe('ManualJoystick 입력 수명', () => {
     fireEvent.pointerUp(window, { pointerId: 1 });
     await advance(0);
     expect(stop).toHaveBeenCalledWith(TEST_ROBOT_ID, expect.objectContaining({ armId: first.armId, pressId: first.pressId }));
-    press();
+    await advance(1000);
+    press('좌회전');
     await advance(0);
     expect(manual.mock.calls[1][1].pressId).not.toBe(first.pressId);
+    expect(manual.mock.calls[1][1].direction).toBe('left');
+    expect(rearm).toHaveBeenCalledOnce();
   });
 
   it('장비가 리모컨 개입으로 거부하면 재개 전까지 반복하지 않는다', async () => {

@@ -23,7 +23,6 @@ class ManualSerialSessionTest(unittest.TestCase):
         opener.assert_not_called()
         session.prepare(0)
         session.tick(0)
-        port.incoming.extend(b"Remote active: 1 (hold remaining=5000ms)\n")
         session.tick(0.1)
         port.incoming.extend(b"Remote active: 0 (hold remaining=0ms)\n")
         session.tick(0.2)
@@ -53,12 +52,11 @@ class ManualSerialSessionTest(unittest.TestCase):
             self.assertFalse(session.arm("late", 2.4))
             self.assertFalse(session.command("late", "press", "forward", 1, 2.4))
 
-    def test_missing_remote_probe_times_out_without_moving(self):
+    def test_missing_status_times_out_without_moving(self):
         port = Port()
         session = ManualSerialSession("/dev/test", Mock(return_value=port))
         session.prepare(0)
         session.tick(0)
-        port.incoming.extend(b"Remote active: 0 (hold remaining=0ms)\n")
         session.tick(0.1)
         self.assertFalse(session.ready_to_arm(0.1))
         session.tick(30)
@@ -71,3 +69,18 @@ class ManualSerialSessionTest(unittest.TestCase):
             session.prepare(0)
         self.assertFalse(session.armed)
         self.assertFalse(session.ready_to_arm(0))
+
+    def test_neutral_start_and_release_allow_next_direction_without_rearm(self):
+        session, port = self.ready()
+        self.assertTrue(session.arm("arm", 0.3))
+        self.assertTrue(session.command("arm", "press-1", "forward", 0.5, 0.4))
+        session.stop("arm", "press-1")
+        session.tick(1)
+        self.assertTrue(session.armed)
+        self.assertEqual(port.sent[-1], encode_packet(0, 1500, 1500))
+        self.assertFalse(session.command("arm", "press-1", "forward", 0.5, 1.1))
+        self.assertTrue(session.command("arm", "press-2", "left", 0.5, 1.1))
+        port.incoming.extend(b"Remote active: 1 (hold remaining=5000ms)\n")
+        session.tick(1.2)
+        self.assertFalse(session.armed)
+        self.assertTrue(port.closed)

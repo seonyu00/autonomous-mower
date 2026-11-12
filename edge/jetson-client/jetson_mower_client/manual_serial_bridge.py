@@ -20,7 +20,7 @@ class ManualSerialBridge:
 
     def ready_to_arm(self, now: float) -> bool:
         with self._lock:
-            return (not self._failed and self._state.remote_probe_seen and not self._state.remote_active
+            return (not self._failed and not self._state.remote_active
                     and self._state._status_fresh(now))
 
     @property
@@ -58,14 +58,12 @@ class ManualSerialBridge:
                 if self._last_tick is None or now - self._last_tick >= 2.5 or now < self._last_tick:
                     self._state.disarm()
                     self._state.remote_seen_at = None
-                    self._state.remote_probe_seen = False
                     self._buffer.clear()
                     self._serial.reset_input_buffer()
                 self._last_tick = now
                 if self._serial.in_waiting > 4096:
                     self._state.disarm()
                     self._state.remote_seen_at = None
-                    self._state.remote_probe_seen = False
                     self._buffer.clear()
                     self._serial.reset_input_buffer()
                 data = self._serial.read(min(self._serial.in_waiting, 4096))
@@ -82,7 +80,6 @@ class ManualSerialBridge:
                     # 쌓인 과거 진단을 현재 장비 상태로 해석하지 않는다.
                     self._state.disarm()
                     self._state.remote_seen_at = None
-                    self._state.remote_probe_seen = False
                 else:
                     for line in lines:
                         self._state.observe(line, now)

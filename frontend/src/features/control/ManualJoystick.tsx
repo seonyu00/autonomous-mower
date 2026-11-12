@@ -331,11 +331,7 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
       <button type="button" onClick={() => void requestRearm()} disabled={!eligibility.allowed || Boolean(pendingArmId) || Boolean(pendingPrepareId) || rearmInFlight}>
         {pendingPrepareId || rearmInFlight ? '수동 조작 준비 중' : pendingArmId ? '장비 응답 대기 중' : armId ? '수동 조작 다시 준비' : '수동 조작 재개'}
       </button>
-      {pendingPrepareId || rearmInFlight || pendingArmId ? <>
-        <p className="muted">장비를 준비하고 있습니다. 현장 안전을 확인한 뒤 리모컨 방향을 잠깐 조작했다 놓아 주세요.</p>
-        <button type="button" onClick={() => cancelSetupRef.current()}>준비 취소</button>
-      </> : null}
-      <p className="muted">리모컨 조작이 끝나고 안전을 확인한 뒤 재개하세요. 방향 버튼은 누르는 동안에만 작동합니다.</p>
+      <p className="muted">주변 안전을 확인한 뒤 재개하세요. 방향 버튼은 누르는 동안에만 작동하며 리모컨 조작 시 웹 제어가 잠깁니다.</p>
 
       <div className="joystick-grid" aria-disabled={disabled}>
         {directionButtons.map((item) => (
@@ -360,6 +356,10 @@ export function ManualJoystick({ compact = false }: ManualJoystickProps) {
           </button>
         ))}
       </div>
+      {pendingPrepareId || rearmInFlight || pendingArmId ? <>
+        <p className="muted">장비의 연결과 중립 상태를 확인하고 있습니다.</p>
+        <button type="button" onClick={() => cancelSetupRef.current()}>준비 취소</button>
+      </> : null}
       {compact && disabledReason ? <span className="compact-disabled-reason">{disabledReason}</span> : null}
 
       {!compact ? <div className="control-summary">
