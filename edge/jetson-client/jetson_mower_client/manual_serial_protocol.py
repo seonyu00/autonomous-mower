@@ -2,7 +2,7 @@
 
 import math
 
-MAX_PWM_DELTA = 100
+MAX_PWM_DELTA = 400
 
 
 def encode_packet(mode: int, left: int, right: int) -> bytes:
@@ -18,7 +18,8 @@ def encode_packet(mode: int, left: int, right: int) -> bytes:
 def manual_wheels(direction: str, speed: float) -> tuple[int, int]:
     if not math.isfinite(speed) or not 0 <= speed <= 1:
         raise ValueError("잘못된 속도")
-    delta = min(round(speed * 300), MAX_PWM_DELTA)
+    # 기존 시험 명령의 바퀴 편차를 네 배로 높이되, 실제 속도와 동일시하지 않는다.
+    delta = min(round(speed * 300), 100) * 4
     directions = {
         "forward": (delta, delta),
         "backward": (-delta, -delta),

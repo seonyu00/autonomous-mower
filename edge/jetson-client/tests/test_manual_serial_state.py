@@ -26,7 +26,7 @@ class ManualSerialStateTest(unittest.TestCase):
         self.assertFalse(state.command("epoch", "press-1", "forward", 1, 1))
         self.assertTrue(state.arm("epoch", 1))
         self.assertTrue(state.command("epoch", "press-1", "forward", 1, 1.1))
-        self.assertEqual(state.packet(1.2), encode_packet(1, 1600, 1600))
+        self.assertEqual(state.packet(1.2), encode_packet(1, 1900, 1900))
 
     def test_release_selects_remote_and_input_timeout_requires_rearm(self):
         state = ManualSerialState()
