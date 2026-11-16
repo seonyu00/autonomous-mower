@@ -4,7 +4,64 @@ Jetson Orin Nano에서 Spring Boot 백엔드의 MQTT command topic을 구독하�
 
 현재 클라이언트는 MQTT command 검증, ROS 2 제어 출력, command ACK, telemetry/status 발행, 로컬 데드맨 스위치와 E-Stop 상태 처리를 제공한다. 기본 ROS 방식은 `/cmd_vel`을 구독하는 별도 bridge node를 사용한다. `manual_serial.port`를 설정하면 이 패키지의 STM32 USB CDC 시리얼 어댑터를 사용하며, 웹 준비 요청으로 포트를 여는 방식은 아래 관제 대기를 따른다.
 
+## 팀원 온라인 CPP에 실제 센서 입력 연결
+
+`cpp_sensor_input.py`는 ROS 구독만 사용해 팀원 `/home/jangwoo/gps_cpp_web_integration/web_cpp.py`에 JSONL 입력을 제공한다. 별도 배포 경로는 `/home/jangwoo/cpp_sensor_bridge_20261117/`이며 관제·카메라·센서 서비스와 팀원 소스는 변경하지 않는다. 서버로 장애물·경로를 전송하거나 AUTO·시리얼·날 제어를 실행하는 기능은 없다.
+
+- 위치 `/dual_gps/fix`와 방향 `/dual_gps/odom`은 측정 시각이 정확히 같은 쌍을 사용한다. 공분산 미확인·무효 방향·준비 신호 만료를 거부한다. 원본 위치·방향 측정과 로컬 수신 모두 500ms 이내여야 하며 수평 표준편차는 팀원 기준 0.10m 이하다.
+- 각속도는 연속 두 GPS 방향의 차이를 정규화해 계산한 시험용 추정치다. `adapter.yaw_rate_source=dual_gps_difference_preview_only`로 표시하고 실제 IMU 각속도나 실주행 검증값으로 해석하지 않는다. 1Hz GPS에서는 초기 두 측정을 기다리고 매 주기의 일부만 500ms 조건을 만족한다. 이를 숨기려고 시각을 재발행 시각으로 바꾸지 않는다.
+- 장애물 스냅샷의 실제 촬영 시각·원점·세션·구역 버전·유효 상태는 보충하지 않고 그대로 전달한다. 수신이 끊겨도 200ms마다 입력을 내보내므로 팀원 실행기가 만료 상태를 검사할 수 있다. `cutting=false`, `motion_preview_enabled=false`를 고정한다.
+- 구역 없는 `rotation_trial` 관측을 실제 구역으로 바꾸지 않는다. 새 `work-plan`으로 지리 좌표 관측을 시작해야 한다. 구역 버전 변경 시 계획을 다시 내보내고 관측기도 같은 구역·버전으로 시작한다.
+
+다음은 팀원이 실행할 수 있는 순서다. `<시험폴더>`는 별도로 만든 절대 경로다. 현재 관측기를 임의 종료하지 않으며 추가 관측기를 시작하기 전 카메라 공유·추론 부하를 확인한다. 기존 5×5 실행기는 사용하지 않는다.
+
+1. 첫 터미널에서 작업 구역 조회를 유지한다. 토큰은 채팅·명령 인자·저장소 파일에 넣지 않는다.
+
+```bash
+read -rs -p '구역 조회 토큰: ' MOWER_READ_TOKEN; echo
+export MOWER_READ_TOKEN
+python3 /home/jangwoo/gps_cpp_web_integration/web_zone.py \
+  https://<BACKEND_HOST> MOWER-01 --state <시험폴더>/web_work_zone_state.json
+```
+
+2. 두 번째 터미널에서 현재 구역의 작업 계획을 내보낸다. 조회 성공 상태가 9초 이내여야 한다.
+
+```bash
+python3 /home/jangwoo/gps_cpp_web_integration/web_cpp.py \
+  <시험폴더>/web_work_zone_state.json --export-work-plan > <시험폴더>/work-plan.json
+```
+
+3. 팀원 비전 환경에서 기존 관측기의 `--work-plan`에 위 파일을 지정한다. 별도 관측 시험의 ROS remap은 아래와 같다. 모델·Python 의존 환경은 팀원 관측기의 기존 설정을 유지한다.
+
+```bash
+python3 /home/jangwoo/drive_test_observer_stationary.pf9DBA/recorder.py \
+  --output <시험폴더>/observations --semantic-model <모델_절대경로> \
+  --work-plan <시험폴더>/work-plan.json --ros-args \
+  -r __node:=cpp_trial_observer -r /fix:=/dual_gps/fix \
+  -r /drive_test/odom:=/dual_gps/odom \
+  -r /drive_test/yaw_ready:=/dual_gps/yaw_ready \
+  -r /drive_test/obstacle_snapshot:=/cpp_trial/obstacle_snapshot
+```
+
+4. ROS 환경을 불러온 새 터미널에서 센서 연결부와 CPP 미리보기를 연결한다.
+
+```bash
+source /opt/ros/humble/setup.bash
+export PYTHONPATH="/home/jangwoo/cpp_sensor_bridge_20261117:${PYTHONPATH:-}"
+set -o pipefail
+python3 -m jetson_mower_client.cpp_sensor_input \
+  --obstacle-topic /cpp_trial/obstacle_snapshot |
+  python3 /home/jangwoo/gps_cpp_web_integration/web_cpp.py \
+    <시험폴더>/web_work_zone_state.json > <시험폴더>/cpp-preview.jsonl
+```
+
+`planning.remaining_path`가 경로이며 `route_revision`은 해당 계획기 인스턴스 안의 변경 번호다. 전역 경로 ID나 주행 허가는 아니다. `sensor_hold`·`work_zone_unavailable`·`invalid_work_zone_or_sensor_input`은 실패 원인과 함께 확인한다. 근접 경고로 팀원 `Mission`의 재개 대기가 잠기면 이 연결부는 자동 해제하지 않는다. 현재 시험에서는 원인을 해소한 뒤 미리보기 파이프라인을 다시 시작하며 관제 재개 입력 연결은 별도 작업이다.
+
+PC·Jetson에서 연결부 단위 시험 각각 5개가 통과했다. 팀원 `WebCPP`에 합성 입력을 연결해 경로 75점 생성과 만료 시 계획 보류를 확인했다. 실제 ROS 입력 8초에서 JSONL 37개를 읽었으나 당시 관측은 구역 식별자 없는 `rotation_trial`이어서 CPP가 모두 거부했다. 실제 서버 조회·지리 좌표 관측과의 종단 CPP·실제 방향/물체 위치 정확도·주행은 미검증이다.
+
 ## 전원 ON 시 듀얼 GPS 자동 시작
+
+2026-11-17 방향 반전 요청에 따라 수신기의 기본 입력 순서를 교환했다. 논리 주 안테나는 `/dev/gps_aux`, 전방 보조 안테나는 `/dev/gps_main`을 읽는다. 기존 udev 별칭은 다른 프로그램과의 호환을 위해 유지한다. 이 변경은 웹 화살표만 돌리지 않고 위치 기준과 비전 투영에 쓰는 방향에도 적용된다. RTK는 기존처럼 양쪽에 전달한다. 설치된 센서 파일을 백업한 뒤 교체하고 센서 서비스만 재시작했다. 이전에 저장된 비전 영역은 자동 보정되지 않으므로 새 세션의 관측으로 비교해야 한다. 입력 교환 시 180° 반전되는 계산은 시험했으나 실제 기체 방위와의 일치는 별도로 확인해야 한다.
 
 2026-11-16 Jetson에 `mower-dual-gps.service`와 `mower-dual-gps-rtk.service`를 설치하고 둘 다 enabled로 등록했다. 사용자 관리자 `Linger=yes`도 확인해 로그인·SSH 없이 부팅 때 시작되는 구성이다. 장치 별칭이 생길 때까지 기다리며 프로세스가 실패하면 10초 뒤 재시도한다. 수신 서비스 재시작 후 실제 위치·방향 복구를 확인했으며, 이번 작업에서 실제 재부팅·전원 재인가 시험은 하지 않았다.
 

@@ -21,6 +21,13 @@ class DualGpsHeadingTest(unittest.TestCase):
         self.assertAlmostEqual(heading_enu_rad(self.main, self.auxiliary,
                                              **self.options), 0)
 
+    def test_swapping_antenna_roles_reverses_body_heading(self):
+        original = heading_enu_rad(self.main, self.auxiliary, **self.options)
+        reversed_heading = heading_enu_rad(self.auxiliary, self.main, **self.options)
+        difference = math.atan2(math.sin(reversed_heading - original),
+                                math.cos(reversed_heading - original))
+        self.assertAlmostEqual(abs(difference), math.pi)
+
     def test_float_missing_time_stale_future_and_bad_baseline_rejected(self):
         for values in (dict(quality=5), dict(measured_at_s=1001),
                        dict(received_monotonic_s=9),

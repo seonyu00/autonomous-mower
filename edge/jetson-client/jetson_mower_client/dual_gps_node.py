@@ -25,8 +25,9 @@ def main():
     from std_msgs.msg import Bool, String
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--main-port', default='/dev/gps_main')
-    parser.add_argument('--aux-port', default='/dev/gps_aux')
+    # 기존 udev 별칭과 실제 전·후 안테나 역할이 반대여서 입력 역할을 교환한다.
+    parser.add_argument('--main-port', default='/dev/gps_aux')
+    parser.add_argument('--aux-port', default='/dev/gps_main')
     args = parser.parse_args()
     rclpy.init(args=ROS_ARGUMENTS)
     node = Ros2NMEADriver()

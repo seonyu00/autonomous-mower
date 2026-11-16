@@ -11,6 +11,16 @@
 
 ## Jetson 장비 경로와 연결 인계
 
+### 팀원 온라인 CPP의 센서 입력 어댑터
+
+`edge/jetson-client/jetson_mower_client/cpp_sensor_input.py`가 듀얼 GPS 위치·방향과 장애물 스냅샷을 팀원 `gps_cpp_web_integration/web_cpp.py`의 JSONL 입력에 연결한다. Jetson 별도 배포 경로는 `/home/jangwoo/cpp_sensor_bridge_20261117/`다. 각속도는 GPS 방향 차이의 시험용 추정이며 구동 출력은 없다. 단위 시험과 합성 입력의 실제 팀원 CPP 호출 및 실제 ROS 입력 구독을 확인했다. 현재 rotation_trial 관측은 구역 식별자가 없어 계획을 거부하며, 지리 좌표 관측과 서버 조회의 종단 연결·실제 주행은 미검증이다. 실행과 제한은 [Jetson README](../edge/jetson-client/README.md#팀원-온라인-cpp에-실제-센서-입력-연결)를 따른다.
+
+### 2026-11-17 방향 입력 교환과 CPP 실행 연결의 한계
+
+듀얼 GPS 실행기의 기본 논리 주 입력은 `/dev/gps_aux`, 전방 보조 입력은 `/dev/gps_main`으로 교환했다. udev 별칭은 유지하며 센서 배포본에도 적용했다. 입력 교환 계산과 서비스 정상 수신을 확인했고 현재 실제 기체 방위·물체 위치 비교는 남아 있다. 변경 전 저장 관측은 자동 보정되지 않는다.
+
+현재 장비의 `path_follower.py`는 기본적으로 `boundary.json`을 사용하고 `/planned_path`를 무시한다. 관제 경로 파일 준비와 이 추종기의 실행 연결은 미구현이며 서버 AUTO도 실제 준비 확인 미연결로 차단한다. 웹 CPP에 비전 장애물을 반영하는 재계산과 최종 실제 추종 경로의 웹 보고도 아직 연결되지 않았다. 따라서 웹 CPP를 현재 Jetson의 실제 주행 경로로 설명하지 않는다. 이번 확인에서 주행 프로그램은 실행하지 않았다. 근거와 검증 범위는 [개발 로그](development-log.md#2026-11-17-듀얼-gps-입력-순서-교환과-실제-주행-경로-확인)를 따른다.
+
 ### 듀얼 GPS 기체 방향의 관제 표시
 
 센서의 `headingDegrees`·`headingObservedAt`, 게이트웨이의 `telemetry_heading.py`, MQTT·STOMP의 nullable 방향 필드와 웹 마커를 연결했다. 변경 전 웹은 GPS 좌표 변화에서 방향을 추정했으며 IMU 기반이라는 이전 설명은 정정했다. Jetson과 백엔드는 적용하고 실제 MQTT 방향값을 확인했다. 새 프런트는 시험·빌드까지 완료했으며 운영 배포는 아직이다. 방향이 무효이거나 만료되면 위치는 유지하고 화살표·각도만 숨긴다. 실제 방위 비교와 방향 이력 저장은 미구현·미검증 범위를 구분해 API 계약과 Jetson README를 따른다.
