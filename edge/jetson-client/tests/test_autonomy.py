@@ -19,7 +19,7 @@ def load_client():
     modules["rclpy.executors"].ExternalShutdownException = type("ExternalShutdownException", (Exception,), {})
     for name in ("DurabilityPolicy", "HistoryPolicy", "QoSProfile", "ReliabilityPolicy"):
         setattr(modules["rclpy.qos"], name, MagicMock())
-    for module, types in [("geometry_msgs.msg", ["Twist"]), ("sensor_msgs.msg", ["Imu", "NavSatFix"]), ("std_msgs.msg", ["Bool", "Int8"])]:
+    for module, types in [("geometry_msgs.msg", ["Twist"]), ("sensor_msgs.msg", ["Imu", "NavSatFix"]), ("std_msgs.msg", ["Bool", "Int8", "String"])]:
         for name in types:
             setattr(modules[module], name, object)
     path = Path(__file__).parents[1] / "jetson_mower_client/main.py"

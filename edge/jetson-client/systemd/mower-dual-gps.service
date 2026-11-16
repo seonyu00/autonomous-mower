@@ -1,0 +1,19 @@
+[Unit]
+Description=듀얼 GPS 위치 및 방향 수신
+Wants=mower-dual-gps-rtk.service
+After=mower-dual-gps-rtk.service
+Conflicts=mower-gps-manual-20261111.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/mower-dual-gps/current
+ExecStart=/bin/bash %h/.local/share/mower-dual-gps/current/scripts/run-dual-gps.sh
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=10
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

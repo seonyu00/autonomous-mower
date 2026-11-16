@@ -11,6 +11,18 @@
 
 ## Jetson 장비 경로와 연결 인계
 
+### 듀얼 GPS 기체 방향의 관제 표시
+
+센서의 `headingDegrees`·`headingObservedAt`, 게이트웨이의 `telemetry_heading.py`, MQTT·STOMP의 nullable 방향 필드와 웹 마커를 연결했다. 변경 전 웹은 GPS 좌표 변화에서 방향을 추정했으며 IMU 기반이라는 이전 설명은 정정했다. Jetson과 백엔드는 적용하고 실제 MQTT 방향값을 확인했다. 새 프런트는 시험·빌드까지 완료했으며 운영 배포는 아직이다. 방향이 무효이거나 만료되면 위치는 유지하고 화살표·각도만 숨긴다. 실제 방위 비교와 방향 이력 저장은 미구현·미검증 범위를 구분해 API 계약과 Jetson README를 따른다.
+
+### 2026-11-16 듀얼 GPS 센서와 RTK 자동 시작
+
+`mower-dual-gps.service`와 `mower-dual-gps-rtk.service`를 Jetson에 설치해 active·enabled와 Linger=yes를 확인했다. 재시작 후 주 안테나의 `/fix` 수신 및 양쪽 Fixed의 듀얼 방향 유효 상태를 확인했다. 새 GPS 실행기는 전방 기준선 0.43m를 사용하고 비전용 Python 경로와 분리된다. 실제 재부팅·전원 재인가는 미시험이다. 자동 시작은 센서·보정에 한정하며 비전·관측 전송·주행은 추가하지 않았다. 후속 웹 기체 방향 연결은 위 절을 따른다. 파일 위치·확인·복구는 [Jetson README](../edge/jetson-client/README.md#전원-on-시-듀얼-gps-자동-시작)를 따른다.
+
+### 2026-11-16 듀얼 GPS와 비전 전역 지도 시험 연결
+
+`edge/jetson-client/jetson_mower_client/dual_gps_{heading,nmea,node,vision}.py`가 두 GPS 입력·측정 시각 결합·Fixed/43cm 기준선 검사와 팀원 비전 기록기의 별도 실행을 제공한다. `vision_web_bridge.py`와 `vision_web_sender.py`가 웹 다각형·버전 고정, 후보 영역 변환과 HTTPS 전송을 제공하고 `VisionObservationController/Service`가 기존 비전 지도 저장·조회로 연결한다. 실제 구역 버전 9와 Jetson 관측으로 저장·재조회한 `UNKNOWN` 영역 3개를 확인했고 사용자도 관제 네이버 지도에서 미확인 영역 표시를 확인했다. 작은 공분산은 드라이버의 추정값이며 실측 오차가 아니다. CPP 연결과 물체 위치 오차·이동 시험은 미검증이다. 비전·관측 전송의 상시 서비스 설치는 하지 않았다. 실행과 장비 파일 위치는 [Jetson README](../edge/jetson-client/README.md#듀얼-gps를-이용한-시험용-비전-전역-지도), 다음 절차는 로드맵을 따른다.
+
 ### 웹 수동 출력 편차 변경과 Jetson 적용
 
 사용자가 웹 수동 방향의 PWM 편차를 기존의 네 배인 최대 ±400으로 변경하기로 했다. 저장소의 수동 시리얼 명령과 패킷 범위를 변경했으며, 실제 속도 4배를 보장하지 않는다. 2026-11-12 Jetson의 별도 배포본에 적용하고 서비스 실행과 MQTT 연결을 확인했다. 현재 서비스 상태와 실제 속도·방향·정지 거리 및 리모컨 우선은 현장 재확인이 필요하다.
@@ -45,7 +57,7 @@ Jetson의 `manualLockReason`을 서버 실시간 상태·상태 이벤트와 웹
 
 **2026-11-12 웹 연결 확인:** 격리 PostGIS와 실제 인증 HTTP를 사용하는 시험 서버에 내부 관측을 저장하고, Mock을 끈 관제 웹의 실제 네이버 지도에서 현재 영역 2개·오래된 위험·위험 이력 1건과 오버레이 해제를 확인했다. 외부 장비 전송과 실제 좌표 변환·센서 정확도는 미검증이다. 재사용 가능한 격리 시험은 `VisionWebIntegrationTest`이며 상세 조건은 개발 로그를 따른다.
 
-`backend/src/main/java/com/autonomousmower/vision/VisionMapService.java`와 V19가 내부 관측의 부분 겹침·최신 영역 보존, 최초 수신 후 위험 이력 30일 보관과 정리를 제공한다. 공개 API는 `robots:read`의 GET `/api/robots/{robotId}/vision-map`뿐이다. `frontend/src/features/map/visionObservations.ts`, `components/VisionMapControls.tsx`와 네이버 지도 오버레이가 분류·5분 경과·위험 이력 페이지를 표시한다. 테스트용 관측은 격리 DB 내부 입력에서만 사용했고 실제 Jetson 수신·깊이/9축 좌표 투영·CPP 반영은 미연결이다. 계약은 [API 문서](api-contract.md#비전-관측-지도-조회--2026-11-11), 다음 단계는 로컬 로드맵, 검증 결과는 개발 로그를 따른다.
+`backend/src/main/java/com/autonomousmower/vision/VisionMapService.java`와 V19가 관측의 부분 겹침·최신 영역 보존, 최초 수신 후 위험 이력 30일 보관과 정리를 제공한다. 조회는 `robots:read`의 GET `/api/robots/{robotId}/vision-map`, 관측 입력은 `control:write`의 POST `/api/robots/{robotId}/vision-map/observations`를 사용한다. `frontend/src/features/map/visionObservations.ts`, `components/VisionMapControls.tsx`와 네이버 지도 오버레이가 분류·5분 경과·위험 이력 페이지를 표시한다. 2026-11-11 격리 DB 시험 이후 11월 16일 듀얼 GPS 입력의 실제 저장·조회 및 사용자 지도 표시 확인까지 진행했다. CPP 반영은 미연결이다. 계약은 [API 문서](api-contract.md#듀얼-gps-비전-관측-입력--2026-11-16), 다음 단계는 로컬 로드맵, 검증 결과는 개발 로그를 따른다.
 
 **관제 대기 설치 갱신: 2026-11-11 07시대 한국 시간.** 현장 격리 확인 후 커밋 `7b4da6d`를 `~/.local/share/mower-control-gateway/releases/7b4da6d/edge/jetson-client/`에 별도 배치했다. `mower-control-gateway.service`는 active·enabled이고 `Linger=yes`이며, 기존 `mower-telemetry.service`는 inactive·disabled다. MQTT 연결·명령 구독 요청과 대기 중 포트 미점유를 확인했다. PC 백엔드는 새 준비 API가 포함된 JAR로 갱신해 health `UP`을 확인했다. 새 서비스의 웹 준비·물리 출력·재부팅은 미검증이다. 설치·복구·줄바꿈 문제와 설정 보존은 [Jetson README](../edge/jetson-client/README.md)의 실제 설치 기록을 따른다. 아래 01시대 관찰은 당시 상태로 보존한다.
 

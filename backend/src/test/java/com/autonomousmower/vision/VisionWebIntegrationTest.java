@@ -48,6 +48,11 @@ class VisionWebIntegrationTest {
             List.of(x0,y0),List.of(x1,y0),List.of(x1,y1),List.of(x0,y1),List.of(x0,y0)))));
     }
     @Test void authenticatedApiReturnsStoredObservationsForBrowser() throws Exception {
+        http.getRestTemplate().setRequestFactory(new org.springframework.http.client.JdkClientHttpRequestFactory());
+        // 이름과 접속 주소로 제한한 격리 시험 DB의 이전 시험 자료만 정리한다.
+        jdbc.update("DELETE FROM vision_observation WHERE robot_id='MOWER-01'");
+        jdbc.update("DELETE FROM work_zone WHERE robot_id='MOWER-01'");
+        jdbc.update("DELETE FROM admin_account WHERE admin_id IN ('vision-web-fixture','vision-reader-fixture')");
         jdbc.update("INSERT INTO work_zone(robot_id,zone_polygon,version,created_at,updated_at) VALUES('MOWER-01',ST_GeomFromText('POLYGON((127.454 36.6255,127.455 36.6255,127.455 36.6265,127.454 36.6265,127.454 36.6255))',4326),1,now(),now())");
         admins.saveAndFlush(new Admin("vision-web-fixture",passwords.encode("Vision-Test-Only-2026!"),"admin",LocalDateTime.now()));
         Instant now=Instant.now();
@@ -63,6 +68,32 @@ class VisionWebIntegrationTest {
         assertThat(result.path("dangerHistory").size()).isEqualTo(1);
         assertThat(result.path("regions").get(0).path("geometry").path("type").asText()).isIn("Polygon","MultiPolygon");
         assertThat(http.getForEntity("/api/robots/MOWER-01/vision-map?version=1",String.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        var observation=Map.of("observationId","candidate", "observedAt",now.minusSeconds(1).toString(),
+            "objectType","BUSH_CANDIDATE","area",area(127.4541,127.4542,36.6256,36.6257));
+        var batch=Map.of("version",1,"sessionId","web-http-test","observations",List.of(observation));
+        String ingest="/api/robots/MOWER-01/vision-map/observations";
+        assertThat(http.postForEntity(ingest,batch,String.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        for(int attempt=0;attempt<2;attempt++) {
+            assertThat(http.exchange(ingest,HttpMethod.POST,new HttpEntity<>(batch,headers),String.class).getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM vision_observation WHERE observation_id='web-http-test:candidate'",Integer.class)).isEqualTo(1);
+        var after=http.exchange("/api/robots/MOWER-01/vision-map?version=1",HttpMethod.GET,new HttpEntity<>(headers),String.class);
+        assertThat(after.getBody()).contains("dual_gps_vision:bush_candidate", "UNKNOWN");
+        var wrong=Map.of("version",2,"sessionId","wrong-version","observations",List.of(observation));
+        assertThat(http.exchange(ingest,HttpMethod.POST,new HttpEntity<>(wrong,headers),String.class).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        var invalid=Map.of("version",1,"sessionId","bad-frame","observations",List.of(Map.of(
+            "observationId","bad","observedAt",now.toString(),"objectType","BUSH_CANDIDATE")));
+        assertThat(http.exchange(ingest,HttpMethod.POST,new HttpEntity<>(invalid,headers),String.class).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        var missingVersion=Map.of("sessionId","missing-version","observations",List.of(observation));
+        assertThat(http.exchange(ingest,HttpMethod.POST,new HttpEntity<>(missingVersion,headers),String.class).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        admins.saveAndFlush(new Admin("vision-reader-fixture",passwords.encode("Vision-Reader-Test-2026!"),"read-only",LocalDateTime.now()));
+        var readerLogin=http.postForEntity("/api/auth/login",Map.of("adminId","vision-reader-fixture","password","Vision-Reader-Test-2026!"),String.class);
+        var readerHeaders=new HttpHeaders();readerHeaders.setBearerAuth(json.readTree(readerLogin.getBody()).path("data").path("accessToken").asText());
+        assertThat(http.exchange(ingest,HttpMethod.POST,new HttpEntity<>(batch,readerHeaders),String.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        var rollback=Map.of("version",1,"sessionId","atomic-frame","observations",List.of(observation,
+            Map.of("observationId","outside","observedAt",now.toString(),"objectType","BUSH_CANDIDATE","area",area(128,129,38,39))));
+        assertThat(http.exchange(ingest,HttpMethod.POST,new HttpEntity<>(rollback,headers),String.class).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM vision_observation WHERE observation_id LIKE 'atomic-frame:%'",Integer.class)).isZero();
         String ready=System.getenv("VISION_WEB_READY_FILE");
         if(ready!=null && !ready.isBlank()) {
             Path marker=Path.of(ready); Files.writeString(marker,Integer.toString(port));

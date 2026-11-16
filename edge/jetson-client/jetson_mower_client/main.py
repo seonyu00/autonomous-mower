@@ -15,7 +15,7 @@ from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Imu, NavSatFix
-from std_msgs.msg import Bool, Int8
+from std_msgs.msg import Bool, Int8, String
 
 from .command_ack import publish_command_ack
 from .autonomy import AutonomyExecution
@@ -28,6 +28,7 @@ from .manual_challenge import ChallengeScope, ManualChallenge
 from .mqtt_edge import MqttEdgeClient
 from .topics import MowerTopics, command_type_from_topic
 from .telemetry import build_telemetry_payload
+from .telemetry_heading import TelemetryHeading
 
 
 class JetsonMowerClientNode(Node):
@@ -44,6 +45,7 @@ class JetsonMowerClientNode(Node):
         self._latest_fix: NavSatFix | None = None
         self._latest_fix_received_at: float | None = None
         self._latest_imu: Imu | None = None
+        self._heading = TelemetryHeading()
         self._last_manual_command_monotonic: float | None = None
         self._recent_command_keys: OrderedDict[str, None] = OrderedDict()
         self._autonomy = AutonomyExecution(config.autonomy_command)
@@ -68,6 +70,7 @@ class JetsonMowerClientNode(Node):
         self._mower_engine_publisher = self.create_publisher(Bool, config.ros.mower_engine_topic, 10)
         self.create_subscription(NavSatFix, config.ros.fix_topic, self._handle_fix, 10)
         self.create_subscription(Imu, config.ros.imu_topic, self._handle_imu, 10)
+        self.create_subscription(String, '/dual_gps/status', self._handle_heading, 10)
 
         self.create_timer(config.ros.telemetry_publish_period_seconds, self._publish_telemetry)
         self.create_timer(config.ros.status_publish_period_seconds, self._publish_status)
@@ -95,6 +98,9 @@ class JetsonMowerClientNode(Node):
 
     def _handle_imu(self, message: Imu) -> None:
         self._latest_imu = message
+
+    def _handle_heading(self, message: String) -> None:
+        self._heading.update(message.data, time.monotonic(), time.time())
 
     def _handle_mqtt_message(self, topic: str, command: dict[str, Any] | None, raw_payload: bytes) -> None:
         with self._manual_setup_lock:
@@ -470,6 +476,7 @@ class JetsonMowerClientNode(Node):
             work_state=self._work_state,
             error_state="emergency-stop-active" if self._emergency_active else None,
             error_observer_session=self._error_observer_session,
+            heading=self._heading.snapshot(time.monotonic(), time.time()),
         )
         # TODO: 속도, 배터리, 신호 세기는 실제 ROS/Jetson 소스에서 계산한다.
         # TODO: 영상 송출 구현 후 카메라/WebRTC 상태를 추가한다.

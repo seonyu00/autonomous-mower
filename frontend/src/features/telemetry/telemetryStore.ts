@@ -50,7 +50,10 @@ export const useTelemetryStore = create<TelemetryStore>((set, get) => ({
       dataSource: 'real',
       telemetryByRobotId: {
         ...state.telemetryByRobotId,
-        [telemetry.robotId]: telemetry,
+        [telemetry.robotId]: {
+          ...telemetry,
+          headingExpiresAtMonotonic: headingExpiry(telemetry),
+        },
       },
     }));
   },
@@ -83,3 +86,11 @@ export const useTelemetryStore = create<TelemetryStore>((set, get) => ({
       },
     })),
 }));
+
+function headingExpiry(telemetry: Telemetry): number | undefined {
+  const observedAt = Date.parse(telemetry.headingObservedAt ?? '');
+  const age = Math.max(Date.parse(telemetry.edgeSampledAt ?? '') - observedAt,
+    Date.parse(telemetry.serverTimestamp ?? telemetry.lastReceivedAt) - observedAt);
+  return Number.isFinite(age) && age >= 0 && age < 3000
+    ? performance.now() + 3000 - age : undefined;
+}

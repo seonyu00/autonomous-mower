@@ -24,6 +24,11 @@ export type Telemetry = {
   serverTimestamp?: string;
   errorState?: string | null;
   errorObserved?: boolean;
+  headingDegrees?: number | null;
+  headingSource?: 'dual-gps' | null;
+  headingObservedAt?: string | null;
+  // 브라우저 수신 후 만료 판단에만 사용하는 값이며 서버로 보내지 않는다.
+  headingExpiresAtMonotonic?: number;
 };
 
 export type RobotStatus = {

@@ -37,7 +37,7 @@ public class VisionMapService {
         this.jdbc = jdbc; this.robots = robots; this.mapper = mapper;
     }
 
-    // 실제 수신기는 아직 없다. 테스트와 향후 좌표 검증 어댑터만 이 내부 입력을 사용한다.
+    // 인증된 관측 수신기와 내부 어댑터가 같은 구역·중복 검사 경로를 사용한다.
     @Transactional
     public void record(String robotId, Input input) {
         robots.getRobot(robotId);

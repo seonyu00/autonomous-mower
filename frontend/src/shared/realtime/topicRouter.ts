@@ -130,6 +130,9 @@ function isTelemetry(value: unknown): value is Telemetry {
     (value.errorState === undefined || isNullableString(value.errorState)) &&
     (value.errorObserved === undefined || typeof value.errorObserved === 'boolean') &&
     (value.edgeSampledAt === undefined || isNullableString(value.edgeSampledAt)) &&
+    (value.headingDegrees === undefined || isNullableNumber(value.headingDegrees)) &&
+    (value.headingSource === undefined || value.headingSource === null || value.headingSource === 'dual-gps') &&
+    (value.headingObservedAt === undefined || isNullableString(value.headingObservedAt)) &&
     (value.serverTimestamp === undefined || isString(value.serverTimestamp))
   );
 }

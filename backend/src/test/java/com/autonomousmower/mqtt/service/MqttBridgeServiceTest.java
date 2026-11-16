@@ -26,6 +26,35 @@ import org.mockito.Mockito;
 class MqttBridgeServiceTest {
 
     @Test
+    void dualHeadingIsForwardedOnlyWhileFreshWithoutLosingPosition() throws Exception {
+        Instant time = Instant.parse("2026-11-16T00:00:00Z");
+        var payload = objectMapper().readValue("""
+            {"robotId":"MOWER-01","latitude":37,"longitude":127,
+             "receivedAt":"2026-11-16T00:00:01Z","headingDegrees":274,
+             "headingSource":"dual-gps","headingObservedAt":"2026-11-16T00:00:00Z"}
+            """, MqttTelemetryPayload.class);
+        for (int age : new int[]{1, 3}) {
+            var publisher = Mockito.mock(RealtimePublisher.class);
+            var handler = new MqttInboundHandler(publisher,Mockito.mock(TelemetrySpool.class),
+                Mockito.mock(CommandExecutionService.class),Mockito.mock(TelemetryReceptionService.class),
+                Clock.fixed(time.plusSeconds(age),ZoneOffset.UTC),registration("MOWER-01"));
+            handler.handleTelemetry(payload);
+            var output = ArgumentCaptor.forClass(TelemetryMessage.class);
+            verify(publisher).publishTelemetry(output.capture());
+            assertThat(output.getValue().latitude()).isEqualTo(37);
+            assertThat(output.getValue().headingDegrees()).isEqualTo(age == 1 ? 274. : null);
+        }
+        var old = new MqttTelemetryPayload("MOWER-01",37.,127.,null,null,null,null,null,time,null,null);
+        assertThat(old.headingDegrees()).isNull();
+        for (double invalid : new double[]{-1,360,Double.NaN}) {
+            var bad = new MqttTelemetryPayload("MOWER-01",37.,127.,null,null,null,null,null,
+                time.plusSeconds(1),null,null,invalid,"dual-gps",time);
+            assertThat(bad.headingDegrees()).isNull();
+            assertThat(bad.latitude()).isEqualTo(37);
+        }
+    }
+
+    @Test
     void partialMeasurementsKeepNullsThroughJsonAndStomp() throws Exception {
         ObjectMapper mapper = objectMapper();
         MqttTelemetryPayload payload = mapper.readValue("""

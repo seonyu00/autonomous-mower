@@ -4,6 +4,81 @@ Jetson Orin Nano에서 Spring Boot 백엔드의 MQTT command topic을 구독하�
 
 현재 클라이언트는 MQTT command 검증, ROS 2 제어 출력, command ACK, telemetry/status 발행, 로컬 데드맨 스위치와 E-Stop 상태 처리를 제공한다. 기본 ROS 방식은 `/cmd_vel`을 구독하는 별도 bridge node를 사용한다. `manual_serial.port`를 설정하면 이 패키지의 STM32 USB CDC 시리얼 어댑터를 사용하며, 웹 준비 요청으로 포트를 여는 방식은 아래 관제 대기를 따른다.
 
+## 전원 ON 시 듀얼 GPS 자동 시작
+
+2026-11-16 Jetson에 `mower-dual-gps.service`와 `mower-dual-gps-rtk.service`를 설치하고 둘 다 enabled로 등록했다. 사용자 관리자 `Linger=yes`도 확인해 로그인·SSH 없이 부팅 때 시작되는 구성이다. 장치 별칭이 생길 때까지 기다리며 프로세스가 실패하면 10초 뒤 재시도한다. 수신 서비스 재시작 후 실제 위치·방향 복구를 확인했으며, 이번 작업에서 실제 재부팅·전원 재인가 시험은 하지 않았다.
+
+- 주 GPS의 새 위치는 `/fix`와 `/dual_gps/main_fix`로 전달해 기존 관제 위치 수신을 유지한다. 두 번째 GPS의 Fixed 여부와 별개로 주 GPS 위치는 표시할 수 있다.
+- 양쪽 Fixed·같은 측정 시각·43cm 기준선 검사를 통과한 위치와 방향만 `/dual_gps/fix`, `/dual_gps/odom`, `/dual_gps/yaw_ready`에 제공한다. 일반 위치 표시를 유효 방향으로 해석하지 않는다. 상태는 `/dual_gps/status`에서 확인한다.
+- RTK 보정은 기존 장비 설정을 양쪽 GPS로 전달한다. 비공개 설정은 `~/.config/mower-dual-gps/ntrip.json`에 사용자 소유 600 권한으로 보관한다. RTK 도구 출력에는 접속 정보가 포함될 수 있어 journal로 보내지 않는다.
+- 설치된 코드는 `~/.local/share/mower-dual-gps/releases/20261116-boot/`, 서비스 실행 경로는 그 위치를 가리키는 `~/.local/share/mower-dual-gps/current`다. 저장소의 `scripts/run-dual-gps*.sh`와 `systemd/mower-dual-gps*.service`를 배포했다.
+
+자동 시작 범위는 센서 수신과 RTK 보정이다. 비전 추론·웹 구역 조회·관측 전송·주행 스크립트를 새로 자동 실행하지 않는다. 후속 관제 연결은 아래 기체 방향 절을 따른다. 듀얼 방향은 별도 비전 실행기도 위 토픽으로 사용한다.
+
+### 관제 웹의 기체 방향 연결
+
+센서 상태에 북쪽 0°·동쪽 90°의 `headingDegrees`와 실제 측정 시각 `headingObservedAt`을 포함한다. 관제 게이트웨이의 `TelemetryHeading`이 양쪽 Fixed·출처·측정 시각을 확인해 기존 MQTT telemetry에 `headingSource:"dual-gps"`와 함께 전달한다. 무효 신호와 3초 만료에서는 방향을 null로 전송하며 같은 측정의 반복 보고로 수명을 연장하지 않는다. 위치 표시와 방향의 유효성은 독립적이다.
+
+이전 설명의 ‘웹이 IMU 방향을 사용한다’는 내용은 잘못됐다. 변경 전 웹은 GPS 좌표 변화에서 이동 방향을 계산했고, Jetson의 IMU 구독값은 telemetry 방향으로 보내지 않았다. 새 웹 코드는 위치 변화 추정을 제거하고 듀얼 GPS의 기체 방향을 사용한다. 정지·후진 시에도 기체 전방을 뜻하며 실제 이동 방향과 혼동하지 않는다.
+
+Jetson 관제 서비스는 `7971263-pwm400-dual-heading` 별도 배포본으로 전환했고 센서 자동 시작 배포본도 상태 필드를 갱신했다. STM32 포트 미점유와 cmd_vel 구독자 0을 확인한 뒤 게이트웨이를 재시작했다. 이전 설정 백업은 `~/.local/share/mower-control-gateway/mower-control-gateway.before-dual-heading.service`이며 기존 배포본과 비공개 설정은 보존했다. 실제 MQTT에 dual-gps 방향이 들어오는 것을 확인했고 백엔드도 적용했다. 운영 프런트 배포와 실제 방위 비교는 아직 수행하지 않았다. 기존 비전·관측 전송의 상시 실행 범위는 확장하지 않는다.
+
+```bash
+systemctl --user is-enabled mower-dual-gps.service mower-dual-gps-rtk.service
+systemctl --user is-active mower-dual-gps.service mower-dual-gps-rtk.service
+source /opt/ros/humble/setup.bash
+ros2 topic echo /dual_gps/status std_msgs/msg/String --once --full-length
+```
+
+다른 프로그램에서 GPS 포트를 열기 전에는 두 서비스를 함께 중지한다. 기존 `mower_test.sh`처럼 자체 GPS·보정 수신기를 실행하는 스크립트와 동시에 사용하지 않는다. 기존 5×5 스크립트는 수정하지 않았다. 듀얼 GPS를 자동 시작하지 않도록 복구하려면 다음 명령으로 등록을 해제하고 필요할 때 단일 GPS 수신기를 별도 실행한다. 이전에 실행 중이던 수신기 명령은 배포 폴더 상위의 `previous-gps-command.json`에 보관했다.
+
+```bash
+systemctl --user disable --now mower-dual-gps.service mower-dual-gps-rtk.service
+```
+
+## 듀얼 GPS를 이용한 시험용 비전 전역 지도
+
+2026-11-16 별도 모듈 `dual_gps_node.py`와 `dual_gps_vision.py`를 준비했다. 주 안테나에서 전방 0.43m에 보조 안테나가 있는 배치다. 양쪽 RTK Fixed, GGA·RMC의 같은 실제 측정 시각, 3초 미만 측정·수신, 기준선 0.43m±0.05m를 초기 시험 조건으로 사용한다. ±0.05m는 기준선 이상을 거르는 시험값이며 위치 정확도나 안전거리의 보장이 아니다. Fixed 해제·시각 불일치·미수신 때 새 방향을 만들지 않는다.
+
+두 포트를 이 수신기가 읽고 `/dual_gps/fix`, `/dual_gps/odom`, `/dual_gps/yaw_ready`, `/dual_gps/status`를 발행한다. 방향은 ENU 동쪽 0·반시계 양수이며 `/dual_gps/odom`은 방향 전달 전용이다. 위치는 주 안테나의 `/dual_gps/fix`를 사용한다. 공분산은 설치된 NMEA 드라이버의 GST 또는 품질별 근사값이며, 표시된 작은 수치가 실제 위치 오차 실측값은 아니다. 카메라·차체 중심과 주 안테나의 정확한 오프셋 및 이동 중 정확도는 미검증이다.
+
+기존 팀원 `recorder.py`는 덮어쓰지 않고 별도 실행기에서 불러온다. 같은 측정 시각의 위치·방향과 카메라 IMU가 준비된 뒤 원래 기록기에 넘기며, 상태 만료 시 화면 상태도 무효로 바꾼다. 기존 제자리 회전 시험과 별도 토픽·출력 폴더를 사용한다. 후속 HTTPS 연결은 아래와 같으며 ROS 구동 명령과 CPP 실행은 추가하지 않는다.
+
+장비에 복사한 위치는 `~/dual_gps_map_20261116/`이다. 실제 시험 데이터는 `map-data/`, 입력 단절 확인은 `gap-map-data/`와 `gap-check.json`에 있다. 시험에서는 전역 원점·위치 기록 57개와 덤불 후보의 GPS 좌표 생성을 확인했다. 네이버 지도 화면 표시나 실제 물체와의 위치 오차 비교는 수행하지 않았다. 임시 시험을 종료하고 기존 GPS 수신기와 기존 비전 시험을 유지했다. 이 첫 연결 시험에서는 상시 서비스를 설치하지 않았으며, 이후 센서 자동 시작은 위 절에 추가했다.
+
+자동 센서 서비스를 사용하는 경우 아래의 수동 GPS 수신기를 중복 실행하지 않고 비전 실행 단계부터 진행한다. 수동 시험으로 전환할 때는 먼저 자동 센서·보정 서비스를 중지하고 두 GPS 포트 점유를 확인한다. RTK 보정은 기존 장비 설정을 이용해 실행해야 하며, 자격증명은 이 문서에 복사하지 않는다. GPS가 Fixed로 바뀌지 않으면 이 연결기는 전역 위치 생성을 보류한다. GPS 수신기는 비전용 NumPy 경로와 분리한 환경에서 실행한다. 시험에서는 비전 NumPy 1.26과 기존 ROS `transforms3d`의 `np.float` 사용이 충돌했으므로 공용 패키지를 덮어쓰지 않았다.
+
+```bash
+env -u PYTHONPATH bash --noprofile --norc -c 'source /opt/ros/humble/setup.bash; export PYTHONPATH="$HOME/.local/share/mower-dual-gps/current:${PYTHONPATH:-}"; python3 -m jetson_mower_client.dual_gps_node'
+```
+
+다각형 처리는 `requirements-vision-map.txt`를 이용해 별도 vendor 경로에 설치한다. 기존 비전 환경의 NumPy를 사용하므로 `python3 -m pip install --target ~/dual_gps_map_20261116/vendor --no-deps -r requirements-vision-map.txt`처럼 의존성을 공용 환경에 설치하지 않는다. 두 번째 터미널에서는 `control:write` 권한이 있는 로그인 토큰을 입력하고 매번 새 출력 경로로 다음을 실행한다. 토큰은 명령 인자나 Git 파일에 적지 않는다.
+
+```bash
+source /opt/ros/humble/setup.bash
+export PYTHONPATH="$HOME/dual_gps_map_20261116:$HOME/dual_gps_map_20261116/vendor:$HOME/mower_semantic_lib:${PYTHONPATH:-}"
+read -rs -p '관제 로그인 토큰: ' WORK_ZONE_API_TOKEN; echo
+export WORK_ZONE_API_TOKEN
+trial_output=$(mktemp -d "$HOME/drive_test_runs/dual-gps.XXXXXX")
+python3 -m jetson_mower_client.dual_gps_vision \
+  --team-dir "$HOME/drive_test_observer_semantic_trial" \
+  --output "$trial_output/data" \
+  --semantic-model "$HOME/drive_test_observer_semantic_trial/models/yolo26s-sem-ade20k.onnx" \
+  --api-base-url "https://<BACKEND_HOST>" --robot-id "<ROBOT_ID>" --expected-version <구역_버전>
+```
+
+입력 상태는 `ros2 topic echo /dual_gps/status std_msgs/msg/String --once --full-length`로 확인한다. 결과 폴더의 `state.json`에서 `pose_ready`, `heading_source`, `map`, `last_map_result`를 확인한다. 시험용 화면은 해당 데이터 폴더를 loopback HTTP 서버로 제공하고 SSH 포트 포워딩으로 열 수 있다. 예를 들어 세 번째 터미널에서 `python3 -m http.server 8768 --bind 127.0.0.1 --directory <데이터_폴더>`를 실행한다. 이 설명은 실제 브라우저 표시 검증을 대신하지 않는다.
+
+### 웹 작업 구역과 관측 저장 연결
+
+`dual_gps_vision`은 시작할 때 인증된 GET work-zone으로 다각형과 버전을 조회·검증하고 그 구역으로 20cm 격자를 만든다. 오목한 경계와 내부 제외 영역을 유지하며 최대 10만 셀을 허용한다. 받아 둔 구역과 해시를 출력 폴더의 `work-zone.json`에 기록한다. 구역은 실행 동안 고정하며 구역 변경 후에는 새 버전으로 다시 시작해야 한다.
+
+별도 터미널에 비전과 같은 환경 및 토큰을 준비한 뒤 `python3 -m jetson_mower_client.vision_web_sender --api-base-url "https://<BACKEND_HOST>" --robot-id "<ROBOT_ID>" --data-dir <데이터_폴더>`로 전송한다. 현재 위치·방향이 유효하고 3초 미만인 실제 촬영 결과만 변환한다. 사람은 서버의 반경 1m 위험 표시, 나무·덤불은 `UNKNOWN` 후보 영역을 사용한다. 기존 네이버 지도에서 ‘비전 표시’를 켜면 기존 조회 API로 읽는다. 객체 미검출만으로 자유 공간이나 위험 해제를 만들지 않는다.
+
+서버는 기존 `control:write` 권한을 사용한다. 이는 장비 신원을 보증하지 않으며 입력은 지도 검토용이다. 세션·촬영 시각·물체 순번으로 관측 ID를 고정하고 실패한 한 프레임을 `web-pending.json`에 보관해 재시도한다. 대기 중 새 프레임을 모두 저장하는 큐가 아니며, 중간 관측은 빠질 수 있다. 4xx 응답은 인증·구역 버전·입력 확인이 필요하므로 중단한다. 서버가 처리한 뒤 응답만 유실돼도 같은 ID로 재전송한다. 외부 주소로의 HTTP 리다이렉트는 따르지 않는다.
+
+2026-11-16 실제 구역 버전 9를 109×199셀로 구성하고, Jetson 실제 관측의 HTTPS 저장 및 재조회에서 `UNKNOWN` 영역 3개를 확인했다. 사용자는 관제 작업 지도의 비전 표시를 켜고 미확인 영역이 보인다고 확인했다. 에이전트의 직접 브라우저 캡처 검증은 아니다. 새 백엔드 빌드를 PC에 적용했다. 임시 입력·비전·전송·보정은 시험 후 종료했고 이전 GPS 수신기와 기존 비전 시험을 유지했다. 비전·관측 전송 자동 실행 서비스는 설치하지 않았다. 물체의 실제 위치 오차·이동 시험은 별도다.
+
 ## 웹 버튼에서 수동 제어 준비
 
 예전 시험 서비스를 매번 수동 실행하는 대신, `mower-control-gateway.service` 하나가 상태 전송과 MQTT 명령 수신을 담당하도록 구성했다. 프로세스 시작만으로 시리얼 포트를 열지 않는다. 웹의 `수동 조작 재개`가 인증·제어권·일회용 확인값 검사를 거친 `manual-prepare`를 보낸 뒤에만 제어 포트를 연다. 기존 `monitor.py`와 `mower-telemetry.service`는 상태 전용 방식으로 그대로 남긴다.

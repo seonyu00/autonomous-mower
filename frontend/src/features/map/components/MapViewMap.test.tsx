@@ -164,7 +164,7 @@ describe('MapViewMap', () => {
     expect(screen.queryByText('0.00000, 0.00000')).not.toBeInTheDocument();
   });
 
-  it('실제 좌표가 연속 수신되면 세션 경로 기준 방향을 표시한다', async () => {
+  it('실제 좌표가 움직여도 듀얼 방향이 없으면 방향을 추정하지 않는다', async () => {
     useTelemetryStore.setState({ dataSource: 'real', connectionState: 'connected' });
     render(<MapViewMap />);
 
@@ -178,7 +178,8 @@ describe('MapViewMap', () => {
     });
 
     expect(await screen.findByText('GPS 위치 · 표시 평균')).toBeInTheDocument();
-    expect(screen.getByText(/GPS 방향/)).toBeInTheDocument();
+    expect(screen.getByText('듀얼 GPS 방향 대기')).toBeInTheDocument();
+    expect(naverMapMock.props?.headingDegrees).toBeNull();
     expect(screen.getByText('세션 완료 경로')).toBeInTheDocument();
   });
 
@@ -194,7 +195,7 @@ describe('MapViewMap', () => {
     expect((naverMapMock.props?.markerPosition as number[])[0]).toBeCloseTo(127.0000015, 8);
     expect(naverMapMock.props?.headingDegrees).toBeNull();
     act(() => update(127.001, 2));
-    expect(naverMapMock.props?.headingDegrees).not.toBeNull();
+    expect(naverMapMock.props?.headingDegrees).toBeNull();
     act(() => update(127.001, 3));
     act(() => update(127.001, 4));
     act(() => update(127.001, 5));
@@ -202,6 +203,21 @@ describe('MapViewMap', () => {
     act(() => update(127.002, 10));
     expect(naverMapMock.props?.markerPosition).toEqual([127.002, 37]);
     expect(naverMapMock.props?.headingDegrees).toBeNull();
+  });
+
+  it('좌표가 그대로여도 듀얼 GPS 기체 방향을 표시하고 무효 신호에서 숨긴다', () => {
+    const original = useTelemetryStore.getState().telemetryByRobotId[TEST_ROBOT_ID];
+    render(<MapViewMap />);
+    const now = new Date().toISOString();
+    act(() => useTelemetryStore.getState().upsertTelemetry({ ...original,
+      lastReceivedAt: now, serverTimestamp: now, edgeSampledAt: now,
+      headingDegrees: 274, headingSource: 'dual-gps', headingObservedAt: now }));
+    expect(naverMapMock.props?.headingDegrees).toBe(274);
+    expect(screen.getByText('듀얼 GPS 기체 방향 274°')).toBeInTheDocument();
+    act(() => useTelemetryStore.getState().upsertTelemetry({ ...original,
+      lastReceivedAt: now, headingDegrees: null, headingSource: null, headingObservedAt: null }));
+    expect(naverMapMock.props?.headingDegrees).toBeNull();
+    expect(screen.getByText('듀얼 GPS 방향 대기')).toBeInTheDocument();
   });
 
   it('Mock 연결의 유효 좌표는 실제 GPS가 아니라 샘플 데이터로 표시한다', async () => {

@@ -1,0 +1,19 @@
+[Unit]
+Description=듀얼 GPS RTK 보정 수신
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/mower-dual-gps/current
+ExecStart=/bin/bash %h/.local/share/mower-dual-gps/current/scripts/run-dual-gps-rtk.sh
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=10
+UMask=0077
+NoNewPrivileges=true
+# 보정 도구의 출력에는 접속 정보가 포함될 수 있어 공유 journal로 보내지 않는다.
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=default.target

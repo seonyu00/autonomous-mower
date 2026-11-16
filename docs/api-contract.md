@@ -1,5 +1,28 @@
 # API 및 실시간 계약
 
+## 실시간 듀얼 GPS 기체 방향
+
+`/topic/robots/{robotId}/telemetry`에는 선택적 nullable `headingDegrees`, `headingSource`, `headingObservedAt`을 전달한다. 유효한 출처는 `dual-gps`이며 북쪽 0°·동쪽 90°·시계 방향의 기체 전방 방위를 뜻한다. 이전 MQTT payload와 기존 Java 생성자 호출은 방향 null로 호환한다. 좌표·배터리 등 기존 필드는 방향 누락과 별개로 처리한다.
+
+웹은 실제 모드에서 이 방향만 마커에 반영하고 좌표 변화로 방향을 대신 추정하지 않는다. 측정부터 엣지 송신·서버 수신까지의 경과 시간과 브라우저 수신 후 단조 시계의 경과로 표시 수명을 계산한다. 값이 없거나 3초 한도가 지나면 화살표와 각도를 숨기고 `듀얼 GPS 방향 대기`를 표시한다. 브라우저 전달 지연의 정확한 상한이나 센서 정확도를 보증하는 제어 계약은 아니다. 샘플 모드는 기존 샘플 경로 방향을 사용한다.
+
+실시간 필드 확장이며 DB 마이그레이션과 새로운 방향 이력 API는 추가하지 않는다. 운영 웹에는 새 프런트 코드 배포가 필요하다.
+
+## 듀얼 GPS 비전 관측 입력 — 2026-11-16
+
+`POST /api/robots/{robotId}/vision-map/observations`는 기존 HTTPS Bearer 로그인과 `control:write` 권한을 사용한다. 등록 로봇과 현재 작업 구역 버전을 검사하고 `VisionMapService.record`를 통해 저장한다. 이 권한과 입력은 실제 장비 신원·센서 정확도나 주행 허가를 보증하지 않는다. 새 MQTT 토픽이나 공개 무인증 입력은 추가하지 않는다.
+
+본문은 `{version, sessionId, observations:[...]}`이다. version은 필수 비음수 정수, sessionId는 1~64자, observations는 1~20개다. 각 항목은 `observationId`(1~128자), `observedAt`(실제 촬영 UTC 시각), `objectType`을 가진다. 저장 ID는 `sessionId:observationId`로 합치며 총 128자를 넘으면 거부한다. 같은 ID·내용의 재전송은 기존 기록을 다시 만들지 않으며 다른 내용이면 거부한다.
+
+- `PERSON`: 유효한 WGS84 `longitude`, `latitude`를 받고 기존 어댑터에서 반경 1m의 `DANGEROUS` 표시 영역으로 변환한다. 1m는 시각화용이며 실제 크기·안전거리가 아니다.
+- `TREE_CANDIDATE`, `BUSH_CANDIDATE`: `area:{type:"Polygon",srid:4326,geometry:{type:"Polygon",coordinates:[...]}}`를 받는다. 외곽 고리 1개·최대 33점과 유한한 2차원 좌표를 검사하고 `UNKNOWN`으로 저장한다. 객체 후보를 예초 가능이나 확정 위험으로 승격하지 않는다.
+
+서버는 다각형을 저장 구역과 교차해 구역 밖·내부 제외 영역을 제거한다. 교집합이 없거나 미래 시각·잘못된 입력이면 400, 버전 충돌이면 409, 미인증이면 401, 쓰기 권한이 없으면 403이다. 한 배치는 하나의 트랜잭션으로 처리하며 잘못된 항목이 있으면 전체를 되돌린다. 성공 응답은 `{success:true,data:{accepted:<항목수>}}`이며 실제 구동·절삭 확인을 뜻하지 않는다.
+
+Jetson은 시작 시 기존 GET work-zone으로 다각형과 버전을 고정하고, 출력 파일에 구역 해시와 세션 ID를 기록한다. 동일 실제 시각의 두 RTK Fixed 위치, 43cm±5cm 기준선, 3초 미만 위치·방향·촬영값을 사용하는 시험 경로다. 위치·방향·깊이를 지도 좌표로 연결할 수 없는 관측은 전송하지 않는다. 최대 20개를 넘는 프레임은 일부를 조용히 자르지 않고 전송을 보류한다.
+
+실패한 한 프레임은 로컬 `web-pending.json`에 보존하고 같은 ID·촬영 시각으로 재시도한다. 대기 중 모든 새 프레임의 보관을 보장하지 않는다. 4xx는 상태 확인이 필요해 전송을 중단하고 파일을 남긴다. 구역 버전 변경 후 최신 버전을 옛 관측에 덧붙이지 않으며 새 구역으로 다시 시작한다. 조회는 기존 GET vision-map과 네이버 비전 오버레이를 사용하고, 5분 경과 표시와 위험 이력 30일 보관 정책을 유지한다.
+
 ## 수동 잠금 원인과 영상 화면 이탈 — 2026-11-12
 
 실시간 로봇 상태에 선택적 문자열 `manualLockReason`을 추가한다. 기존 `edgeState=manual-serial-locked`는 유지한다. 현재 지원하는 원인은 `remote-active`, `serial-status-timeout`, `serial-error`, `serial-loop-delayed`, `serial-backlog`, `serial-invalid`, `input-timeout`, `input-expired`, `stop-requested`다. 원인 필드가 없거나 지원하지 않는 값은 원인 미확인으로 표시하고 재개를 자동 허용하지 않는다. 상태 이벤트에는 수신한 원인도 기록한다.

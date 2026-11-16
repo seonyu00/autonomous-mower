@@ -47,6 +47,9 @@ public class MqttInboundHandler {
         }
         spool.append(InboundRecord.telemetry(payload, receivedAt));
         receptionService.recordTelemetry(payload.robotId(), receivedAt, payload.receivedAt());
+        boolean headingFresh = payload.headingObservedAt() != null
+                && !payload.headingObservedAt().isAfter(receivedAt)
+                && payload.headingObservedAt().isAfter(receivedAt.minusSeconds(3));
         realtimePublisher.publishTelemetry(new TelemetryMessage(
                 payload.robotId(),
                 payload.latitude(),
@@ -59,7 +62,10 @@ public class MqttInboundHandler {
                 receivedAt,
                 payload.errorState(),
                 payload.receivedAt(),
-                clock.instant(), payload.errorObserverSession() != null
+                clock.instant(), payload.errorObserverSession() != null,
+                headingFresh ? payload.headingDegrees() : null,
+                headingFresh ? payload.headingSource() : null,
+                headingFresh ? payload.headingObservedAt() : null
         ));
     }
 

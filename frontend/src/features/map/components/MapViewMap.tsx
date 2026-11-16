@@ -3,13 +3,13 @@ import type { CSSProperties } from 'react';
 import { env } from '../../../shared/config/env';
 import { useRobotStore } from '../../robots/robotStore';
 import { hasUsableTelemetryPosition } from '../../telemetry/position';
+import { telemetryHeadingDegrees } from '../../telemetry/heading';
 import { useTelemetryStore } from '../../telemetry/telemetryStore';
 import type { LngLat, PolygonGeometry } from '../geojson';
 import { mockRouteByRobotId } from '../mockMapData';
 import {
   appendRoutePosition,
   calculateHeadingDegrees,
-  calculateDisplayHeadingDegrees,
   smoothDisplayPosition,
   splitRouteByProgress,
 } from '../routeGeometry';
@@ -34,8 +34,8 @@ export function MapViewMap() {
   const preview = useCppPreview();
   const [mapError, setMapError] = useState<string | null>(null);
   const [sessionRoutes, setSessionRoutes] = useState<Record<string, LngLat[]>>({});
-  const [displayHeading, setDisplayHeading] = useState<{ robotId: string; value: number | null } | null>(null);
-  const displaySamples = useRef<{ robotId: string; receivedAt: number; samples: LngLat[]; position: LngLat } | null>(null);
+  const [headingNow, setHeadingNow] = useState(() => performance.now());
+  const displaySamples = useRef<{ robotId: string; receivedAt: number; samples: LngLat[] } | null>(null);
 
   const selectedRobotId = useRobotStore((state) => state.selectedRobotId);
   const telemetry = useTelemetryStore((state) =>
@@ -73,7 +73,7 @@ export function MapViewMap() {
   const completedRoute = livePositionAvailable ? sessionRoute : sampleRouteSegments.completed;
   const plannedRoute = sampleRouteSegments.planned;
   const headingDegrees = livePositionAvailable
-    ? (displayHeading?.robotId === selectedRobotId ? displayHeading.value : null)
+    ? telemetryHeadingDegrees(telemetry, headingNow)
     : calculateHeadingDegrees(completedRoute);
   const markerPosition = useMemo(
     () =>
@@ -103,8 +103,15 @@ export function MapViewMap() {
       : 'GPS 수신';
   const directionLabel =
     headingDegrees === null
-      ? '방향 계산 대기'
-      : `${livePositionAvailable ? 'GPS 방향' : '샘플 방향'} ${Math.round(headingDegrees)}°`;
+      ? '듀얼 GPS 방향 대기'
+      : `${livePositionAvailable ? '듀얼 GPS 기체 방향' : '샘플 방향'} ${Math.round(headingDegrees)}°`;
+
+  useEffect(() => {
+    if (!livePositionAvailable || telemetry?.headingDegrees == null) return;
+    setHeadingNow(performance.now());
+    const timer = window.setInterval(() => setHeadingNow(performance.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [livePositionAvailable, telemetry]);
 
   useEffect(() => {
     if (!selectedRobotId || !telemetry || !livePositionAvailable) {
@@ -118,9 +125,7 @@ export function MapViewMap() {
     const continuous = previous?.robotId === selectedRobotId && Number.isFinite(receivedAt)
       && receivedAt > previous.receivedAt && receivedAt - previous.receivedAt < 3000;
     const filtered = smoothDisplayPosition(continuous ? previous.samples : [], position);
-    displaySamples.current = { robotId: selectedRobotId, receivedAt, samples: filtered.samples, position: filtered.position };
-    setDisplayHeading({ robotId: selectedRobotId,
-      value: continuous ? calculateDisplayHeadingDegrees([previous.position, filtered.position]) : null });
+    displaySamples.current = { robotId: selectedRobotId, receivedAt, samples: filtered.samples };
     setSessionRoutes((current) => ({
       ...current,
       [selectedRobotId]: appendRoutePosition(continuous ? current[selectedRobotId] ?? [] : [], filtered.position),
