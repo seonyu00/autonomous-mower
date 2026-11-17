@@ -6,6 +6,24 @@ Jetson Orin Nano에서 Spring Boot 백엔드의 MQTT command topic을 구독하�
 
 ## 팀원 온라인 CPP에 실제 센서 입력 연결
 
+### 한 명령 실행과 별도 시험 지도
+
+`jetson_mower_client.cpp_trial`은 구역 조회·팀원 work-plan 생성·지리 좌표 비전 관측·센서 JSONL·팀원 WebCPP를 한 프로세스에서 관리한다. 시험마다 `~/cpp_trial_runs/trial.*` 새 폴더와 전용 장애물 토픽을 사용한다. 관측기의 기존 결과 폴더를 덮어쓰지 않으며 다른 프로그램을 종료하지 않는다. 기존 수동 시험 터미널은 먼저 정상 종료해 추론을 중복 실행하지 않는다.
+
+Jetson 배포 경로 `~/cpp_sensor_bridge_20261117/jetson_mower_client/`에 `cpp_trial.py`, `cpp_trial.html`, `cpp_sensor_input.py`, `__init__.py`가 필요하다. 팀원 모듈·모델은 기존 절대 경로를 기본값으로 사용한다. 이 변경은 현재 Jetson 오프라인으로 **아직 배포하지 않았다.** 배포 뒤 PC에서 저장소 루트 기준 다음 한 명령을 실행한다.
+
+```powershell
+.\tools\pc-demo\cpp-trial.ps1
+```
+
+PuTTY가 SSH 로그인과 Jetson 실행을 담당하고 PC의 9877 포트를 Jetson loopback HTTP에 연결한다. SSH 인증 뒤 관제 아이디·비밀번호를 숨김 입력하거나 Jetson 환경의 `MOWER_READ_TOKEN`을 사용한다. 준비되면 브라우저 시험 지도가 자동으로 열린다. PC 포트 9877이 사용 중이면 시작하지 않는다. 서버 주소·로봇은 `-ApiBaseUrl`, `-RobotId`로 지정할 수 있다. 계정 인증과 GUI 브라우저 자동 열기는 실장비 연결 후 검증해야 한다.
+
+창은 북쪽이 위인 미터 단위 평면 지도이며 위성지도 API를 사용하지 않는다. 구역 경계·정적/동적/미확인 장애물·현재 위치·방향·CPP 경로와 보류 사유·관측 나이를 표시한다. 입력이 오래되거나 지도가 무효면 장애물을 흐리게 하고 경로를 사용 가능하게 표시하지 않는다. 관제 웹에 경로를 저장하는 기능은 포함하지 않는다.
+
+Fixed·공분산·시각·근접 보호와 재개 잠금은 팀원 모듈과 기존 센서 연결부의 기준을 유지한다. 구역 변경 시 시험 전체를 중단하고 새 실행에서 새 지도를 준비한다. 근접 보호 재개 대기를 자동 해제하지 않으며 원인을 해결한 뒤 시험을 재시작한다. 자식 프로그램 종료·Ctrl+C·정상 전달된 SSH 종료 신호에는 자신이 생성한 프로세스 그룹만 정리한다. 전원 단절·SIGKILL에서는 정상 정리를 보장하지 않는다. `drive_ros.py`·STM32·AUTO·예초 제어는 실행하지 않는다.
+
+PC에서는 자식 프로세스 실패 시 정리와 원본 시각 보존 시험, 지도 JavaScript 구문·두 화면 폭 좌표 계산·보류 상태 표시, PowerShell 구문을 확인했다. 실제 브라우저 검사는 Playwright 확장 부재로 실행하지 못했고 Jetson 오프라인으로 센서·팀원 모듈·로그인 종단 실행도 미검증이다.
+
 `cpp_sensor_input.py`는 ROS 구독만 사용해 팀원 `/home/jangwoo/gps_cpp_web_integration/web_cpp.py`에 JSONL 입력을 제공한다. 별도 배포 경로는 `/home/jangwoo/cpp_sensor_bridge_20261117/`이며 관제·카메라·센서 서비스와 팀원 소스는 변경하지 않는다. 서버로 장애물·경로를 전송하거나 AUTO·시리얼·날 제어를 실행하는 기능은 없다.
 
 - 위치 `/dual_gps/fix`와 방향 `/dual_gps/odom`은 측정 시각이 정확히 같은 쌍을 사용한다. 공분산 미확인·무효 방향·준비 신호 만료를 거부한다. 원본 위치·방향 측정과 로컬 수신 모두 500ms 이내여야 하며 수평 표준편차는 팀원 기준 0.10m 이하다.

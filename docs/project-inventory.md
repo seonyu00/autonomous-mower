@@ -13,6 +13,8 @@
 
 ### 팀원 온라인 CPP의 센서 입력 어댑터
 
+`cpp_trial.py`·`cpp_trial.html`과 PC의 `tools/pc-demo/cpp-trial.ps1`은 구역 조회·비전·CPP 미리보기와 별도 평면 지도를 묶는 실행 기반이다. PC 대역 시험과 구문 검사를 완료했으며 현재 Jetson 오프라인으로 배포·실제 센서와 브라우저 종단 시험은 미수행이다. 모터 출력이 없고 실제 주행 경로의 관제 보고 기능은 포함하지 않는다. 실행 방법은 아래 Jetson README의 한 명령 실행 절을 따른다.
+
 `edge/jetson-client/jetson_mower_client/cpp_sensor_input.py`가 듀얼 GPS 위치·방향과 장애물 스냅샷을 팀원 `gps_cpp_web_integration/web_cpp.py`의 JSONL 입력에 연결한다. Jetson 별도 배포 경로는 `/home/jangwoo/cpp_sensor_bridge_20261117/`다. 각속도는 GPS 방향 차이의 시험용 추정이며 구동 출력은 없다. 단위 시험과 합성 입력의 실제 팀원 CPP 호출 및 실제 ROS 입력 구독을 확인했다. 현재 rotation_trial 관측은 구역 식별자가 없어 계획을 거부하며, 지리 좌표 관측과 서버 조회의 종단 연결·실제 주행은 미검증이다. 실행과 제한은 [Jetson README](../edge/jetson-client/README.md#팀원-온라인-cpp에-실제-센서-입력-연결)를 따른다.
 
 ### 2026-11-17 방향 입력 교환과 CPP 실행 연결의 한계
