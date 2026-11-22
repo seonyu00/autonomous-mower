@@ -158,7 +158,7 @@ class JetsonRouteIntegrationTest {
         var invalidFraction = report(1, 0, 1, "available", Instant.now().minusMillis(100),
                 List.of(PATH.getFirst(), Map.of("lat", 90.1, "lon", 127.0)));
         assertThat(put(id, invalidFraction, writer).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        var stale = report(1, 0, 1, "available", Instant.now().minusSeconds(4), PATH);
+        var stale = report(1, 0, 1, "available", Instant.now().minusSeconds(11), PATH);
         assertThat(put(id, stale, writer).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         var tooLarge = http.exchange(ROBOT + "/sessions/" + id + "/latest", HttpMethod.PUT,
                 new HttpEntity<>(" ".repeat(256 * 1024 + 1), writer), String.class);

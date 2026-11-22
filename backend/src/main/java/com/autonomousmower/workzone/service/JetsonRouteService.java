@@ -26,7 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class JetsonRouteService {
-    private static final int LIFETIME_SECONDS = 3;
+    // 웹 무구동 경로의 서버 수신·표시 여유이며 실제 주행 센서 기준은 변경하지 않는다.
+    private static final int LIFETIME_SECONDS = 10;
+    private static final int OBSERVATION_MAX_AGE_SECONDS = 3;
     private static final int FUTURE_TOLERANCE_MS = 500;
 
     public enum Status {
@@ -170,7 +172,7 @@ public class JetsonRouteService {
         if (input.status() == Status.AVAILABLE) {
             if (input.remainingPath().size() < 2 || input.routeRevision() == null || input.routeGeneratedAt() == null
                     || input.observationObservedAt() == null || !observed.isAfter(now.minusSeconds(LIFETIME_SECONDS))
-                    || !input.observationObservedAt().isAfter(observed.minusSeconds(LIFETIME_SECONDS))
+                    || !input.observationObservedAt().isAfter(observed.minusSeconds(OBSERVATION_MAX_AGE_SECONDS))
                     || input.remainingPath().stream().anyMatch(point ->
                         !Double.isFinite(point.lat()) || !Double.isFinite(point.lon()))) {
                 throw new BusinessException(ErrorCode.INVALID_REQUEST);

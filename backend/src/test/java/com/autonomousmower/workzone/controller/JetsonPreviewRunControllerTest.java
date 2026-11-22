@@ -18,6 +18,7 @@ class JetsonPreviewRunControllerTest {
     private final WorkZoneService zones = mock(WorkZoneService.class);
     private final Clock clock = mock(Clock.class);
     private final SecurityUser operator = mock(SecurityUser.class);
+    private final org.springframework.security.core.Authentication authentication = mock(org.springframework.security.core.Authentication.class);
     private final JetsonPreviewRunController controller = new JetsonPreviewRunController(controls, zones, clock);
 
     @Test
@@ -30,7 +31,7 @@ class JetsonPreviewRunControllerTest {
         when(clock.instant()).thenReturn(now.plusSeconds(4));
         controller.renew("robot", ticket.id(), operator);
         when(clock.instant()).thenReturn(now.plusSeconds(9));
-        assertThat(controller.current("robot").getBody().data()).isNull();
+        assertThat(controller.current("robot", authentication).getBody().data()).isNull();
         assertThatThrownBy(() -> controller.renew("robot", ticket.id(), operator)).isInstanceOf(BusinessException.class);
     }
 
@@ -40,9 +41,9 @@ class JetsonPreviewRunControllerTest {
         when(clock.instant()).thenReturn(now);
         var ticket = claim(now);
         controller.start("robot", ticket, operator);
-        assertThat(controller.current("robot").getBody().data()).isEqualTo(ticket);
+        assertThat(controller.current("robot", authentication).getBody().data()).isEqualTo(ticket);
         controls.stateFor("robot").release("operator", now);
-        assertThat(controller.current("robot").getBody().data()).isNull();
+        assertThat(controller.current("robot", authentication).getBody().data()).isNull();
     }
 
     private JetsonPreviewRunController.Ticket claim(Instant now) {
