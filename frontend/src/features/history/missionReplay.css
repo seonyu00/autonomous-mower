@@ -1,0 +1,31 @@
+.mission-replay {
+  font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+  color-scheme: light;
+  --surface-canvas: #f5f6f3;
+  --text-primary: #202d28;
+  --text-secondary: #425c4d;
+  --accent: #245b46;
+  --info: #236290;
+  --border-default: #c6d3c7;
+}
+body:has(> #root > .mission-replay) { margin: 0; background: #f5f6f3; color: #202d28; }
+.mission-replay { max-width: 960px; margin: auto; padding: clamp(16px, 4vw, 44px); }
+.mission-replay h1 { margin: 0; font-size: clamp(24px, 4vw, 36px); }
+.mission-replay p { line-height: 1.6; }
+.replay-file, .replay-details label { display: grid; justify-items: start; gap: 8px; font-weight: 600; }
+.replay-file input { max-width: 100%; }
+.mission-replay :is(input, button, select) { font: inherit; accent-color: var(--accent); }
+.mission-replay :focus-visible { outline: 3px solid var(--info); outline-offset: 2px; }
+.replay-heading, .replay-controls, .replay-details dl { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; }
+.replay-heading { justify-content: space-between; margin: 28px 0 10px; }
+.replay-heading h2, .replay-details dd { margin: 0; }
+.replay-heading small, .replay-key, .replay-details dt { color: var(--text-secondary); font-size: .875rem; }
+.replay-map { width: 100%; height: clamp(280px, 48vh, 520px); background: #fff; border: 1px solid var(--border-default); box-sizing: border-box; }
+.replay-key { margin: 6px 0 16px; }
+.replay-controls { padding: 12px 0; border-block: 1px solid var(--border-default); font-variant-numeric: tabular-nums; }
+.replay-controls button, .replay-details select { min-height: 40px; padding: 5px 12px; border-radius: 5px; }
+.replay-controls button { background: var(--accent); color: white; border: 0; cursor: pointer; }
+.replay-controls input { flex: 1; min-width: 100px; }
+.replay-details { margin-top: 16px; }
+.replay-details select { max-width: 100%; color: inherit; background: white; border: 1px solid var(--border-default); }
+.replay-details dd { margin-top: 4px; overflow-wrap: anywhere; }

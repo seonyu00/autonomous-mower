@@ -71,6 +71,7 @@ export function HistoryPage() {
           <div>
             <p className="eyebrow">2단계</p>
             <h2>작업 이력</h2>
+            <a href="/mission-replay.html" target="_blank" rel="noreferrer">CPP 주행 기록 재생 열기</a>
           </div>
           <span className="status-pill connected">{env.enableMockHistory ? '샘플 데이터' : '실제 이력'}</span>
         </div>
