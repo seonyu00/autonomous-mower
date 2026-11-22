@@ -1,6 +1,5 @@
 package com.autonomousmower.workzone.controller;
 
-import com.autonomousmower.auth.security.SecurityUser;
 import com.autonomousmower.common.api.ApiResponse;
 import com.autonomousmower.common.exception.BusinessException;
 import com.autonomousmower.common.exception.ErrorCode;
@@ -20,7 +19,7 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -47,23 +46,23 @@ public class JetsonRouteController {
     }
 
     @PostMapping(value = "/sessions", consumes = "application/json")
-    @PreAuthorize("hasAuthority('control:write')")
-    public ApiResponse<Session> open(@PathVariable String robotId, @AuthenticationPrincipal SecurityUser user,
+    @PreAuthorize("hasAnyAuthority('control:write','edge:work-zone:read')")
+    public ApiResponse<Session> open(@PathVariable String robotId, Authentication authentication,
                                      HttpServletRequest request) {
-        return ApiResponse.success(routes.open(robotId, user.getAdminId(), readPreview(request, OpenSession.class)));
+        return ApiResponse.success(routes.open(robotId, actor(robotId, authentication), readPreview(request, OpenSession.class)));
     }
 
     @PutMapping(value = "/sessions/{sessionId}/latest", consumes = "application/json")
-    @PreAuthorize("hasAuthority('control:write')")
+    @PreAuthorize("hasAnyAuthority('control:write','edge:work-zone:read')")
     public ApiResponse<Snapshot> report(@PathVariable String robotId, @PathVariable String sessionId,
-                                       @AuthenticationPrincipal SecurityUser user, HttpServletRequest request) {
+                                       Authentication authentication, HttpServletRequest request) {
         UUID id;
         try {
             id = UUID.fromString(sessionId);
         } catch (IllegalArgumentException error) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
-        return ApiResponse.success(routes.report(robotId, user.getAdminId(), id, readPreview(request, Report.class)));
+        return ApiResponse.success(routes.report(robotId, actor(robotId, authentication), id, readPreview(request, Report.class)));
     }
 
     @GetMapping("/latest")
@@ -100,5 +99,15 @@ public class JetsonRouteController {
         } catch (IOException error) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
+    }
+
+    private String actor(String robotId, Authentication authentication) {
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof com.autonomousmower.auth.security.EdgeWorkZonePrincipal edge) {
+            if (!edge.robotId().equals(robotId)) throw new AccessDeniedException("Permission denied");
+            return "edge:" + edge.tokenId();
+        }
+        if (principal instanceof com.autonomousmower.auth.security.SecurityUser user) return user.getAdminId();
+        throw new AccessDeniedException("Permission denied");
     }
 }

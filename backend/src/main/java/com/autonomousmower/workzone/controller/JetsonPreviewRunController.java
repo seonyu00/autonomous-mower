@@ -19,6 +19,7 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -78,8 +79,13 @@ public class JetsonPreviewRunController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('control:write')")
-    public synchronized ResponseEntity<ApiResponse<Ticket>> current(@PathVariable String robotId) {
+    @PreAuthorize("hasAnyAuthority('control:write','edge:work-zone:read')")
+    public synchronized ResponseEntity<ApiResponse<Ticket>> current(@PathVariable String robotId, Authentication authentication) {
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof com.autonomousmower.auth.security.EdgeWorkZonePrincipal edge
+                && !edge.robotId().equals(robotId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Permission denied.");
+        }
         Lease lease = active(robotId);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(ApiResponse.success(lease == null ? null : lease.ticket()));
