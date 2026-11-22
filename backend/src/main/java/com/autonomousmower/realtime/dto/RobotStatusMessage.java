@@ -12,10 +12,12 @@ public record RobotStatusMessage(
         Instant lastSeenAt,
         boolean stale,
         TelemetryReception telemetryReception,
-        String manualLockReason
+        String manualLockReason,
+        String autonomyBlockReason,
+        Boolean autonomyReady
 ) {
     public RobotStatusMessage(String robotId, String connectionState, String mqttState, String wssState,
                              String edgeState, Instant lastSeenAt, boolean stale, TelemetryReception telemetryReception) {
-        this(robotId, connectionState, mqttState, wssState, edgeState, lastSeenAt, stale, telemetryReception, null);
+        this(robotId, connectionState, mqttState, wssState, edgeState, lastSeenAt, stale, telemetryReception, null, null, null);
     }
 }

@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { Blob as NodeBlob } from 'node:buffer';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { resetStores } from '../test/testStores';
 import { useRobotStore } from '../features/robots/robotStore';
@@ -32,6 +33,33 @@ it('작업 행을 선택한 뒤에만 해당 로그를 읽고 미등록 상태�
       headers: { Accept: 'application/octet-stream' },
     }));
     expect(screen.getByText('이 작업에 등록된 주행 기록이 없습니다.')).toBeInTheDocument();
+  } finally {
+    getBlob.mockRestore();
+  }
+});
+
+it('서버에서 받은 미션 파일을 선택한 작업의 지도에 재생한다', async () => {
+  const polygon = [{ lat: 36, lon: 127 }, { lat: 36.001, lon: 127 }, { lat: 36, lon: 127.001 }];
+  const rows = [
+    { type: 'run_start', schema: 'mower.mission.log.v1',
+      work_zone: { work_zone_id: '2', work_zone_version: 11, polygon } },
+    { type: 'route', route_revision: 1, path: polygon, reason: 'initial_or_resume' },
+    { type: 'step', at_unix_ms: 1000, planning: { route_revision: 1 }, path_remaining: 3 },
+    { type: 'run_end' },
+  ];
+  const archive = new NodeBlob([rows.map(row => JSON.stringify(row)).join('\n')]);
+  const getBlob = vi.spyOn(httpClient, 'getBlob').mockResolvedValue(archive as unknown as Blob);
+  try {
+    const entry: HistoryEntry = { ...mockHistoryEntries[0], id: 'run-123', recordType: 'run' };
+    vi.mocked(getHistory).mockResolvedValue([entry]);
+    render(<HistoryPage />);
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '검색' })));
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(entry.robotId) }));
+    expect(await screen.findByRole('img', { name: '작업 구역과 기록 시점의 경로·장애물 지도' })).toBeVisible();
+    expect(screen.getByLabelText('남은 경로')).toBeVisible();
+    expect(screen.getByText('v1 · 3점')).toBeVisible();
+    fireEvent.change(screen.getByLabelText('시작일 (한국 시간)'), { target: { value: '2026-11-21' } });
+    expect(screen.queryByLabelText('남은 경로')).not.toBeInTheDocument();
   } finally {
     getBlob.mockRestore();
   }

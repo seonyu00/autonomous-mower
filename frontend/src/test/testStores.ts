@@ -60,7 +60,6 @@ export function resetStores(role: Role = 'admin') {
     draftVerticesByRobotId: {},
     editingByRobotId: {},
     selectedArea: 'work',
-    reviewedPlans: {},
   });
 }
 

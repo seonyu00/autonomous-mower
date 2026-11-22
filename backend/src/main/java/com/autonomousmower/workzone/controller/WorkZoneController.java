@@ -6,6 +6,7 @@ import com.autonomousmower.workzone.dto.WorkZoneRequest;
 import com.autonomousmower.workzone.dto.WorkZoneResponse;
 import com.autonomousmower.workzone.service.WorkZoneService;
 import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,8 +26,13 @@ public class WorkZoneController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('robots:read')")
-    public ApiResponse<WorkZoneResponse> getWorkZone(@PathVariable String robotId) {
+    public ApiResponse<WorkZoneResponse> getWorkZone(@PathVariable String robotId, Authentication authentication) {
+        Object principal = authentication.getPrincipal();
+        boolean edgeOwnsRobot = principal instanceof com.autonomousmower.auth.security.EdgeWorkZonePrincipal edge
+                && edge.robotId().equals(robotId);
+        boolean operatorCanRead = authentication.getAuthorities().stream()
+                .anyMatch(authority -> "robots:read".equals(authority.getAuthority()));
+        if (!edgeOwnsRobot && !operatorCanRead) throw new org.springframework.security.access.AccessDeniedException("Permission denied.");
         return ApiResponse.success(workZoneService.getWorkZone(robotId));
     }
 

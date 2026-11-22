@@ -44,8 +44,6 @@ export function useCppPreview() {
   useEffect(() => {
     const invalidate = () => {
       generation.current += 1;
-      const id = useRobotStore.getState().selectedRobotId;
-      useZoneStore.setState(state => ({ reviewedPlans: id ? Object.fromEntries(Object.entries(state.reviewedPlans).filter(([key]) => key !== id)) : {} }));
       controller.current?.abort();
       preparationController.current?.abort();
       setPreparation({ message: '', loading: false });
@@ -83,7 +81,6 @@ export function useCppPreview() {
     const abort = new AbortController();
     controller.current = abort;
     const requestId = ++generation.current;
-    useZoneStore.setState(state => ({ reviewedPlans: Object.fromEntries(Object.entries(state.reviewedPlans).filter(([key]) => key !== robotId)) }));
     setState({ path: emptyPath, message: 'CPP 예정 경로를 생성 중입니다.', loading: true, planId: null, sha256: null });
     let timeout: ReturnType<typeof setTimeout>;
     const deadline = new Promise<never>((_, reject) => {
@@ -105,7 +102,6 @@ export function useCppPreview() {
       if (result.robotId !== robotId || result.version !== version) {
         throw new Error('응답 구역이 현재 선택과 다릅니다.');
       }
-      if (result.path.length >= 2) useZoneStore.setState(state => ({ reviewedPlans: { ...state.reviewedPlans, [robotId!]: { planId: stored.planId, version: result.version } } }));
       setTransitPath((result.transitPath ?? []).map(({ lat, lon }) => [lon, lat] as LngLat));
       const path: LngLat[] = result.path.map(({ lat, lon }) => [lon, lat]);
       setState({ path, loading: false, planId: path.length ? stored.planId : null, sha256: path.length ? stored.sha256 : null, message: path.length

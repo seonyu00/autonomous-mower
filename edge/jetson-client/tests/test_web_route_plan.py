@@ -57,6 +57,32 @@ class WebRoutePlanTest(unittest.TestCase):
         self.assertEqual(prepared["sha256"], source["data"]["sha256"])
         self.assertEqual(prepared["status"], "route_prepared")
 
+    def test_r60_preview_zone_export_keeps_boundary_and_rejects_holes(self):
+        data = json.loads(envelope()["data"]["payload"])
+        rings = data["workZone"]["zone"]["geometry"]["coordinates"]
+        with tempfile.TemporaryDirectory() as directory:
+            source, output = Path(directory) / "input.json", Path(directory) / "r60-zone.json"
+            command = [sys.executable, "-m", "jetson_mower_client.web_route_plan", "--response-file", str(source),
+                       "--robot-id", "test-robot", "--expected-version", "3", "--plan-id", PLAN_ID,
+                       "--output", str(output), "--r60-preview-zone"]
+            source.write_text(json.dumps(envelope(data)), encoding="utf-8")
+            self.assertEqual(subprocess.run(command, capture_output=True).returncode, 1)
+            self.assertFalse(output.exists())
+            rings[:] = rings[:1]
+            source.write_text(json.dumps(envelope(data)), encoding="utf-8")
+            self.assertEqual(subprocess.run(command, capture_output=True).returncode, 1)
+            self.assertFalse(output.exists())
+            rings[0] = [[127.0028, 36.0028], [127.0042, 36.0028], [127.0042, 36.0042],
+                        [127.0028, 36.0042], [127.0028, 36.0028]]
+            source.write_text(json.dumps(envelope(data)), encoding="utf-8")
+            subprocess.run(command, check=True, capture_output=True)
+            exported = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(exported, {
+                "work_zone_id": "9", "work_zone_version": 3,
+                "polygon": [{"lat": lat, "lon": lon} for lon, lat in rings[0][:-1]],
+            })
+            self.assertEqual(subprocess.run(command, capture_output=True).returncode, 1)
+
     def test_tampering_robot_version_and_plan_id_are_rejected(self):
         bad = copy.deepcopy(envelope())
         bad["data"]["payload"] += " "

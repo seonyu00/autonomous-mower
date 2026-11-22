@@ -15,6 +15,27 @@ from shapely.affinity import scale, translate
 from .web_work_zone import MAX_BYTES, fetch, prepare, save_new
 
 
+def r60_preview_zone(work_zone, robot_id, version):
+    from .r41_web import local_zone
+
+    zone = local_zone(prepare({"success": True, "data": work_zone}, robot_id, version))
+    polygon = zone["polygon"]
+    south = min(point["lat"] for point in polygon)
+    north = max(point["lat"] for point in polygon)
+    longitude_span = max(point["lon"] for point in polygon) - min(point["lon"] for point in polygon)
+    if max(abs(south), abs(north)) > 85 or longitude_span > 180:
+        raise ValueError("r60 작업 구역의 좌표 범위를 벗어났습니다.")
+    # r60 planner.work_grid와 같은 20 cm 격자 한도를 적용한다.
+    radius = 6378137.0
+    width = math.radians(longitude_span) * radius * math.cos(math.radians(south))
+    height = math.radians(north - south) * radius
+    cols = math.floor((width + 1e-7) / .2)
+    rows = math.floor((height + 1e-7) / .2)
+    if max(width, height) > 5000 or min(cols, rows) <= 0 or rows * cols > 1_000_000:
+        raise ValueError("r60 작업 구역의 격자 크기 한도를 벗어났습니다.")
+    return zone
+
+
 def prepare_route(response: dict, robot_id: str, version: int, plan_id: str) -> dict:
     if not isinstance(robot_id, str) or not robot_id.strip() or len(robot_id) > 50 or type(version) is not int or version < 0:
         raise ValueError("로봇 ID와 구역 버전이 유효하지 않습니다.")
@@ -98,6 +119,8 @@ def main() -> None:
     parser.add_argument("--expected-version", required=True, type=int)
     parser.add_argument("--plan-id", required=True)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--r60-preview-zone", action="store_true",
+                        help="검토 경로 대신 r60 무구동 실행기가 읽는 작업 구역 JSON을 출력")
     args = parser.parse_args()
     try:
         if args.response_file:
@@ -108,8 +131,16 @@ def main() -> None:
             response = json.loads(content)
         else:
             response = fetch(args.api_base_url, args.robot_id, os.environ.get("WORK_ZONE_API_TOKEN", ""), args.plan_id)
-        save_new(args.output, prepare_route(response, args.robot_id, args.expected_version, args.plan_id))
-        print("경로 준비 완료: " + str(UUID(args.plan_id)) + " · 실제 주행은 시작하지 않았습니다.")
+        plan = prepare_route(response, args.robot_id, args.expected_version, args.plan_id)
+        if args.r60_preview_zone:
+            from .r41_web import save_zone_file
+
+            work_zone = json.loads(plan["payload"])["workZone"]
+            save_zone_file(args.output, r60_preview_zone(work_zone, args.robot_id, args.expected_version))
+            print("r60 무구동 구역 준비 완료 · 실행기가 이 구역에서 자체 경로를 계산합니다.")
+        else:
+            save_new(args.output, plan)
+            print("경로 준비 완료: " + str(UUID(args.plan_id)) + " · 실제 주행은 시작하지 않았습니다.")
     except (ValueError, OSError, UnicodeError):
         parser.exit(1, "경로 준비 실패: 인증·경로 ID·구역 버전·해시·도형·출력 파일을 확인해 주세요.\n")
 

@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import type { LngLat, PolygonGeometry } from './geojson';
 
 type ZoneStore = {
-  reviewedPlans: Record<string, { planId: string; version: number }>;
   selectedArea: 'work' | 'travel';
   setSelectedArea: (area: 'work' | 'travel') => void;
   mapReady: boolean;
@@ -23,7 +22,6 @@ type ZoneStore = {
 };
 
 export const useZoneStore = create<ZoneStore>((set) => ({
-  reviewedPlans: {},
   selectedArea: 'work',
   setSelectedArea: (selectedArea) => set({ selectedArea }),
   mapReady: false,

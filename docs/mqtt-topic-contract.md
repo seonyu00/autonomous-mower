@@ -303,6 +303,7 @@ Field policy:
 - `mqttState`: `connected`, `reconnecting`, or `disconnected`.
 - `edgeState`: `connected`, `monitoring`, `manual`, `autonomous`, `emergency`, or `fault`. `monitoring`은 명령 구독·ROS 제어 출력 없이 상태만 전송하는 프로그램이며 센서·STM32·예초 작업의 정상 동작을 의미하지 않는다.
 - `stale`: true when Jetson considers upstream telemetry/control state stale.
+- `autonomyBlockReason`은 Jetson 게이트웨이가 알려주는 선택적 AUTO 차단 사유다. `emergency-active`, `autonomy-not-configured`, `autonomy-not-ready`, `autonomy-readiness-unknown` 또는 r61 입력 판정 사유다. `autonomyReady`는 같은 표본에서 r61 감독 실행기의 실제 시작 입력이 모두 최신·일치할 때만 `true`이며, 미관측은 `null`이다. 서버는 최근 6초 이내의 상태만 관제 상태 응답에 표시한다. 첫 AUTO 요청은 출력 없는 감독 프로세스를 시작할 수 있으므로 서버가 이 필드를 보고 직접 바퀴 출발을 판정하지 않는다.
 
 ## Event Payload
 
@@ -454,6 +455,6 @@ topic 계약을 변경할 때는 이 문서와 영향을 받는 구현을 같은
 
 ### AUTO 실행 준비
 
-Jetson 제어 클라이언트의 기존 `mowers/{robotId}/commands/mode` 입력에서 `parameters.mode=autonomous`는 설정된 실행 관리자에 요청한다. 새 토픽이나 임의 셸 명령 입력은 추가하지 않았다. 현재 명령 미설정과 준비 확인 미연결이 기본이므로 `rejected`를 반환한다. `autonomy-not-configured`, `autonomy-readiness-unknown`, `autonomy-not-ready`, `autonomy-already-running`, `autonomy-end-unconfirmed`, `autonomy-launch-failed`, `autonomy-stop-unconfirmed`는 실행 거부·확인 불가 사유다. 향후 어댑터 연결 후 프로세스 생성에 성공하면 `accepted`와 `autonomy-process-started`로 응답하며 실제 주행 시작이나 작업 완료를 뜻하지 않는다.
+Jetson 제어 클라이언트의 기존 `mowers/{robotId}/commands/mode` 입력에서 `parameters.mode=autonomous`는 설정된 실행 관리자에 요청한다. 새 토픽이나 임의 셸 명령 입력은 추가하지 않았다. 현재 명령 미설정은 `rejected`를 반환한다. r61 `--live-ssh-latched` 연결에서는 AUTO 요청이 출력 없는 감독 프로세스를 먼저 시작하고 `accepted`와 `autonomy-process-started`를 응답할 수 있다. 이 응답은 실제 주행 시작이나 작업 완료를 뜻하지 않는다. Jetson은 최신 리모컨·STM32·경로/구역·자세·장애물 입력이 모두 일치할 때만 다음 ping에 시작 `r`을 한 번 보낸다. `autonomy-not-configured`, `autonomy-already-running`, `autonomy-end-unconfirmed`, `autonomy-launch-failed`, `autonomy-stop-unconfirmed`는 실행 거부·확인 불가 사유다.
 
 기존 status의 `edgeState`에는 관리 중인 실행의 `autonomy-awaiting-start`, `autonomy-running`, `autonomy-end-unconfirmed`, `autonomy-stop-unconfirmed` 등이 표시될 수 있다. 여기서 running은 외부 확인 어댑터가 실제 시작을 확인했을 때의 상태이며 현재 해당 어댑터는 미연결이다. 서버 작업 이력 입력·GPS 측정 신호와의 외부 전송 계약도 미연결이다. 상태 전용 모니터는 계속 명령을 구독하지 않는다. 실제 MQTT 브로커·Jetson 적용·물리 동작은 이번 PC 코드 검증 범위가 아니다.

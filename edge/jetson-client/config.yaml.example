@@ -1,9 +1,17 @@
 robot_id: MOWER-01
 edge_node_id: jetson-MOWER-01
 
-# 실제 실행 경로·준비 확인·정지 계약이 확정될 때까지 비워 둔다.
+# r61 SSH 래치 감독 예시다. {work-zone}은 Jetson이 HTTPS에서 현재 버전을
+# 확인해 만든 읽기 전용 구역 파일로만 치환한다. 실제 시리얼 장치명은 현장 값으로 바꾼다.
+# 빈 목록은 AUTO 실행을 받지 않는 안전한 기본값이다.
 autonomy:
   command: []
+  # command:
+  #   - /usr/bin/bash
+  #   - /home/jangwoo/mower_vision_cpp_20261123_r61/gps_cpp_planner/preview_session.sh
+  #   - --live-ssh-latched
+  #   - "{work-zone}"
+  #   - /dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_...-if02
 
 # 실제 적용은 장비와 포트 소유권을 확인한 뒤 별도로 진행한다.
 manual_serial:

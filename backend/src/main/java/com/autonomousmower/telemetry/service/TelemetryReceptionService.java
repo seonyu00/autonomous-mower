@@ -122,7 +122,13 @@ public class TelemetryReceptionService {
                 edge != null ? edge.lastSeenAt() : state.lastReceivedAt,
                 delayed || (edge != null && edge.stale()),
                 reception,
-                edge != null ? edge.manualLockReason() : null
+                edge != null ? edge.manualLockReason() : null,
+                edge != null && !edge.stale() && edge.lastSeenAt() != null
+                        && !edge.lastSeenAt().isAfter(now) && edge.lastSeenAt().isAfter(now.minusSeconds(6))
+                        ? edge.autonomyBlockReason() : null,
+                edge != null && !edge.stale() && edge.lastSeenAt() != null
+                        && !edge.lastSeenAt().isAfter(now) && edge.lastSeenAt().isAfter(now.minusSeconds(6))
+                        ? edge.autonomyReady() : null
         );
     }
 

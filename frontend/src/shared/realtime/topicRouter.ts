@@ -149,6 +149,7 @@ function isRobotStatus(value: unknown): value is RobotStatus {
     isString(value.wssState) &&
     isString(value.edgeState) &&
     (value.manualLockReason === undefined || isNullableString(value.manualLockReason)) &&
+    (value.autonomyReady === undefined || typeof value.autonomyReady === 'boolean' || value.autonomyReady === null) &&
     isNullableString(value.lastSeenAt) &&
     (value.telemetryReception === undefined || isTelemetryReception(value.telemetryReception)) &&
     typeof value.stale === 'boolean'

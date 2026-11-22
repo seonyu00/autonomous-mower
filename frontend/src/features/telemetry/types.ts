@@ -38,6 +38,7 @@ export type RobotStatus = {
   wssState: 'connected' | 'degraded' | 'disconnected';
   edgeState: string;
   manualLockReason?: string | null;
+  autonomyReady?: boolean | null;
   lastSeenAt: string | null;
   telemetryReception?: TelemetryReception;
   stale: boolean;

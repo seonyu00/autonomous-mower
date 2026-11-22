@@ -27,6 +27,20 @@ class TelemetryReceptionServiceTest {
     }
 
     private final Instant start = Instant.parse("2026-09-10T00:00:00Z");
+
+    @Test
+    void forwardsFreshAutonomyBlockReasonButIgnoresExpiredReport() {
+        var report = new MqttStatusPayload("A", "online", "connected", "connected",
+                start, false, null, "autonomy-not-configured");
+        service.recordStatus(report);
+        now = start.plusSeconds(6);
+        service.recordStatus(report);
+
+        var captor = ArgumentCaptor.forClass(RobotStatusMessage.class);
+        verify(publisher, times(2)).publishStatus(captor.capture());
+        assertThat(captor.getAllValues().get(0).autonomyBlockReason()).isEqualTo("autonomy-not-configured");
+        assertThat(captor.getAllValues().get(1).autonomyBlockReason()).isNull();
+    }
     private Instant now;
     private RealtimePublisher publisher;
     private TelemetrySpool persistence;

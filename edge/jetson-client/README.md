@@ -25,7 +25,9 @@ python -m jetson_mower_client.r41_web replay-preview-routes --robot-id <ROBOT_ID
 
 재생 버튼은 기록 시각 간격을 따르고 슬라이더는 판단 단위로 이동한다. **경로 변경 시점**에서 최초 계획과 재계획을 바로 비교할 수 있다. 지도는 각 경로 버전의 `path` 끝에서 `path_remaining`개 점을 가져오고, 두 점 미만이면 선을 지운다. 빈 원은 별도로 기록한 `next_waypoint`다. 장애물은 같은 판단의 플래너 입력에서 읽고, 관측이 오래되면 마지막 지도를 흐리게 표시한다. 이 화면은 주행 판단 기록을 재생하며 ROS 토픽 원본 수신과 실시간 송신은 별도 검증 대상이다.
 
-서버 작업 이력에 연결하려면 운영자가 세션과 서버의 실제 작업 UUID가 일치함을 확인한 뒤 PC 백엔드 호스트에서 `python tools/archive_mission.py <mission.jsonl> <작업_UUID> <보관_디렉터리>`를 실행한다. 보관 디렉터리는 백엔드 실행 위치 기준 `data/mission-replays`이며 `APP_HISTORY_REPLAY_DIRECTORY`로 절대 경로를 지정할 수 있다. 쓰기가 완료된 gzip 파일만 공개하고 기존 파일은 보존한다. 작업 목록을 검색한 뒤 해당 행을 클릭하면 웹이 로그인 세션으로 기록을 읽는다. Jetson에서 파일을 서버로 자동 전송하는 기능은 별도 연결이 필요하다.
+기존 기록을 서버 작업 이력에 연결하려면 운영자가 세션과 서버의 실제 작업 UUID가 일치함을 확인한 뒤 PC 백엔드 호스트에서 `python tools/archive_mission.py <mission.jsonl> <작업_UUID> <보관_디렉터리>`를 실행한다. 보관 디렉터리는 백엔드 실행 위치 기준 `data/mission-replays`이며 `APP_HISTORY_REPLAY_DIRECTORY`로 절대 경로를 지정할 수 있다. 작업 목록을 검색한 뒤 해당 행을 클릭하면 웹이 로그인 세션으로 기록을 읽는다.
+
+자동 업로드 시험에서는 Jetson 실행 관리자와 별도 업로더에 같은 `MOWER_MISSION_SPOOL` 절대 경로를 설정한다. 실행 관리자는 r60 로그 루트에 작업 UUID를 붙여 자식에 전달한다. 업로더에만 `MOWER_MISSION_UPLOAD_TOKEN`에 `control:write` 권한의 토큰을 설정하고 `python -m jetson_mower_client.mission_upload --api-base-url <HTTPS_API> --robot-id <ROBOT_ID>`를 실행한다. 업로더는 30초마다 닫힌 작업 로그를 확인하고, 서버에서 같은 UUID의 종료가 확인되면 저장한다. 성공 후 표시 파일을 남겨 재전송을 건너뛰며 원본 로그는 보존한다. 무구동 로그는 전송 대상에서 제외한다. 현재 r60의 실제 시작·종료 신호를 서버에 보내는 어댑터는 별도 연결이 필요하다.
 
 r60 무구동 상태를 격리 관제 서버에 전달하려면 서버에서 `APP_JETSON_ROUTE_PREVIEW_WRITE_ENABLED=true`를 설정하고, Jetson의 `MOWER_PREVIEW_TOKEN`에 해당 서버의 조회·제어 쓰기 권한 토큰을 설정한다. 같은 작업 구역이 저장된 시험 로봇을 대상으로 `edge/jetson-client`에서 실행한다.
 
@@ -497,15 +499,34 @@ ros2 topic echo /cmd_vel geometry_msgs/msg/Twist \
 ```
 ## AUTO 실행 관리의 PC 준비
 
+검토한 웹 계획의 작업 구역을 r60 무구동 실행기에 넘길 때는 `jetson_mower_client.web_route_plan`의 기존 인자에 `--r60-preview-zone`을 추가한다. 별도 JSON 파일로 구역 ID·버전과 외곽 경계를 내보내며, 내부 제외 구역은 r60 형식에서 지원하지 않아 거부한다. 이 파일을 읽는 r60은 구역 안에서 자체 경로를 계산한다. 웹의 경로점과 진입 경로를 실행기에 적용하는 기능은 별도 연결이 필요하다.
+
+`jetson_mower_client.cpp_auto_preflight`는 HTTPS로 웹에서 검토한 계획을 조회해 기존 경로 검증을 적용하고, r60 무구동 세션의 로컬 구역 JSON과 최근 상태 JSON을 대조한다. 설치 후 `python -m jetson_mower_client.cpp_auto_preflight --help`에서 입력을 확인할 수 있다. 보고서에는 구역 일치와 무구동 입력의 위치·방향·장애물 최신성이 표시된다. 첫 계획이 생긴 상태 메시지에 한해 보고 좌표를 웹 계획의 진입·작업 경로 순서와 비교한다. 좌표 일치와 별도로 실행기의 계획 ID·해시 적용 확인과 현장 제어권 확인이 필요하다.
+
+`jetson_mower_client.r60_preview_runner`는 ROS 환경에서 대화형 터미널 없이 r60 무구동 CPP를 시작한다. 실행 관리자가 넘긴 `MOWER_RUN_ID`를 기준으로 전용 상태·장애물·포즈 토픽을 사용한다. `--planner-dir`에는 r60의 `gps_cpp_planner` 절대 경로를, 마지막 인자에는 구역 JSON 절대 경로를 넣는다. 관측기는 해당 세션의 장애물 토픽에 별도로 연결해야 한다. 이 실행 모드는 경로 계산과 상태 확인용이며 구동 브리지·현장 허용을 시작하지 않는다.
+
+웹 지도에서 무구동 실행을 요청하려면 기존 미리보기 쓰기 설정을 켜고, ROS 환경을 불러온 Jetson에서 `MOWER_PREVIEW_TOKEN`을 설정한 뒤 아래 작업자를 실행한다. 토큰은 시험 서버의 `control:write`와 조회 권한이 필요하다. 지도에서 로봇 제어권을 얻고 **Jetson 남은 경로 → 무구동 시작**을 누른다.
+
+```bash
+python3 -m jetson_mower_client.preview_run --api-base-url <HTTPS_API> --robot-id <ROBOT_ID> \
+  --planner-dir <CPP_PLANNER_ABSOLUTE_PATH> --model <SEMANTIC_MODEL_ABSOLUTE_PATH> --semantic-lib <SEMANTIC_LIB_ABSOLUTE_PATH>
+```
+
+작업자는 저장 구역을 다시 읽어 전용 관측기·CPP·경로 보고기를 실행한다. 요청 만료·종료 또는 서버 접속 실패 시 실행 그룹을 종료하며, 같은 요청을 자동 실행하지 않는다.
+
 기존 `change-mode` 명령의 `parameters.mode=autonomous` 경로에서 `AutonomyExecution`에 실행을 요청한다. 별도 작업 시작 MQTT 토픽은 추가하지 않았다. 실행 프로그램은 장비의 설정 파일 `autonomy.command`에 문자열 목록으로 지정하며, MQTT payload의 실행 파일·명령 문자열은 사용하지 않는다. `shell=False`로 실행하고 실행 파일은 절대 경로만 허용한다. 이 설정은 신뢰할 수 있는 장비 관리자만 수정해야 한다.
 
-예제 설정은 `autonomy.command: []`로 비활성이다. 준비 확인 어댑터도 연결되지 않아 `_autonomy_ready=None`으로 시작한다. 명령만 설정해도 실제 AUTO가 실행되지는 않는다. 미설정·준비 미확인·준비 실패는 거부 응답이며, 기존처럼 소프트웨어 모드만 바꿔 AUTO 요청을 성공으로 응답하지 않는다. 실제 준비 기준과 스크립트 경로는 장비·팀원 확인 후 연결해야 한다.
+예제 설정은 `autonomy.command: []`로 비활성이다. r61을 연결할 때는 `config.yaml.example`의 `--live-ssh-latched` 예시처럼 `{work-zone}` 자리표시자를 정확히 한 번 넣는다. 게이트웨이는 AUTO 요청으로 r61 감독 프로세스를 시작하되, 첫 SSH ping에는 연결 확인만 답하고 `/mower/remote_override`, `/mower/stm32_feedback_status`, `/mower_cpp/drive_status`의 최신 입력과 요청 구역 일치가 확인될 때만 한 번 `r`을 답한다. MQTT 단절·정지·비상 정지는 프로세스 그룹을 종료하며, 연결 복구만으로 다시 `r`을 보내지 않는다.
 
-프로세스 생성 성공은 `accepted / autonomy-process-started`, 상태는 `awaiting-start`다. 이는 주행 시작이나 명령 완료를 의미하지 않으며 작업 거리를 만들지 않는다. 현재 AUTO와 작업 시작 버튼은 같은 모드 요청을 보내므로 둘 다 이 처리의 영향을 받는다. 이미 실행 중이면 거부하고 종료가 확인되지 않은 작업의 재시작도 거부한다. 프로세스가 정상 종료해도 실제 작업 종료로 추정하지 않는다.
+기존 SSH 시험과 웹 실행은 r61의 `preview_session.sh`가 잡는 동일 사용자 전용 잠금을 공유한다. 이미 한 감독 세션이 있으면 뒤 세션은 STM32 브리지나 시리얼을 열기 전에 거부된다. 잠금은 중복 실행 방지 장치이며 현장의 리모컨·릴레이·독립 정지 수단을 대체하지 않는다.
 
-`confirm_started(run_id, at)`, `observe(run_id, at)`, `confirm_ended(run_id, at)`는 향후 실제 상태 신호 어댑터를 위한 내부 확인 지점이다. 확인된 신호만 작업·신호 UUID를 포함한 콜백으로 전달한다. 현재 콜백은 외부 전송에 연결하지 않았으며 서버 작업 이력·GPS 입력에 자동 반영되지 않는다. 어댑터는 로봇 ID, GPS 실제 측정 시각, 정상 종료의 의미와 인증 계약을 확정한 후 연결해야 한다. 시작 미확인·프로세스 소실 후 종료 미확인 상태의 복구 방식도 실제 계약 확인 대상이다.
+프로세스 생성 성공은 `accepted / autonomy-process-started`, 상태는 `awaiting-start`다. 웹 AUTO에서 이 응답은 구역 확인을 담당할 자식 프로세스가 시작됐다는 뜻이다. 장비 준비를 확인하고 명령을 발행하는 운영 연결은 아직 적용하지 않았다. 이후 연결 시 `MOWER_WORK_ZONE_API_BASE_URL`과 `WORK_ZONE_API_TOKEN`, `MOWER_MISSION_SPOOL`을 설정한다. 자식은 HTTPS로 최신 구역을 조회하고 요청의 ID·버전과 일치할 때만 작업 폴더에 `requested-work-zone.json`을 저장해 설정된 실행기의 마지막 인자로 넘긴다. 조회 토큰은 실행기에 전달하지 않는다. 기존 r60 대화형 실행기는 SSH 터미널을 요구하므로 웹용 비대화 실행기를 연결해야 한다.
 
-stop, E-Stop과 다른 모드·수동 요청은 관리 중인 프로세스의 종료를 요청한다. POSIX에서는 별도 프로세스 그룹을 생성해 그룹에 종료 신호를 보내고, Windows 모의 시험에서는 직접 실행한 프로세스를 종료한다. E-Stop의 기존 출력과 로컬 비상 상태 설정은 프로세스 정리보다 먼저 수행한다. 프로세스 종료는 기체·날·현장 리모컨의 물리 정지 확인이 아니다. 스크립트가 별도 세션을 만들거나 다른 서비스를 실행하는 경우까지 정리된다고 가정하지 않으며 실제 정지·카메라·시리얼 소유 계약 확인 전에는 적용하지 않는다.
+`MOWER_MISSION_SPOOL`이 설정되면 실행 관리자가 자식에게 `MOWER_RUN_ID`와 작업별 `MOWER_PREVIEW_LOG_DIR`를 전달한다. 실제 장비 상태를 확인하는 어댑터는 해당 환경에서 `python -m jetson_mower_client.mission_confirmation <start|end> <ISO_8601_측정시각>`으로 확인 이벤트를 남긴다. 실행 관리자는 작업 UUID와 시각·순서를 확인한 뒤 업로드 대기열에 넣는다. 별도 업로더는 시작·종료를 차례로 보내고 압축 로그를 등록하며, 전송이 실패하면 같은 신호 UUID로 재시도한다.
+
+r60의 STM32 상태는 리모컨 개입과 통신 상태를 제공한다. 궤도·날의 실측 상태를 확인해 이벤트를 발생시키는 어댑터는 미연결이다. `run_end`는 로그 마감에만 사용한다. 프로세스 종료 후 별도 확인이 도착하기 전까지 종료 미확인 상태를 유지한다.
+
+stop, E-Stop과 다른 모드·수동 요청은 관리 중인 프로세스의 종료를 요청한다. MQTT 연결 해제를 감지하면 기존 AUTO 준비를 무효화하고 준비 중이거나 실행 중인 자식도 종료한다. POSIX에서는 별도 프로세스 그룹을 생성해 그룹에 종료 신호를 보내고, Windows 모의 시험에서는 직접 실행한 프로세스를 종료한다. E-Stop의 기존 출력과 로컬 비상 상태 설정은 프로세스 정리보다 먼저 수행한다. 프로세스 종료는 기체·날·현장 리모컨의 물리 정지 확인이 아니다. 실제 통신 단절 응답 시간과 물리 정지는 현장 인터록과 STM32를 포함해 별도로 검증한다.
 
 ROS와 장비 없이 모의 프로그램으로 검사하려면 `requirements.txt`가 설치된 가상 환경에서 다음을 실행한다.
 
@@ -596,7 +617,7 @@ python3 -m jetson_mower_client.web_route_report \
 
 새 `mission.py`는 내부 상태 계약이며 ROS/MQTT/실행기와 아직 연결하지 않았다. 명시적 경로 확인→AUTO 요청→파일 준비→실제 준비 미확인과 실제 시작 확인을 분리한다. 구역 변경은 중단 요청을 발생시키고 해당 실행 ID·중단 요청 ID에 대응하는 실제 정지 확인이 있어야 최신 구역의 경로 재생성 콜백을 호출한다. 새 경로를 생성해도 확인·AUTO 요청을 다시 해야 한다. 명령 ACK·파일 보고·프로세스 종료로 실제 시작/정지 확인을 대신하지 않는다. 운영 어댑터에서 신호 출처·유효 시간·중복과 실행 중/재시작 복구를 확인한 뒤 연결해야 한다.
 
-현재 웹은 선택한 planId를 AUTO에 포함하지만 서버의 실제 준비 확인 어댑터가 미연결이라 주행 명령 발행 전에 거부한다. mission 상태 계약과 구역 변경 이벤트는 실제 서버 저장 이벤트·Jetson 제어 경로에 아직 연결하지 않았으므로 실제 중단/재계획이 자동 실행되는 구현으로 해석하지 않는다. 실제 GPS/방향·제어권 중재·정지 증거·추종기와 현재 위치에서 첫 점까지의 실행 방식은 후속 장비 계약이다. 현장 리모컨 우선과 기존 5×5 스크립트를 유지하며 장비에 배포하지 않았다.
+현재 웹 AUTO는 저장된 작업 구역 ID·버전을 보낸다. Jetson이 최초 경로와 이후 구역 내 경로를 계산하고 웹은 이를 표시하는 방향이다. 위 `mission.py`의 개별 경로 검토 흐름은 이전 내부 시험 계약으로, 웹 AUTO에 연결되지 않았다. 서버는 실제 준비 확인 어댑터가 연결되기 전까지 주행 명령을 발행하지 않는다. 실제 구역 적용, 현장 구동 허용과 해제, 장애물 및 통신 이상으로 인한 정지·재시작 조건은 Jetson 실행 경로에서 별도로 확인한다.
 ## 웹 수동 시리얼 연결 준비
 
 방향키 시험 코드의 패킷과 같은 `$MODE,LPWM,RPWM,ENG,CS*` 형식을 별도 어댑터로 준비했다. 웹 버튼은 누른 동안만 입력을 반복하고 각 누름과 재개 세대를 구분한다. 첫 장비 시험에는 PWM 편차를 ±100으로 제한했으며, 이후 사용자 요청으로 저장소 코드를 ±400으로 변경했다. 실제 속도와 안전 검증은 별도이며 `ENG=0`은 명령값일 뿐 날의 실제 정지 상태가 아니다.

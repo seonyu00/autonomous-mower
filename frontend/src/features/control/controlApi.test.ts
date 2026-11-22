@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { httpClient } from '../../shared/api/httpClient';
 import { env } from '../../shared/config/env';
 import { useAuthStore } from '../auth/authStore';
+import { useZoneStore } from '../map/zoneStore';
 import { useControlStore } from './controlStore';
 import {
   changeMode,
@@ -111,6 +112,27 @@ describe('control command prechecks', () => {
       name: 'ControlPrecheckError',
       reasons: expect.arrayContaining(['robot-in-emergency']),
     });
+  });
+
+  it('저장한 구역으로 경로 검토 없이 AUTO를 요청하고 편집 중에는 차단한다', async () => {
+    const previousMock = env.enableMockControl;
+    env.enableMockControl = false;
+    const post = vi.spyOn(httpClient, 'post').mockResolvedValue({ accepted: true });
+    try {
+      useZoneStore.getState().setZone(TEST_ROBOT_ID, { type: 'Polygon', coordinates: [
+        [[127, 36], [127.01, 36], [127, 36.01], [127, 36]],
+      ] }, 11, 2);
+      await changeMode(TEST_ROBOT_ID, 'autonomous');
+      const [, body] = post.mock.calls[0];
+      expect(body).toMatchObject({ mode: 'autonomous', workZoneId: 2, workZoneVersion: 11 });
+      expect(body).not.toHaveProperty('planId');
+      useZoneStore.getState().startEditing(TEST_ROBOT_ID + '::travel');
+      await expect(changeMode(TEST_ROBOT_ID, 'autonomous')).rejects.toMatchObject({ name: 'ControlPrecheckError' });
+      expect(post).toHaveBeenCalledTimes(1);
+    } finally {
+      post.mockRestore();
+      env.enableMockControl = previousMock;
+    }
   });
 
   it('blocks read-only users from manual control commands', async () => {

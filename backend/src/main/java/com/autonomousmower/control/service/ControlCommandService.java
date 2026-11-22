@@ -22,6 +22,8 @@ import org.springframework.stereotype.Service;
 public class ControlCommandService {
     @org.springframework.beans.factory.annotation.Autowired
     private com.autonomousmower.workzone.service.RoutePlanService routePlans;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.autonomousmower.workzone.service.WorkZoneService workZones;
 
     private static final Set<String> ALLOWED_MODES = Set.of("idle", "manual", "autonomous", "home");
     private static final Set<String> ALLOWED_ATTACHMENT_ACTIONS = Set.of("blade-start", "blade-stop", "raise", "lower");
@@ -119,15 +121,40 @@ public class ControlCommandService {
         controlRobotGuard.requireKnownRobot(robotId);
         validateRobotId(robotId, request.robotId());
         validateAllowed(request.mode(), ALLOWED_MODES);
-        if ("autonomous".equals(request.mode())) {
-            if (request.planId() == null) throw new BusinessException(ErrorCode.CPP_INPUT_INVALID);
-            routePlans.get(robotId, request.planId());
-            // 파일 준비 보고는 실제 위치·방향·제어 중재 확인이 아니다. 운영 어댑터 연결 전 발행을 막는다.
-            throw new BusinessException(ErrorCode.AUTONOMY_READINESS_UNCONFIRMED);
-        }
         Instant requestedAt = Instant.now();
         ControlStateStore.MutableControlState state = controlStateStore.stateFor(robotId);
         synchronized (state) {
+            if ("autonomous".equals(request.mode())) {
+                state.requireOwner(user.getAdminId());
+                state.requireNotEmergency();
+                state.requireVersion(request.lockVersion());
+                if (request.workZoneId() == null && request.workZoneVersion() == null && request.planId() != null) {
+                    // 배포 전 구형 웹에서 보낸 계획 ID도 현재 구역과 대조한다.
+                    routePlans.get(robotId, request.planId());
+                } else {
+                    if (request.workZoneId() == null || request.workZoneId() <= 0
+                            || request.workZoneVersion() == null || request.workZoneVersion() <= 0) {
+                        throw new BusinessException(ErrorCode.INVALID_REQUEST);
+                    }
+                    var zone = workZones.getWorkZone(robotId);
+                    if (!request.workZoneId().equals(zone.zoneId()) || request.workZoneVersion() != zone.version()) {
+                        throw new BusinessException(ErrorCode.WORK_ZONE_CONFLICT);
+                    }
+                }
+                // r61 SSH 감독 실행기는 입력을 받은 뒤에 준비 상태를 만들며, 첫 r 프레임 전에는
+                // 출력이 허용되지 않는다. 따라서 여기서는 안전한 감독 시작 요청만 전송하고,
+                // 실제 출발 판정은 Jetson의 최신 입력 게이트가 맡는다.
+                ControlLockSnapshot snapshot = state.changeMode(user.getAdminId(), request.mode(), requestedAt);
+                ControlCommandResponse response = responseFactory.accepted("change-mode", snapshot, requestedAt);
+                Map<String, Object> parameters = new java.util.HashMap<>();
+                parameters.put("mode", request.mode());
+                parameters.put("workZoneId", request.workZoneId());
+                parameters.put("workZoneVersion", request.workZoneVersion());
+                mqttCommandPublisher.publishModeCommand(new MqttCommandPayload(
+                        response.commandId(), robotId, response.commandType(), request.idempotencyKey(),
+                        snapshot.lockVersion(), null, user.getAdminId(), requestedAt, "normal", parameters));
+                return response;
+            }
             state.requireVersion(request.lockVersion());
             ControlLockSnapshot snapshot = state.changeMode(user.getAdminId(), request.mode(), requestedAt);
             ControlCommandResponse response = responseFactory.accepted("change-mode", snapshot, requestedAt);

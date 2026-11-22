@@ -19,6 +19,7 @@ import com.autonomousmower.control.model.ControlLockSnapshot;
 import com.autonomousmower.control.service.ControlCommandService;
 import com.autonomousmower.control.service.ControlLockService;
 import com.autonomousmower.control.service.EmergencyStopService;
+import com.autonomousmower.control.service.ManualChallengeService;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +50,9 @@ class ControlControllerSecurityTest {
 
     @MockBean
     private ControlCommandService controlCommandService;
+
+    @MockBean
+    private ManualChallengeService manualChallengeService;
 
     @MockBean
     private JwtTokenProvider jwtTokenProvider;

@@ -128,6 +128,8 @@ def _autonomy_command(raw: dict[str, Any]) -> tuple[str, ...]:
         raise ValueError("autonomy.command는 실행 파일과 인수를 담은 문자열 목록이어야 합니다.")
     if command and not Path(command[0]).is_absolute():
         raise ValueError("autonomy.command의 실행 파일은 절대 경로여야 합니다.")
+    if command.count("{work-zone}") > 1:
+        raise ValueError("autonomy.command의 {work-zone} 자리표시는 한 번만 사용할 수 있습니다.")
     return tuple(command)
 
 

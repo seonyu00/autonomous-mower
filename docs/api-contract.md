@@ -18,6 +18,8 @@
 
 지도에서는 `Jetson 남은 경로`의 `경로 표시`를 켤 때 약 1초마다 조회한다. 유효한 선을 갱신하고 표시가 만료되거나 보류·편집·구역 변경·조회 실패가 발생하면 선을 지운다. 기존 예정 경로의 생성·조회는 별도 계약을 따른다.
 
+같은 경로의 `/preview-run` 아래에서 `POST /start`에 `{id, zoneId, zoneVersion, lockVersion}`을 보내면 현재 제어권과 저장 구역을 검사해 5초 실행 요청을 만든다. `POST /{id}/renew`는 요청 계정과 제어권이 일치할 때만 수명을 연장한다. `POST /{id}/stop`은 해당 계정의 요청을 종료한다. Jetson 작업자는 `GET /preview-run`으로 요청을 확인한다. 이 API는 `control:write` 권한과 기존 미리보기 쓰기 설정을 요구하며, 메모리에 로봇별 활성 요청 한 건을 보관한다. 주행 모드나 MQTT 제어 명령에는 영향이 없다.
+
 ## 실시간 듀얼 GPS 기체 방향
 
 `/topic/robots/{robotId}/telemetry`에는 선택적 nullable `headingDegrees`, `headingSource`, `headingObservedAt`을 전달한다. 유효한 출처는 `dual-gps`이며 북쪽 0°·동쪽 90°·시계 방향의 기체 전방 방위를 뜻한다. 이전 MQTT payload와 기존 Java 생성자 호출은 방향 null로 호환한다. 좌표·배터리 등 기존 필드는 방향 누락과 별개로 처리한다.
@@ -327,9 +329,13 @@ Response `200`:
 
 #### `GET /api/history?robotId=&from=&to=`
 
+Jetson의 업로더는 `PUT /api/history/runs/{id}/lifecycle?robotId=`로 실행 관리자가 확인한 시작·종료를 보고한다. `control:write` 권한이 필요하며 JSON 본문은 신호 UUID `id`, `kind`(`start` 또는 `end`), UTC 기준 `signalAt`으로 구성한다. 같은 신호의 재전송은 204를 반환한다. 시작이 저장되기 전 종료나 충돌한 신호는 409로 응답한다. 이 API는 작업 이력 기록에 사용하며 주행 제어 명령을 발행하지 않는다.
+
 Permission: `history:read`
 
 기존 날짜별 API는 유지한다. 화면은 이 결과를 `작업 구분 전 기록`으로 표시하며 작업 시작·종료를 추정하지 않는다. 별도 `GET /api/history/runs?robotId=&from=&to=`도 같은 권한과 UTC Instant 조건을 사용한다. 새 조회는 기간에 걸쳐 있는 작업 전체를 반환하며 종료가 미확인인 작업은 시작 이후 기간의 조회에 포함될 수 있다. 기존 위치 조회와 새 작업 조회는 서로 다른 출처이며 작업에 GPS를 연결하기 전 과거 위치를 자동 복사·분할하지 않는다.
+
+`PUT /api/history/runs/{id}/replay?robotId=`는 `control:write` 권한으로 종료 확인된 작업의 gzip JSONL을 등록한다. 본문은 `application/gzip`이며 첫 행의 `server_run_id`가 URL의 작업 UUID와 같아야 한다. 무구동 로그, 종료 기록이 없는 로그, 형식 오류는 400으로 거부한다. 작업이나 로봇 불일치는 404, 종료 대기 또는 기존 파일과의 충돌은 409, 압축 16 MiB 초과는 413이다. 같은 파일을 다시 보내면 204를 반환하고 다른 파일로 덮어쓰지 않는다. 같은 URL의 GET은 `history:read` 권한으로 등록된 로그를 반환한다.
 
 작업별 조회 응답에는 `id`, `robotId`, `startedAt`, `endedAt`(미확인 시 null), `lastObservedAt`, `checkedAt`, `status`(`running|completed|unconfirmed`), `routeSegments`, `distanceMeters`, `hasGpsGap`, `distancePartial`, `coveragePercent`, `events`가 있다. 시각은 UTC다. 상태 신호의 최종 서버 관측 후 30초 이상이면 `unconfirmed`이며 실제 종료를 확정하지 않는다. 동일 작업의 새로운 신호를 확인하면 같은 ID로 이어 표시한다. 중복·역순 신호는 최종 관측 시각을 연장하지 않고 확인된 종료는 이전 상태로 되돌리지 않는다.
 
@@ -1064,7 +1070,7 @@ CPP 생성 요청의 선택적 `start:{lat,lon}`은 검토용 시작 좌표이�
 
 웹은 작업 구역·이동 가능 범위를 선택해 편집하고 이동 가능 범위와 진입 경로를 주황색으로 구분한다. 두 영역 중 하나라도 편집 중이면 예정 경로 생성과 AUTO 요청을 막는다. 시작 위치는 검토용 입력이며 실제 AUTO에서는 현재 GPS·측정 시각·위치 오차를 별도로 확인해야 한다.
 
-모드 요청에 선택적 planId를 추가하고 웹은 확인한 예정 경로의 ID를 AUTO 요청에 넣는다. 서버는 autonomous에서 경로 ID가 없으면 CPP_INPUT_INVALID, 기존 구역과 다르면 WORK_ZONE_CONFLICT로 거부한다. 현재 실제 주행 준비 확인 어댑터가 없어 유효 경로라도 AUTONOMY_READINESS_UNCONFIRMED(409)로 거부하고 상태 변경·MQTT 발행 전에 종료한다. 파일 준비 보고를 실제 주행 준비로 승격하지 않는다. 기존 AUTO 요청도 경로 ID 없이 시작할 수 없으므로 웹·서버·CLI·Jetson 코드를 함께 검토해 배포한다.
+웹 AUTO 요청은 저장된 `workZoneId`와 `workZoneVersion`을 보낸다. 최초 경로 계산과 구역 안에서의 재계획은 Jetson이 담당하는 방향이며 운영자가 각 경로를 승인하는 절차는 요구하지 않는다. 서버는 제어권 소유자, 긴급정지 상태, 잠금 버전을 먼저 확인하고 요청 구역이 현재 저장본과 다르면 WORK_ZONE_CONFLICT로 응답한다. 구형 웹이 `planId`만 보낸 경우에는 기존 계획 조회로 현재 구역과 대조한다. 실제 주행 준비 확인 어댑터가 연결되기 전에는 AUTONOMY_READINESS_UNCONFIRMED(409)로 응답하며 모드 변경과 MQTT 발행은 보류한다.
 # 수동 시리얼 조작 재개와 입력 식별자 (개발 중)
 
 ### 웹에서 수동 제어부 준비 요청 — 2026-11-11

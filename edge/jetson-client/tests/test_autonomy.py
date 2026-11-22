@@ -1,4 +1,8 @@
 import importlib.util
+import os
+import tempfile
+import threading
+from datetime import datetime, timezone
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -6,6 +10,8 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from jetson_mower_client.autonomy import AutonomyExecution
+from jetson_mower_client.mission_confirmation import publish_confirmation
+from jetson_mower_client.mission_upload import queue_lifecycle
 from jetson_mower_client.config import _autonomy_command
 
 MOCK = Path(__file__).parent / "fixtures/autonomy_mock.py"
@@ -105,6 +111,45 @@ class AutonomyTest(unittest.TestCase):
             self.assertEqual(runner.request_start(True), "autonomy-stop-unconfirmed")
             spawn.assert_not_called()
 
+    def test_mission_spool_uses_same_id_as_the_execution(self):
+        runner = AutonomyExecution([sys.executable])
+        root = Path.cwd() / "test-spool"
+        process = MagicMock(pid=123)
+        with patch.dict(os.environ, {"MOWER_MISSION_SPOOL": str(root)}), \
+                patch("jetson_mower_client.autonomy.subprocess.Popen", return_value=process) as spawn:
+            self.assertEqual(runner.request_start(True), "autonomy-process-started")
+            child = spawn.call_args.kwargs["env"]
+            self.assertEqual(child["MOWER_RUN_ID"], runner.run_id)
+            self.assertEqual(Path(child["MOWER_PREVIEW_LOG_DIR"]), root / runner.run_id)
+
+    def test_runner_confirmation_reaches_upload_queue(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            process = MagicMock(pid=123)
+            process.poll.return_value = None
+            runner = AutonomyExecution([sys.executable], lambda event: queue_lifecycle(root, event))
+            with patch.dict(os.environ, {"MOWER_MISSION_SPOOL": str(root)}), \
+                    patch("jetson_mower_client.autonomy.subprocess.Popen", return_value=process) as spawn:
+                self.assertEqual(runner.request_start(True), "autonomy-process-started")
+            folder = root / runner.run_id
+            with patch.dict(os.environ, spawn.call_args.kwargs["env"]):
+                publish_confirmation("end", datetime.now(timezone.utc).isoformat())
+                runner.poll_confirmations()
+                self.assertFalse(runner.started)
+                self.assertFalse((folder / ".lifecycle-end.json").exists())
+                end = folder / ".confirmed-end.json"
+                end.unlink()
+                publish_confirmation("start", datetime.now(timezone.utc).isoformat())
+                runner.poll_confirmations()
+                self.assertTrue((folder / ".lifecycle-start.json").is_file())
+                process.poll.return_value = 0
+                runner.poll_confirmations()
+                self.assertEqual(runner.state, "end-unconfirmed")
+                publish_confirmation("end", datetime.now(timezone.utc).isoformat())
+                runner.poll_confirmations()
+                self.assertTrue((folder / ".lifecycle-end.json").is_file())
+                self.assertEqual(runner.state, "end-confirmed")
+
     def test_posix_cleanup_keeps_group_after_parent_exit(self):
         runner = AutonomyExecution([sys.executable])
         process = MagicMock(pid=123)
@@ -140,6 +185,25 @@ class AutonomyTest(unittest.TestCase):
             node._handle_estop({}, "now")
         self.assertTrue(node._emergency_active)
         node._publish_emergency_stop_outputs.assert_called_once()
+
+    def test_mqtt_disconnect_stops_preparing_run_and_requires_new_readiness(self):
+        client = load_client()
+        node = client.JetsonMowerClientNode.__new__(client.JetsonMowerClientNode)
+        node._manual_setup_lock = threading.RLock()
+        node._disarm_manual_serial = MagicMock()
+        node._autonomy = AutonomyExecution([sys.executable, str(MOCK)])
+        node._autonomy_ready = True
+        try:
+            self.assertEqual(node._autonomy.request_start(True), "autonomy-process-started")
+            child = node._autonomy.process
+            node._on_mqtt_disconnect()
+            self.assertIsNotNone(child.poll())
+            self.assertIsNone(node._autonomy_ready)
+            self.assertEqual(node._autonomy.state, "end-unconfirmed")
+            self.assertEqual(node._autonomy.request_start(node._autonomy_ready), "autonomy-end-unconfirmed")
+            node._disarm_manual_serial.assert_called_once()
+        finally:
+            node._autonomy.stop()
 
     def test_real_dummy_process_dedup_and_explicit_lifecycle(self):
         signals = []
@@ -185,15 +249,25 @@ class AutonomyTest(unittest.TestCase):
         node._emergency_active = False
         node._publish_ack = MagicMock()
         node._publish_status = MagicMock()
+        node._config = MagicMock(robot_id="TEST-01")
         command = {"parameters": {"mode": "autonomous", "command": "untrusted-command"}}
         node._handle_mode(command, "now")
         self.assertEqual(node._publish_ack.call_args.args[2:4], ("rejected", "autonomy-readiness-unknown"))
         node._autonomy_ready = True
-        try:
+        with patch("jetson_mower_client.autonomy.subprocess.Popen") as spawn:
             node._handle_mode(command, "now")
+            self.assertEqual(node._publish_ack.call_args.args[2:4], ("rejected", "autonomy-work-zone-invalid"))
+            spawn.assert_not_called()
+            command["parameters"].update(workZoneId=2, workZoneVersion=11)
+            with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {
+                "MOWER_MISSION_SPOOL": directory, "MOWER_WORK_ZONE_API_BASE_URL": "https://example.invalid",
+                "WORK_ZONE_API_TOKEN": "test-only",
+            }):
+                node._handle_mode(command, "now")
             self.assertEqual(node._publish_ack.call_args.args[2:4], ("accepted", "autonomy-process-started"))
+            self.assertEqual(spawn.call_args.args[0][2:6],
+                             ("jetson_mower_client.autonomy_zone", "TEST-01", "2", "11"))
+            self.assertEqual(spawn.call_args.args[0][-2:], (sys.executable, str(MOCK)))
             node._emergency_active = True
             node._handle_mode(command, "now")
             self.assertEqual(node._publish_ack.call_args.args[2:4], ("rejected", "emergency-active"))
-        finally:
-            node._autonomy.stop()

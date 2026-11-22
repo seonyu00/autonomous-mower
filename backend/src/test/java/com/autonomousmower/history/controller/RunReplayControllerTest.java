@@ -18,7 +18,7 @@ class RunReplayControllerTest {
         var runs = mock(AutonomousRunRepository.class);
         var run = new AutonomousRun(id, "robot", Instant.EPOCH, Instant.EPOCH);
         when(runs.findById(id)).thenReturn(Optional.of(run));
-        var controller = new RunReplayController(runs, dir.toString());
+        var controller = new RunReplayController(runs, mock(com.autonomousmower.history.service.RunSignalPersistence.class), dir.toString());
         assertThat(controller.replay(id, "robot").getStatusCode().value()).isEqualTo(404);
         Files.write(dir.resolve(id + ".jsonl.gz"), new byte[]{1, 2, 3});
         assertThat(controller.replay(id, "other").getStatusCode().value()).isEqualTo(404);

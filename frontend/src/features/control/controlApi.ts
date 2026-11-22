@@ -59,13 +59,19 @@ export async function takeoverControl(robotId: string) {
 
 export async function changeMode(robotId: string, mode: ControlMode) {
   requireCanControl(robotId);
-  const plan = useZoneStore.getState().reviewedPlans[robotId];
-  if (mode === 'autonomous' && (!plan || plan.version !== useZoneStore.getState().versionsByRobotId[robotId] || useZoneStore.getState().editingByRobotId[robotId] || useZoneStore.getState().editingByRobotId[robotId + '::travel'])) throw new ControlPrecheckError(['현재 구역의 예정 경로를 먼저 생성하고 확인하세요.']);
+  const zones = useZoneStore.getState();
+  const workZoneId = zones.zoneIdsByRobotId[robotId];
+  const workZoneVersion = zones.versionsByRobotId[robotId];
+  const zoneIdentity = workZoneId != null && workZoneVersion != null ? { workZoneId, workZoneVersion } : null;
+  if (mode === 'autonomous' && (!zones.zonesByRobotId[robotId] || !zoneIdentity
+      || zones.editingByRobotId[robotId] || zones.editingByRobotId[robotId + '::travel'])) {
+    throw new ControlPrecheckError(['현재 작업 구역을 저장한 뒤 자율주행을 요청하세요.']);
+  }
   const command: ModeCommand = {
     action: 'change-mode',
     robotId,
     mode,
-    ...(mode === 'autonomous' ? { planId: plan.planId } : {}),
+    ...(mode === 'autonomous' ? zoneIdentity : {}),
     idempotencyKey: createIdempotencyKey('mode'),
     lockVersion: useControlStore.getState().getControlState(robotId).lockVersion,
   };

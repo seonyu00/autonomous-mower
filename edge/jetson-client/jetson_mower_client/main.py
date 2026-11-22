@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import os
+import json
 import subprocess
 import time
 import threading
 from uuid import uuid4
 from collections import OrderedDict
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import rclpy
@@ -19,12 +22,14 @@ from std_msgs.msg import Bool, Int8, String
 
 from .command_ack import publish_command_ack
 from .autonomy import AutonomyExecution
+from .autonomy_readiness import Observation, readiness
 from .command_mapping import TwistCommand, is_stale_client_command, manual_to_twist, parse_iso_utc
 from .config import EdgeConfig, load_config
 from .hardware_safety import publish_emergency_stop_outputs
 from .manual_serial_bridge import ManualSerialBridge
 from .manual_serial_session import ManualSerialSession
 from .manual_challenge import ChallengeScope, ManualChallenge
+from .mission_upload import queue_lifecycle
 from .mqtt_edge import MqttEdgeClient
 from .topics import MowerTopics, command_type_from_topic
 from .telemetry import build_telemetry_payload
@@ -37,7 +42,7 @@ class JetsonMowerClientNode(Node):
         self._config = config
         self._topics = MowerTopics(config.robot_id)
         self._mqtt = MqttEdgeClient(config, self._topics, self._handle_mqtt_message, self.get_logger().info,
-                                    on_disconnect=self._disarm_manual_serial)
+                                    on_disconnect=self._on_mqtt_disconnect)
         self._emergency_active = False
         self._error_observer_session = str(uuid4())
         self._mode: str | None = None
@@ -48,9 +53,18 @@ class JetsonMowerClientNode(Node):
         self._heading = TelemetryHeading()
         self._last_manual_command_monotonic: float | None = None
         self._recent_command_keys: OrderedDict[str, None] = OrderedDict()
-        self._autonomy = AutonomyExecution(config.autonomy_command)
+        spool = os.environ.get("MOWER_MISSION_SPOOL")
+        self._autonomy = AutonomyExecution(
+            config.autonomy_command,
+            (lambda event: queue_lifecycle(Path(spool), event)) if spool else None,
+        )
         # GPS·주행 준비 확인 어댑터가 연결되기 전에는 실행을 허용하지 않는다.
         self._autonomy_ready: bool | None = None
+        self._autonomy_readiness_reason: str | None = "autonomy-readiness-unknown"
+        self._autonomy_zone: tuple[int, int] | None = None
+        self._autonomy_remote: Observation | None = None
+        self._autonomy_feedback: Observation | None = None
+        self._autonomy_status: Observation | None = None
         self._manual_serial = None
         self._manual_challenge = ManualChallenge()
         self._manual_serial_device = None
@@ -71,17 +85,74 @@ class JetsonMowerClientNode(Node):
         self.create_subscription(NavSatFix, config.ros.fix_topic, self._handle_fix, 10)
         self.create_subscription(Imu, config.ros.imu_topic, self._handle_imu, 10)
         self.create_subscription(String, '/dual_gps/status', self._handle_heading, 10)
+        # r61 SSH 래치 실행기의 실제 감독 입력이다. 메시지를 만들거나 추정하지 않는다.
+        self.create_subscription(Bool, '/mower/remote_override', self._handle_autonomy_remote, 10)
+        self.create_subscription(String, '/mower/stm32_feedback_status', self._handle_autonomy_feedback, 10)
+        self.create_subscription(String, '/mower_cpp/drive_status', self._handle_autonomy_status, 10)
 
         self.create_timer(config.ros.telemetry_publish_period_seconds, self._publish_telemetry)
         self.create_timer(config.ros.status_publish_period_seconds, self._publish_status)
         self.create_timer(0.1, self._check_manual_timeout)
-        self.create_timer(0.1, self._autonomy.poll)
+        self.create_timer(0.1, self._poll_autonomy)
         if self._manual_serial is not None:
             self.create_timer(0.1, self._tick_manual_serial)
 
     def start(self) -> None:
         self._mqtt.connect()
         self._publish_status()
+
+    def _poll_autonomy(self) -> None:
+        try:
+            self._autonomy.poll_confirmations()
+            self._refresh_autonomy_readiness()
+        except (OSError, ValueError) as error:
+            self.get_logger().warning(f"작업 확인 보류: {error}", throttle_duration_sec=5)
+
+    def _handle_autonomy_remote(self, message: Bool) -> None:
+        self._autonomy_remote = Observation(message.data, time.monotonic())
+
+    def _handle_autonomy_feedback(self, message: String) -> None:
+        try:
+            value = json.loads(message.data)
+        except (TypeError, ValueError):
+            value = None
+        self._autonomy_feedback = Observation(value, time.monotonic())
+
+    def _handle_autonomy_status(self, message: String) -> None:
+        try:
+            value = json.loads(message.data)
+        except (TypeError, ValueError):
+            value = None
+        self._autonomy_status = Observation(value, time.monotonic())
+
+    def _refresh_autonomy_readiness(self) -> None:
+        if self._autonomy_zone is None:
+            self._autonomy_ready = None
+            self._autonomy_readiness_reason = "autonomy-readiness-unknown"
+            self._autonomy.set_start_permitted(False)
+            return
+        status = self._autonomy_status.value if self._autonomy_status else None
+        replay = status.get("replay") if isinstance(status, dict) else None
+        source = replay.get("input") if isinstance(replay, dict) else None
+        pose = source.get("pose") if isinstance(source, dict) else None
+        obstacles = source.get("obstacle_snapshot") if isinstance(source, dict) else None
+        actual = None
+        if isinstance(status, dict):
+            zone_id, zone_version = status.get("work_zone_id"), status.get("work_zone_version")
+            try:
+                parsed_id, parsed_version = int(zone_id), int(zone_version)
+            except (TypeError, ValueError):
+                parsed_id, parsed_version = 0, 0
+            if parsed_id > 0 and parsed_version > 0:
+                actual = (parsed_id, parsed_version)
+        reason = readiness(now=time.monotonic(), expected_zone=self._autonomy_zone, actual_zone=actual,
+                           remote=self._autonomy_remote, feedback=self._autonomy_feedback,
+                           pose=Observation(pose, self._autonomy_status.received_at) if pose is not None and self._autonomy_status else None,
+                           obstacles=Observation(obstacles, self._autonomy_status.received_at) if obstacles is not None and self._autonomy_status else None,
+                           authority_available=self._mqtt.is_connected(), max_age=2.5)
+        self._autonomy_readiness_reason = reason
+        self._autonomy_ready = reason is None
+        self._autonomy.set_start_permitted(self._autonomy_ready)
 
     def stop(self) -> None:
         self._publish_zero_twist()
@@ -245,7 +316,19 @@ class JetsonMowerClientNode(Node):
             if self._manual_serial is not None:
                 self._publish_ack(command, "change-mode", "rejected", "manual-serial-active", received_at)
                 return
-            reason = self._autonomy.request_start(self._autonomy_ready)
+            parameters = _parameters(command)
+            zone_id, zone_version = parameters.get("workZoneId"), parameters.get("workZoneVersion")
+            if type(zone_id) is int and type(zone_version) is int:
+                self._autonomy_zone = (zone_id, zone_version)
+            # r61의 입력은 실행 뒤에 생긴다. 프로세스 자체는 첫 r 프레임 전까지
+            # 정지 상태이며, 아래 준비 판정이 true가 될 때만 출발 요청을 전달한다.
+            reason = self._autonomy.request_start(
+                True, robot_id=self._config.robot_id,
+                work_zone_id=zone_id, work_zone_version=zone_version,
+            )
+            # request_start의 기존 API는 즉시 시작 가능한 실행에도 쓰인다. 웹 경로는
+            # 첫 ping 전까지 명시적으로 닫아 실제 ROS 입력을 받은 뒤에만 연다.
+            self._autonomy.set_start_permitted(False)
             # 프로세스 생성은 실제 주행 시작 확인이나 완료 응답이 아니다.
             self._publish_ack(command, "change-mode", "accepted" if reason == "autonomy-process-started" else "rejected", reason, received_at)
             self._publish_status()
@@ -273,6 +356,9 @@ class JetsonMowerClientNode(Node):
         self._publish_status()
 
     def _stop_autonomy(self) -> None:
+        self._autonomy_zone = None
+        self._autonomy_ready = None
+        self._autonomy_readiness_reason = "autonomy-readiness-unknown"
         try:
             self._autonomy.stop()
         except (OSError, subprocess.TimeoutExpired) as error:
@@ -384,6 +470,17 @@ class JetsonMowerClientNode(Node):
             if self._manual_serial is not None:
                 self._manual_serial.disarm()
 
+    def _on_mqtt_disconnect(self) -> None:
+        with self._manual_setup_lock:
+            self._autonomy_ready = None
+            try:
+                self._disarm_manual_serial()
+            finally:
+                try:
+                    self._stop_autonomy()
+                except ValueError:
+                    self.get_logger().error("MQTT 연결이 끊겼으며 자율주행 실행기 종료를 확인하지 못했습니다.")
+
     def _cancel_manual_prepare(self, reason: str) -> None:
         pending = self._pending_manual_prepare
         self._pending_manual_prepare = None
@@ -484,6 +581,15 @@ class JetsonMowerClientNode(Node):
 
     def _publish_status(self) -> None:
         self._autonomy.poll()
+        if self._emergency_active:
+            autonomy_block_reason = "emergency-active"
+        elif not self._config.autonomy_command:
+            autonomy_block_reason = "autonomy-not-configured"
+        elif self._autonomy_ready is False:
+            autonomy_block_reason = self._autonomy_readiness_reason or "autonomy-not-ready"
+        else:
+            # 실제 장비 입력 어댑터를 연결하기 전에는 준비 완료를 보고하지 않는다.
+            autonomy_block_reason = "autonomy-readiness-unknown"
         serial_state = None if self._manual_serial is None else (
             "manual-serial-ready" if self._manual_serial.armed else "manual-serial-locked")
         if self._pending_manual_prepare is not None:
@@ -495,6 +601,8 @@ class JetsonMowerClientNode(Node):
             "edgeState": "emergency" if self._emergency_active else (
                 serial_state or ("autonomy-" + self._autonomy.state if self._autonomy.run_id is not None else self._mode or "connected")),
             "lastSeenAt": utc_now(),
+            "autonomyBlockReason": autonomy_block_reason,
+            "autonomyReady": self._autonomy_ready,
             "manualLockReason": getattr(self._manual_serial, "lock_reason", None) if serial_state == "manual-serial-locked" else None,
             "stale": False,
         }
