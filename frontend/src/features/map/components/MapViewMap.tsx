@@ -27,6 +27,7 @@ import { NaverOperationalMap } from './NaverOperationalMap';
 import { useVisionObservations } from '../visionObservations';
 import { VisionMapControls } from './VisionMapControls';
 import { useJetsonRoute } from '../jetsonRoute';
+import { JetsonPreviewRunControls } from './JetsonPreviewRunControls';
 
 const emptyDraftVertices: LngLat[] = [];
 const emptySessionRoute: LngLat[] = [];
@@ -94,10 +95,12 @@ export function MapViewMap() {
   const vision = useVisionObservations(selectedRobotId, zoneVersion, visionEnabled && visionAvailable);
   const visibleVision = visionEnabled && visionAvailable && !vision.isError ? vision.data : undefined;
   const [jetsonRouteEnabled, setJetsonRouteEnabled] = useState(false);
+  const [previewSessionId, setPreviewSessionId] = useState<string>();
   const zoneId = useZoneStore(state => selectedRobotId ? state.zoneIdsByRobotId[selectedRobotId] : null);
   const routeAvailable = visionAvailable && zoneId != null && selectedRobotId != null
     && !editingByRobotId[selectedRobotId] && !editingByRobotId[selectedRobotId + '::travel'];
-  const jetsonRoute = useJetsonRoute(selectedRobotId, zoneId, zoneVersion, jetsonRouteEnabled && routeAvailable);
+  const showJetsonRoute = routeAvailable && (jetsonRouteEnabled || !!previewSessionId);
+  const jetsonRoute = useJetsonRoute(selectedRobotId, zoneId, zoneVersion, showJetsonRoute, previewSessionId);
   const displayedWorkZone = editingWorkZone
     ? closePolygonVertices(draftVertices)
     : area === 'travel' ? travelZone : storedWorkZone;
@@ -205,16 +208,18 @@ export function MapViewMap() {
         <CppPreviewControls preview={preview} />
         <details className="cpp-preview-controls jetson-route-controls" name="map-tools">
           <summary>Jetson 남은 경로</summary>
+          {routeAvailable && <JetsonPreviewRunControls key={`${selectedRobotId}/${zoneId}/${zoneVersion}`}
+            robotId={selectedRobotId} zoneId={zoneId} zoneVersion={zoneVersion} onSession={setPreviewSessionId} />}
           <div className="jetson-route-summary">
             <label>
               <input type="checkbox" checked={jetsonRouteEnabled} disabled={!routeAvailable}
                 onChange={event => setJetsonRouteEnabled(event.target.checked)} />
               경로 표시
             </label>
-            {routeAvailable && jetsonRouteEnabled && <p role="status">{jetsonRoute.label}</p>}
+            {showJetsonRoute && <p role="status">{jetsonRoute.label}</p>}
           </div>
           {!routeAvailable && <p>저장된 작업 구역을 불러오고 편집을 마친 뒤 조회할 수 있습니다.</p>}
-          {routeAvailable && jetsonRouteEnabled && <>
+          {showJetsonRoute && <>
             {jetsonRoute.preview && <p>무구동 미리보기{jetsonRoute.receivedAt && <>
               {' · 최근 보고 '}<time dateTime={jetsonRoute.receivedAt}>{new Date(jetsonRoute.receivedAt)
                 .toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false })}</time>

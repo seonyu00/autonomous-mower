@@ -7,6 +7,7 @@ import type { LngLat } from './geojson';
 type RouteStatus = 'unreported' | 'pending' | 'available' | 'held' | 'failed' | 'ended' | 'stale';
 type Snapshot = {
   robotId: string;
+  sessionId?: string | null;
   workZoneId: number;
   workZoneVersion: number;
   sourceMode: 'preview' | null;
@@ -37,10 +38,10 @@ const heldReasons: Record<string, string> = {
 type RouteDisplay = { label: string; receivedAt?: string; preview?: boolean; path?: LngLat[] };
 
 export function useJetsonRoute(robotId: string | null, zoneId: number | null | undefined,
-  version: number | null | undefined, enabled: boolean) {
+  version: number | null | undefined, enabled: boolean, expectedSession?: string) {
   const session = useAuthStore(state => state.sessionVersion);
   const authenticated = useAuthStore(state => state.isAuthenticated);
-  const key = JSON.stringify([session, robotId, zoneId, version]);
+  const key = JSON.stringify([session, robotId, zoneId, version, expectedSession]);
   const [result, setResult] = useState<{ key: string; display: RouteDisplay }>();
 
   useEffect(() => {
@@ -85,6 +86,10 @@ export function useJetsonRoute(robotId: string | null, zoneId: number | null | u
         }
         window.clearTimeout(expiry);
         deadline = undefined;
+        if (expectedSession && data.sessionId !== expectedSession) {
+          display({ label: statusLabels.unreported });
+          return;
+        }
         const base = { receivedAt: data.receivedAt ?? undefined, preview: data.sourceMode === 'preview' };
         if (data.status !== 'available') {
           const reason = data.status === 'held' && data.reason && Object.hasOwn(heldReasons, data.reason)
@@ -128,7 +133,7 @@ export function useJetsonRoute(robotId: string | null, zoneId: number | null | u
       window.clearTimeout(expiry);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [key, enabled, authenticated, robotId, zoneId, version]);
+  }, [key, enabled, authenticated, robotId, zoneId, version, expectedSession]);
 
   return enabled && authenticated && result?.key === key ? result.display : { label: '경로 조회 중…' };
 }

@@ -17,13 +17,18 @@ def iso(stamp):
     return datetime.fromtimestamp(stamp / 1000, timezone.utc).isoformat()
 
 
-def preview_frame(packet, zone, boundary, sequence, generation, route_at):
+def preview_source(packet, zone):
     source = packet["replay"]
     if (packet["planner"] != "edge" or "output_topic" not in packet or packet["output_topic"] is not None
             or "command_at_unix_ms" not in source or source["command_at_unix_ms"] is not None
             or packet.get("armed") is not False or packet.get("v") != 0 or packet.get("w") != 0
             or not zone_matches(packet, zone) or not zone_matches(source, zone)):
         raise ValueError("같은 구역의 무구동 상태만 보고할 수 있습니다.")
+    return source
+
+
+def preview_frame(packet, zone, boundary, sequence, generation, route_at):
+    source = preview_source(packet, zone)
     stamp = source["at_unix_ms"]
     plan = packet.get("planning") or {}
     revision = plan.get("route_revision")
@@ -61,6 +66,7 @@ def main():
     parser.add_argument("--robot-id", required=True)
     parser.add_argument("--zone", type=Path, required=True)
     parser.add_argument("--status-topic", required=True)
+    parser.add_argument("--session-id", type=UUID, help="웹 무구동 실행 요청 ID")
     args = parser.parse_args()
     if not re.fullmatch(r"/mower_preview_[A-Za-z0-9_]+/status", args.status_topic):
         parser.error("무구동 미리보기 세션의 status 토픽을 지정해 주세요.")
@@ -88,6 +94,7 @@ def main():
     node = Node("cpp_web_preview")
     latest = None
     session = None
+    source_session = None
     generation = None
     last_stamp = 0
     route_at = None
@@ -102,7 +109,7 @@ def main():
             latest = None
 
     def send():
-        nonlocal session, generation, last_stamp, route_at, last_revision, observation_key
+        nonlocal session, source_session, generation, last_stamp, route_at, last_revision, observation_key
         if latest is None or node.count_publishers(args.status_topic) != 1:
             return
         try:
@@ -111,7 +118,7 @@ def main():
             if type(stamp) is not int or not 0 <= time.time_ns() // 1_000_000 - stamp < 2500 or stamp <= last_stamp:
                 return
             incoming = str(UUID(source["session_id"]))
-            if session is not None and incoming != session:
+            if source_session is not None and incoming != source_session:
                 raise ValueError("다른 미리보기 세션은 별도 실행이 필요합니다.")
             revision = (latest.get("planning") or {}).get("route_revision")
             if revision is not None and revision != last_revision:
@@ -122,10 +129,11 @@ def main():
             if session is None:
                 zone_id = int(zone["work_zone_id"])
                 current = api("GET", f"/jetson-route/latest?workZoneId={zone_id}&workZoneVersion={version}")
-                expected = current["generation"] - int(current["sessionId"] == incoming)
-                opened = api("POST", "/jetson-route/sessions", {"sessionId": incoming, "workZoneId": zone_id,
+                report_id = str(args.session_id) if args.session_id else incoming
+                expected = current["generation"] - int(current["sessionId"] == report_id)
+                opened = api("POST", "/jetson-route/sessions", {"sessionId": report_id, "workZoneId": zone_id,
                              "workZoneVersion": version, "expectedGeneration": expected, "sourceMode": "preview"})
-                session, generation = incoming, opened["generation"]
+                session, source_session, generation = report_id, incoming, opened["generation"]
                 report["generation"] = generation
             api("PUT", f"/jetson-route/sessions/{session}/latest", report)
             last_stamp = stamp
