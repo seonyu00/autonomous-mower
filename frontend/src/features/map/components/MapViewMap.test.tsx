@@ -65,6 +65,29 @@ describe('MapViewMap', () => {
 
   afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
+  it('Jetson 경로를 별도 지도 레이어에 전달하고 이동 범위 편집을 시작하면 숨긴다', async () => {
+    envMock.naverMapClientId = 'test-client-id';
+    naverMapMock.failMessage = '';
+    useTelemetryStore.setState({ dataSource: 'real' });
+    useZoneStore.getState().setZone('MOWER-01', {
+      type: 'Polygon', coordinates: [[[127, 37], [127.001, 37], [127, 37.001], [127, 37]]],
+    }, 2, 3);
+    vi.spyOn(httpClient, 'get').mockResolvedValue({
+      robotId: 'MOWER-01', workZoneId: 3, workZoneVersion: 2, sourceMode: 'preview',
+      status: 'available', reason: 'replanned', serverTime: '2026-11-21T12:00:00Z',
+      receivedAt: '2026-11-21T12:00:00Z', expiresAt: '2026-11-21T12:00:03Z',
+      remainingPath: [{ lon: 127, lat: 37 }, { lon: 127.001, lat: 37 }],
+    });
+    render(<MapViewMap />);
+    fireEvent.click(screen.getByText('Jetson 남은 경로'));
+    fireEvent.click(screen.getByLabelText('경로 표시'));
+    expect(await screen.findByText('Jetson 남은 경로 수신')).toBeInTheDocument();
+    expect(naverMapMock.props?.jetsonRoute).toEqual([[127, 37], [127.001, 37]]);
+    expect(naverMapMock.props?.previewRoute).toEqual([]);
+    act(() => useZoneStore.getState().startEditing('MOWER-01::travel'));
+    expect(naverMapMock.props?.jetsonRoute).toBeUndefined();
+  });
+
   it('실제 모드 대체 지도에 CPP 선과 시작·끝을 표시하고 구역 변경 시 제거한다', async () => {
     envMock.enableMockWorkZone = false;
     useZoneStore.getState().setZone('MOWER-01', { type: 'Polygon', coordinates: [[[127, 37], [127.001, 37], [127, 37.001], [127, 37]]] }, 2);

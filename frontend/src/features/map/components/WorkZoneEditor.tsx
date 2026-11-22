@@ -55,9 +55,9 @@ export function WorkZoneEditor() {
     (area === 'travel' ? getWorkZone(robotId!, 'travel') : getWorkZone(robotId!))
       .then((snapshot) => {
         if (cancelled || useAuthStore.getState().sessionVersion !== sessionVersion) return;
-        setZone(selectedRobotId, snapshot.geometry, snapshot.version);
-        if (snapshot.workGeometry) setZone(robotId!, snapshot.workGeometry, snapshot.version);
-        if (snapshot.travelGeometry !== undefined) setZone(robotId! + '::travel', snapshot.travelGeometry, snapshot.version);
+        setZone(selectedRobotId, snapshot.geometry, snapshot.version, snapshot.zoneId);
+        if (snapshot.workGeometry) setZone(robotId!, snapshot.workGeometry, snapshot.version, snapshot.zoneId);
+        if (snapshot.travelGeometry !== undefined) setZone(robotId! + '::travel', snapshot.travelGeometry, snapshot.version, snapshot.zoneId);
         setLoadMessage(snapshot.geometry ? null : '등록된 작업 구역이 없습니다.');
       })
       .catch(() => {
@@ -87,7 +87,7 @@ export function WorkZoneEditor() {
     try {
       const response = await (area === 'travel' ? saveWorkZone(robotId!, polygon, currentVersion, 'travel') : saveWorkZone(robotId!, polygon, currentVersion));
       if (useAuthStore.getState().sessionVersion !== sessionVersion) return;
-      setZone(selectedRobotId, polygon, response.version);
+      setZone(selectedRobotId, polygon, response.version, response.zoneId);
       setConflict(false);
       stopEditing(selectedRobotId);
       setSaveMessage(
@@ -112,9 +112,9 @@ export function WorkZoneEditor() {
       if (useAuthStore.getState().sessionVersion !== sessionVersion
         || useRobotStore.getState().selectedRobotId !== robotId) return;
       // 최신 저장본과 버전만 갱신하고 사용자가 작성한 꼭짓점은 유지한다.
-      setZone(selectedRobotId, snapshot.geometry, snapshot.version);
-        if (snapshot.workGeometry) setZone(robotId!, snapshot.workGeometry, snapshot.version);
-        if (snapshot.travelGeometry !== undefined) setZone(robotId! + '::travel', snapshot.travelGeometry, snapshot.version);
+      setZone(selectedRobotId, snapshot.geometry, snapshot.version, snapshot.zoneId);
+        if (snapshot.workGeometry) setZone(robotId!, snapshot.workGeometry, snapshot.version, snapshot.zoneId);
+        if (snapshot.travelGeometry !== undefined) setZone(robotId! + '::travel', snapshot.travelGeometry, snapshot.version, snapshot.zoneId);
       setConflict(false);
       setSaveMessage('최신 작업 구역을 불러왔습니다. 편집 내용은 유지됩니다. 변경 내용을 확인한 뒤 저장하세요.');
     } catch {

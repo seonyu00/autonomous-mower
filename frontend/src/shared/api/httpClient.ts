@@ -18,7 +18,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const sessionVersion = useAuthStore.getState().sessionVersion;
   const { responseType = 'json', ...fetchOptions } = options;
   const headers = new Headers(options.headers);
-  headers.set('Accept', responseType === 'blob' ? 'image/jpeg' : 'application/json');
+  if (!headers.has('Accept')) headers.set('Accept', responseType === 'blob' ? 'image/jpeg' : 'application/json');
 
   if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');

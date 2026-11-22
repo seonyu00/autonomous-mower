@@ -29,20 +29,20 @@ Jetson 또는 Edge Mock
 - `_handle_fix()`는 최신 GPS 메시지를 보관한다.
 - `_handle_imu()`는 최신 IMU 메시지를 보관하지만 현재 payload 계산에는 사용하지 않는다.
 - `_publish_telemetry()`가 주기적으로 MQTT payload를 만든다.
-- GPS가 없으면 위도와 경도를 `0.0`으로 보낸다.
-- 배터리와 신호 세기는 설정의 기본값을 사용한다.
-- 속도는 현재 `0.0`으로 고정돼 있다.
+- 유효하고 수신한 지 3초 미만인 GPS fix만 좌표로 보내며, 나머지는 두 좌표 모두 `null`이다.
+- 현재 장비 입력원이 없는 배터리·신호 세기·속도는 `null`로 보낸다.
+- 전체 클라이언트는 듀얼 GPS 방향과 관측 시각·출처를 함께 전달한다. 서버는 미래 또는 3초 이상 지난 방향 관측을 화면 메시지에서 제외한다.
 
 ```json
 {
   "robotId": "<ROBOT_ID>",
   "latitude": 37.0001,
   "longitude": 127.0001,
-  "batteryLevel": 80,
+  "batteryLevel": null,
   "mode": "idle",
   "workState": "idle",
-  "speedMps": 0.0,
-  "signalStrength": 100,
+  "speedMps": null,
+  "signalStrength": null,
   "receivedAt": "2026-01-01T00:00:00Z",
   "errorState": null
 }

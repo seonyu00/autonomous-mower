@@ -40,6 +40,10 @@ logging:
     com.autonomousmower: INFO
 
 app:
+  jetson-route:
+    preview-write-enabled: ${APP_JETSON_ROUTE_PREVIEW_WRITE_ENABLED:false}
+  history:
+    replay-directory: ${APP_HISTORY_REPLAY_DIRECTORY:data/mission-replays}
   cpp:
     executable: ${CPP_EXECUTABLE:}
     timeout-ms: 5000

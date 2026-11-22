@@ -13,6 +13,8 @@
 
 ### 팀원 온라인 CPP의 센서 입력 어댑터
 
+2026-11-18 통합 시험기 cpp_trial은 팀원 `drive_ros.py --jsonl-preview`를 센서 입력으로 사용하고 관측기에 `--dual-gps --diagnostic-captures`를 추가하도록 조정해 Jetson에 배포했다. 기존 단독 cpp_sensor_input은 보존한다. 일반 근접 대기의 명시적 재개와 별도 안전 확인 잠금 구분을 제공한다. 관련 단위·배포 검사는 완료했으나 실제 센서 종단과 브라우저 자동 열기는 미검증이다. 앞선 미배포 설명은 초기 구현 당시 기록이다.
+
 `cpp_trial.py`·`cpp_trial.html`과 PC의 `tools/pc-demo/cpp-trial.ps1`은 구역 조회·비전·CPP 미리보기와 별도 평면 지도를 묶는 실행 기반이다. PC 대역 시험과 구문 검사를 완료했으며 현재 Jetson 오프라인으로 배포·실제 센서와 브라우저 종단 시험은 미수행이다. 모터 출력이 없고 실제 주행 경로의 관제 보고 기능은 포함하지 않는다. 실행 방법은 아래 Jetson README의 한 명령 실행 절을 따른다.
 
 `edge/jetson-client/jetson_mower_client/cpp_sensor_input.py`가 듀얼 GPS 위치·방향과 장애물 스냅샷을 팀원 `gps_cpp_web_integration/web_cpp.py`의 JSONL 입력에 연결한다. Jetson 별도 배포 경로는 `/home/jangwoo/cpp_sensor_bridge_20261117/`다. 각속도는 GPS 방향 차이의 시험용 추정이며 구동 출력은 없다. 단위 시험과 합성 입력의 실제 팀원 CPP 호출 및 실제 ROS 입력 구독을 확인했다. 현재 rotation_trial 관측은 구역 식별자가 없어 계획을 거부하며, 지리 좌표 관측과 서버 조회의 종단 연결·실제 주행은 미검증이다. 실행과 제한은 [Jetson README](../edge/jetson-client/README.md#팀원-온라인-cpp에-실제-센서-입력-연결)를 따른다.
@@ -34,6 +36,16 @@
 ### 2026-11-16 듀얼 GPS와 비전 전역 지도 시험 연결
 
 `edge/jetson-client/jetson_mower_client/dual_gps_{heading,nmea,node,vision}.py`가 두 GPS 입력·측정 시각 결합·Fixed/43cm 기준선 검사와 팀원 비전 기록기의 별도 실행을 제공한다. `vision_web_bridge.py`와 `vision_web_sender.py`가 웹 다각형·버전 고정, 후보 영역 변환과 HTTPS 전송을 제공하고 `VisionObservationController/Service`가 기존 비전 지도 저장·조회로 연결한다. 실제 구역 버전 9와 Jetson 관측으로 저장·재조회한 `UNKNOWN` 영역 3개를 확인했고 사용자도 관제 네이버 지도에서 미확인 영역 표시를 확인했다. 작은 공분산은 드라이버의 추정값이며 실측 오차가 아니다. CPP 연결과 물체 위치 오차·이동 시험은 미검증이다. 비전·관측 전송의 상시 서비스 설치는 하지 않았다. 실행과 장비 파일 위치는 [Jetson README](../edge/jetson-client/README.md#듀얼-gps를-이용한-시험용-비전-전역-지도), 다음 절차는 로드맵을 따른다.
+
+### 2026-11-15 하드웨어 인수인계 자료 대조
+
+2026-11-09 인수인계 설명서와 전달된 STM32 `main.c`를 검토했다. 펌웨어의 500ms 통신 감시와 비상 모드 2는 릴레이를 리모컨 경로로 전환하며, 자료는 가솔린 엔진을 사람이 직접 켜고 끈다고 설명한다. 설치 버전·배선과 물리 정지는 미확인이다. 세부 근거와 SRS와의 차이는 [긴급 정지 흐름](learning/06-emergency-stop.md#2026-11-15-하드웨어-인수인계-자료-대조)을 따른다.
+
+인수인계 자료의 예초 폭은 0.70m, 날 중심은 차체 중심보다 5cm 앞이다. 프로젝트에 사용자 제공값으로 반영된 예초 폭은 0.650m다. 서로 다른 수치의 측정 기준과 GPS 안테나·날 중심 오프셋은 담당자와 실측 확인이 필요하며 기존 계산값은 변경하지 않았다. 인계 자료의 2026-11-05 5×5m 시험은 날 ON·OFF 각각 17/17 구간 완주 기록이며, 면적은 1Hz 위치와 0.70m 폭으로 계산한 추정치다. 현재 웹 AUTO 연동이나 실제 절삭 완료의 검증 결과는 아니다.
+
+PDF 9·13·24쪽에 따르면 당시 `path_follower`는 `boundary.json`의 사각형에서 직접 경로를 만들고 팀원 CPP의 `/planned_path`는 사용하지 않았다. PDF 24쪽은 웹 내보내기와 주행 스크립트가 같은 구역 파일을 덮어쓸 수 있다고 설명한다. 이는 2026-11-09 인계 당시 기록으로, 현재 장비의 파일 소유와 웹 경로 소비 여부는 재확인이 필요하다. PDF 24쪽은 주행과 웹 영상의 카메라 공유 방향을 제시하되 동시 실행·재연결은 미검증으로 적는다.
+
+PDF 3·4·13쪽은 단일 안테나 GPS가 위치만 제공하며 D455의 6축 IMU와 GPS 이동 방향을 조합해 방향을 추정한다고 설명한다. 이 방향은 고정된 GPS 방위각이 아니므로 좌표계와 초기화·정확도를 확인한 뒤 관제 지도에 연결해야 한다. PDF 26쪽은 날 ON 시험의 전체 경계 대비 추정 커버리지를 약 64%로 기록하며, 계획 구역 기준 97.1%와 분모가 다르다.
 
 ### 웹 수동 출력 편차 변경과 Jetson 적용
 
@@ -660,7 +672,7 @@ Backend 주요 파일:
 
 ### Manual Joystick
 
-2026-11-11 구현·설치: `수동 조작 재개`에서 `manual-prepare`를 요청하고 준비 완료 후 새 일회용 확인값으로 재개한다. 준비 중 방향 입력 잠금·취소·제어권 버전 변경과 늦은 완료 폐기를 제공한다. `ManualSerialSession`은 명시적인 준비 때만 포트를 열며, 새 리모컨 개입·해제 확인과 준비/재개 만료를 적용한다. `scripts/run-control-gateway.sh`와 `systemd/mower-control-gateway.service`가 상태 전송·명령 수신 대기를 제공한다. 장비의 별도 배포 폴더에 설치하고 서비스 시작·자동 실행·MQTT 연결·대기 중 포트 미점유를 확인했으며, 새 서비스의 웹 재개·물리 동작과 재부팅 시험은 미수행이다. 실행·복구는 [Jetson README](../edge/jetson-client/README.md), 계약은 [API 계약](api-contract.md#수동-시리얼-조작-재개와-입력-식별자-개발-중), 다음 단계는 [로드맵](learning/12-development-roadmap.md)을 따른다.
+2026-11-11 구현·설치: `수동 조작 재개`에서 `manual-prepare`를 요청하고 준비 완료 후 새 일회용 확인값으로 재개한다. 준비 중 방향 입력 잠금·취소·제어권 버전 변경과 늦은 완료 폐기를 제공한다. `ManualSerialSession`은 명시적인 준비 때만 포트를 열며, 새 중립 진단과 hold 종료 및 준비/재개 만료를 적용한다. `scripts/run-control-gateway.sh`와 `systemd/mower-control-gateway.service`가 상태 전송·명령 수신 대기를 제공한다. 장비의 별도 배포 폴더에 설치하고 서비스 시작·자동 실행·MQTT 연결·대기 중 포트 미점유를 확인했으며, 새 서비스의 웹 재개·물리 동작과 재부팅 시험은 미수행이다. 실행·복구는 [Jetson README](../edge/jetson-client/README.md), 계약은 [API 계약](api-contract.md#수동-시리얼-조작-재개와-입력-식별자-개발-중), 다음 단계는 [로드맵](learning/12-development-roadmap.md)을 따른다.
 
 Frontend 주요 파일:
 
@@ -1694,6 +1706,8 @@ npm start
 
 
 ## 2026-11-07 날 관측과 예초 추정 면적의 내부 준비
+
+2026-11-13 사용자는 가솔린 엔진의 날 상태를 자동 수신할 수 없어 관제 날 제어를 제외하고, 운전자가 날 구동 확인 버튼을 누른 시점부터 예초 구역을 추정하기로 했다. 현재 코드는 기존 날 관측 기반 내부 준비 상태이며 버튼과 새 집계 방식은 미구현이다. 후속 결정과 작업은 [로드맵](learning/12-development-roadmap.md)을 따른다.
 
 `BladeObservation`은 실제 회전·전원·확인 불가 출처와 ON/OFF/UNKNOWN·측정 시각을 구분한다. V17과 `MowingAreaService`는 고정한 보관 경로의 구역과 관측을 저장하며 `MowingAreaEstimator`는 상태 전환·3초 만료와 GPS 끊김을 반영해 폭 0.650m의 중복 제거·구역 절단 면적을 계산한다. 작업 이력의 별도 mowingEstimate와 웹의 예초 추정 면적·추정 커버리지·부분 집계·출처 표시를 연결했다.
 

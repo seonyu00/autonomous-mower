@@ -1,5 +1,23 @@
 # API 및 실시간 계약
 
+## Jetson 남은 경로의 무구동 관제 조회
+
+웹 CPP 예정 경로와 별도로, 로봇별로 최신 Jetson 경로 보고 한 건을 보존한다. 최초 적용의 출처는 `preview`이며 관제 지도에는 `무구동 미리보기`로 표시한다. 경로 보고는 주행 승인이나 정지 확인에 사용하지 않는다. 실제 r41 `drive_status` 연결은 원본 로그로 좌표·갱신·보류 상태를 확인한 뒤 진행한다.
+
+공통 경로는 `/api/robots/{robotId}/jetson-route`다. 조회는 `robots:read`를 요구한다. 세션 등록과 보고는 기본 비활성화이며 격리 시험 환경에서 `app.jetson-route.preview-write-enabled=true`와 `control:write`를 함께 사용한다. 보고는 세션을 등록한 계정만 제출할 수 있다. 운영 장비 귀속 인증은 후속 계약이다.
+
+| 메서드·경로 | 요청과 응답 |
+| --- | --- |
+| `GET /latest?workZoneId=<ID>&workZoneVersion=<VERSION>` | 현재 구역의 `generation`, 세션·revision·상태, 보고·서버·만료 시각과 `remainingPath`를 반환한다. 응답은 캐시를 사용하지 않는다. 해당 구역에 보고가 없으면 `unreported`와 마지막 세대를 반환한다. |
+| `POST /sessions` | `{sessionId, workZoneId, workZoneVersion, expectedGeneration, sourceMode:"preview"}`를 받는다. 현재 세대와 일치하면 새 세대로 등록하며 최초 기대 세대는 0이다. 응답은 `{sessionId, generation}`이다. |
+| `PUT /sessions/{sessionId}/latest` | `generation`, `workZoneId`, `workZoneVersion`, `sequence`, `routeRevision`, `status`, `reason`, `statusObservedAt`, `routeGeneratedAt`, `observationObservedAt`, `remainingPath`를 받는다. 응답 형식은 GET과 같다. |
+
+`available`은 좌표 범위를 만족하는 순서대로의 WGS84 `{lat, lon}` 2~4,000점과 revision 및 세 시각이 필요하다. `pending`, `held`, `failed`, `ended`는 빈 경로로 보고한다. `unreported`와 `stale`은 조회 상태다. 시각은 UTC ISO 8601을 사용한다. `reason`은 소문자 영문·숫자·밑줄 1~64자다. 요청 본문이 256 KiB를 초과하면 `413`, 구역 변경은 `409 WORK_ZONE_CONFLICT`, 세대·보고 순서 충돌은 `409 JETSON_ROUTE_CONFLICT`다.
+
+서버는 같은 세션·sequence의 동일 내용 재전송에 최초 수신 시각을 유지한다. 낮은 sequence·revision, 종료 후 새 보고, 이전 세대 보고를 거부한다. 보고의 유효 표시 시간은 `min(statusObservedAt, receivedAt) + 3초`다. 원본 상태가 3초 이상 오래됐거나 서버 시각보다 500ms를 초과해 앞선 `available`은 거부한다. 만료 후 조회는 `stale`과 빈 경로를 반환한다. 두 시간값은 무구동 관제 표시 기준이다.
+
+지도에서는 `Jetson 남은 경로`의 `경로 표시`를 켤 때 약 1초마다 조회한다. 유효한 선을 갱신하고 표시가 만료되거나 보류·편집·구역 변경·조회 실패가 발생하면 선을 지운다. 기존 예정 경로의 생성·조회는 별도 계약을 따른다.
+
 ## 실시간 듀얼 GPS 기체 방향
 
 `/topic/robots/{robotId}/telemetry`에는 선택적 nullable `headingDegrees`, `headingSource`, `headingObservedAt`을 전달한다. 유효한 출처는 `dual-gps`이며 북쪽 0°·동쪽 90°·시계 방향의 기체 전방 방위를 뜻한다. 이전 MQTT payload와 기존 Java 생성자 호출은 방향 null로 호환한다. 좌표·배터리 등 기존 필드는 방향 누락과 별개로 처리한다.
@@ -1053,7 +1071,7 @@ CPP 생성 요청의 선택적 `start:{lat,lon}`은 검토용 시작 좌표이�
 
 `POST /api/control/{robotId}/manual/prepare`는 재개 요청과 같은 `{robotId,idempotencyKey,lockVersion,clientSentAt,challenge}` 형식을 사용한다. `control:write`, 등록 로봇, 현재 제어권·버전과 비상 정지 상태를 검사하고, `purpose:"rearm"`으로 받은 일회용 확인값을 반드시 포함해야 한다. Jetson은 확인값을 자신의 단조 시계로 2초 미만·1회 사용인지 검사한다.
 
-HTTP 성공은 준비 요청 접수다. 장비가 `manual-prepare`의 `executing`을 보고한 뒤 포트를 열고 리모컨 개입·해제를 새로 확인한다. `completed`는 수동 제어부 준비 완료이며 이동 허가나 물리 동작 확인이 아니다. 웹은 완료 뒤 **새 확인값**으로 기존 `/manual/rearm`을 요청하고 해당 `edge-ack` 이후에만 방향 버튼을 활성화한다. 이동은 이후 별도의 버튼 누름이 필요하다.
+HTTP 성공은 준비 요청 접수다. 장비가 `manual-prepare`의 `executing`을 보고한 뒤 포트를 열고 새 중립 진단과 hold 종료를 확인한다. 준비를 위해 리모컨을 일부러 개입·해제하지 않는다. `completed`는 수동 제어부 준비 완료이며 이동 허가나 물리 동작 확인이 아니다. 웹은 완료 뒤 **새 확인값**으로 기존 `/manual/rearm`을 요청하고 해당 `edge-ack` 이후에만 방향 버튼을 활성화한다. 이동은 이후 별도의 버튼 누름이 필요하다.
 
 장비 준비 대기는 최대 30초이고 웹도 준비 접수 후 30초를 기다린다. 최종 응답 유실 시 서버는 발행 후 35초가 지난 실행 중 준비를 `edge-timeout`으로 종결한다. 장비는 준비 완료 후 2초 안에 재개되지 않으면 포트를 닫는다. 취소·화면 이탈·연결 저하·제어권 버전 변경 시 웹은 정지를 시도하고 늦은 준비 완료를 무시한다. 정지 전달 성공을 보장하는 것은 아니므로 장비 자체 만료를 함께 적용한다.
 

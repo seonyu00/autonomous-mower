@@ -26,6 +26,7 @@ type NaverOperationalMapProps = {
   completedRoute: LngLat[];
   editing: boolean;
   visionRegions?: VisionRegion[];
+  jetsonRoute?: LngLat[];
   onAddVertex: (position: LngLat) => void;
   onMoveVertex: (index: number, position: LngLat) => void;
   onError: (message: string) => void;
@@ -46,6 +47,7 @@ export function NaverOperationalMap({
   completedRoute,
   editing,
   visionRegions,
+  jetsonRoute,
   onAddVertex,
   onMoveVertex,
   onError,
@@ -152,6 +154,16 @@ export function NaverOperationalMap({
     map.fitBounds(bounds);
     return () => { line.setMap(null); markers.forEach((marker) => marker.setMap(null)); };
   }, [mapsApi, previewRoute]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapsApi || !map || !jetsonRoute || jetsonRoute.length < 2 || editing) return;
+    const line = new mapsApi.Polyline({
+      map, path: jetsonRoute.map(point => toLatLng(mapsApi, point)),
+      strokeColor: '#d68cff', strokeWeight: 4, strokeStyle: 'solid',
+    });
+    return () => { line.setMap(null); };
+  }, [mapsApi, jetsonRoute, editing]);
 
   useEffect(() => {
     const map = mapRef.current;

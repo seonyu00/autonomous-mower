@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '../features/auth/authStore';
 import { getHistory } from '../features/history/api';
+import { StoredReplay } from '../features/history/StoredReplay';
 import { HistoryMap } from '../features/history/components/HistoryMap';
 import { HistoryTimeline } from '../features/history/components/HistoryTimeline';
 import { mockHistoryEntries } from '../features/history/mockHistory';
@@ -25,6 +26,7 @@ export function HistoryPage() {
     env.enableMockHistory ? mockHistoryEntries.filter((entry) => entry.robotId === (robots[0]?.id ?? '')) : [],
   );
   const [selectedEntryId, setSelectedEntryId] = useState(entries[0]?.id ?? null);
+  const [replayId, setReplayId] = useState<string | null>(null);
   const queryKey = JSON.stringify([robotId, from, to, sessionVersion]);
   const [resultKey, setResultKey] = useState(queryKey);
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(env.enableMockHistory ? 'success' : 'idle');
@@ -42,6 +44,7 @@ export function HistoryPage() {
       && useAuthStore.getState().sessionVersion === sessionVersion;
     setResultKey(queryKey);
     setEntries([]);
+    setReplayId(null);
     setError(null);
     setStatus('loading');
     try {
@@ -58,6 +61,7 @@ export function HistoryPage() {
   };
 
   const changeFilter = (update: () => void) => {
+    setReplayId(null);
     requestId.current += 1;
     setEntries([]);
     setStatus('idle');
@@ -124,7 +128,10 @@ export function HistoryPage() {
               key={entry.id}
               className={entry.id === selectedEntry?.id ? 'history-result selected' : 'history-result'}
               type="button"
-              onClick={() => setSelectedEntryId(entry.id)}
+              onClick={() => {
+                setSelectedEntryId(entry.id);
+                setReplayId(entry.recordType === 'run' && entry.startedAt && !env.enableMockHistory ? entry.id : null);
+              }}
             >
               <strong>{entry.robotId}</strong>
               <span>{entry.recordType === 'run' ? runStatus(entry, now) : '작업 구분 전 기록'}</span>
@@ -147,6 +154,9 @@ export function HistoryPage() {
           {status === 'idle' || resultKey !== queryKey ? <p className="muted">조회 조건을 선택하고 검색해 주세요.</p> : null}
         </div>
       </section>
+
+      {selectedEntry && replayId === selectedEntry.id &&
+        <StoredReplay key={JSON.stringify([sessionVersion, robotId, replayId])} id={replayId} robotId={robotId} />}
 
       <section className="workspace-panel">
         <div className="panel-heading compact">

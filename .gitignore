@@ -8,6 +8,7 @@
 *.log
 **/integration-*.log
 data/snapshots/
+**/data/mission-replays/
 **/data/telemetry-spool/
 
 # Python artifacts

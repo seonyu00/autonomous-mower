@@ -4,13 +4,58 @@ Jetson Orin Nano에서 Spring Boot 백엔드의 MQTT command topic을 구독하�
 
 현재 클라이언트는 MQTT command 검증, ROS 2 제어 출력, command ACK, telemetry/status 발행, 로컬 데드맨 스위치와 E-Stop 상태 처리를 제공한다. 기본 ROS 방식은 `/cmd_vel`을 구독하는 별도 bridge node를 사용한다. `manual_serial.port`를 설정하면 이 패키지의 STM32 USB CDC 시리얼 어댑터를 사용하며, 웹 준비 요청으로 포트를 여는 방식은 아래 관제 대기를 따른다.
 
+## r41 웹 작업 구역과 관측 재생
+
+`jetson_mower_client.r41_web`은 2026-11-21 r41 인수인계 형식의 작업 구역과 장애물 메시지를 PC에서 확인하는 도구다. `edge/jetson-client`에서 Python과 `requirements-vision-map.txt`의 Shapely를 사용한다. 구역 조회 응답 파일에는 서버 응답 전체인 `{success, data}`를 저장하고, 장애물은 `std_msgs/msg/String`의 내용으로 전달된 JSON 객체를 한 줄씩 저장한다.
+
+```powershell
+python -m jetson_mower_client.r41_web prepare-zone --robot-id <ROBOT_ID> --expected-version <VERSION> --response-file <WORK_ZONE_RESPONSE.json> --output <NEW_R41_ZONE.json>
+python -m jetson_mower_client.r41_web replay-obstacles --robot-id <ROBOT_ID> --expected-version <VERSION> --response-file <WORK_ZONE_RESPONSE.json> --obstacles <OBSTACLES.jsonl>
+python -m jetson_mower_client.r41_web replay-preview-routes --robot-id <ROBOT_ID> --expected-version <VERSION> --response-file <WORK_ZONE_RESPONSE.json> --preview-states <PREVIEW_STATES.jsonl>
+```
+
+- `prepare-zone`은 로봇·구역 버전·도형을 검사하고 오목한 경계를 보존한다. r41은 외곽 고리만 지원하므로 내부 제외 구역은 거부한다. 새 파일만 생성하며 완성된 파일을 최종 경로에 공개한다. 온라인 조회 시 `--response-file` 자리에 `--api-base-url <HTTPS_API_BASE_URL>`을 사용하고 `MOWER_READ_TOKEN`에 조회 권한이 있는 토큰을 설정한다.
+- `replay-obstacles`는 각 원본 스냅샷의 생성 시각을 재생 기준으로 사용한다. 유효한 자세·구역·신선도와 객체 가시성을 확인하고 `last_seen_unix_ms`를 실제 관측 시각으로 보존한다. 인수인계의 `{lat,lon}` 원점과 `{east,north}` m 좌표를 기존 소구역 평면 근사로 변환한다. 사람은 점, 나무·덤불 후보는 패딩 전 관측 영역으로 변환한다. 결과는 기존 관측 POST 본문 형태의 JSONL로 표준 출력에 기록한다. 저장 동작을 시험할 때는 짧은 간격으로 이동한 사람과 동일 관측의 재전송을 격리 서버에서 확인한다.
+- `replay-preview-routes`는 기존 무구동 시험기의 `/state.json` 응답을 한 줄씩 모은 JSONL을 입력으로 사용한다. 세션과 작업 구역을 고정하고 WGS84 경로점 순서를 보존한다. 새 revision에서 경로가 오기 전이거나 센서 입력이 무효일 때는 경로 없는 결과를 출력한다.
+- 파일 변환과 재생은 로컬에서 처리한다. r41 원본 로그에서 객체 클래스·좌표 구조·객체별 시각을 대조하고, `drive_status`의 경로점·보류·무효화 구조를 확인한 뒤 실제 메시지 구독과 최종 경로 보고 계약을 적용한다.
+
+### r57 백업을 웹에서 재생
+
+인계 ZIP을 풀고 웹의 **작업 이력 → CPP 주행 기록 재생 열기**에서 해당 세션의 `mission-…/mission.jsonl`을 선택한다. PC에서는 `frontend`에서 `npm run dev`를 실행한 뒤 `/mission-replay.html`로 직접 접속해도 된다. 파일 선택부터 지도 표시까지 브라우저에서 처리한다.
+
+재생 버튼은 기록 시각 간격을 따르고 슬라이더는 판단 단위로 이동한다. **경로 변경 시점**에서 최초 계획과 재계획을 바로 비교할 수 있다. 지도는 각 경로 버전의 `path` 끝에서 `path_remaining`개 점을 가져오고, 두 점 미만이면 선을 지운다. 빈 원은 별도로 기록한 `next_waypoint`다. 장애물은 같은 판단의 플래너 입력에서 읽고, 관측이 오래되면 마지막 지도를 흐리게 표시한다. 이 화면은 주행 판단 기록을 재생하며 ROS 토픽 원본 수신과 실시간 송신은 별도 검증 대상이다.
+
+서버 작업 이력에 연결하려면 운영자가 세션과 서버의 실제 작업 UUID가 일치함을 확인한 뒤 PC 백엔드 호스트에서 `python tools/archive_mission.py <mission.jsonl> <작업_UUID> <보관_디렉터리>`를 실행한다. 보관 디렉터리는 백엔드 실행 위치 기준 `data/mission-replays`이며 `APP_HISTORY_REPLAY_DIRECTORY`로 절대 경로를 지정할 수 있다. 쓰기가 완료된 gzip 파일만 공개하고 기존 파일은 보존한다. 작업 목록을 검색한 뒤 해당 행을 클릭하면 웹이 로그인 세션으로 기록을 읽는다. Jetson에서 파일을 서버로 자동 전송하는 기능은 별도 연결이 필요하다.
+
+r60 무구동 상태를 격리 관제 서버에 전달하려면 서버에서 `APP_JETSON_ROUTE_PREVIEW_WRITE_ENABLED=true`를 설정하고, Jetson의 `MOWER_PREVIEW_TOKEN`에 해당 서버의 조회·제어 쓰기 권한 토큰을 설정한다. 같은 작업 구역이 저장된 시험 로봇을 대상으로 `edge/jetson-client`에서 실행한다.
+
+```bash
+python -m jetson_mower_client.cpp_web_preview --api-base-url <HTTPS_API> --robot-id <TEST_ROBOT_ID> --zone <LOCAL_ZONE_JSON> --status-topic /mower_preview_<SESSION>/status
+```
+
+이 구독기는 플래너가 사용한 장애물 스냅샷을 상태 메시지에서 읽어서 경로와 같은 판단 시점에 보고한다. 센서 입력이 유효할 때만 남은 경로를 표시하며 갱신이 끊기면 서버의 경로 표시 기한이 만료된다. 장애물 관측은 기존 지도에 저장되므로 전용 시험 로봇을 사용한다. ROS bag은 원래 기록 시각으로 변환 시험에 사용한다.
+
 ## 팀원 온라인 CPP에 실제 센서 입력 연결
 
 ### 한 명령 실행과 별도 시험 지도
 
+**2026-11-18 카메라 확인과 상태 패널 축약:** 상태를 짧은 가로 표로 표시하고 현재 컬러 영상과 근접 감지 당시 진단 사진을 함께 제공한다. `cpp_camera_preview.py`는 기존 `/camera/camera/color/image_raw/compressed`를 BEST_EFFORT로 구독하고 최대 2Hz로 최신 JPEG만 교체한다. 새 카메라 장치나 추론 모델을 열지 않는다. 이 모듈도 통합 실행기 패키지에 함께 배포해야 한다. HTTP는 실행 폴더의 정해진 이미지 두 종류만 제공하고 임의 파일 경로는 받지 않는다.
+
+진단 사진은 관측기의 `--diagnostic-captures`가 저장한 `*-raw-guard.png`이며 현재 컬러 영상과 같은 시각이라고 보장하지 않는다. 관측기 캡처 제한은 10초 이상 간격·최대 20건이다. 화면에서 촬영 경과 시간을 표시하고 오래된 영상은 흐리게 한다. 빨간 검출 상자는 원본 캡처가 해당 정보를 기록했을 때만 나타난다. 이미지는 이 관측 시험 폴더 안에 저장되므로 공유할 때 현장 영상 포함 여부를 확인한다.
+
+최초 CPP 보류는 프로세스 종료가 아니다. 센서와 비전 추론은 계속 동작하며 새 입력으로 검사를 반복한다. 보호 잠금은 명시적 재개 또는 별도 안전 확인이 필요하다. 자원 사용을 끝내려면 PC 실행 터미널에서 Ctrl+C로 시험을 정상 종료한다. 배포 후 기존 실행기는 한 번 종료·재실행해야 새 HTML과 카메라 자식 프로세스가 적용된다.
+
+**Windows PowerShell 로그인 표시:** `cpp-trial.ps1`은 Windows PowerShell 5에서도 한글 원문을 읽도록 UTF-8 BOM으로 저장하며 SSH 동안 콘솔 입출력을 UTF-8로 설정하고 종료 시 복구한다. SSH 비밀번호와 관제 웹 계정은 별개다. 관제 아이디는 화면에 표시하고 비밀번호만 숨긴다. 관제 로그인 실패는 HTTP 인증 거부·통신 실패·응답 형식 오류로 구분하며 실제 계정·비밀번호·토큰과 서버 응답 본문은 출력하지 않는다. 실제 사용자 로그인 성공은 별도 확인이 필요하다.
+
+**2026-11-18 센서 동기화 가이드 반영·Jetson 배포 완료:** 관측기에 `--dual-gps --diagnostic-captures`를 지정하고 센서 입력은 팀원 `drive_ros.py --jsonl-preview`로 교체했다. 이 모드는 Twist 발행자를 만들지 않는다. 기존 `cpp_sensor_input.py`를 동시에 실행하지 않는다. 팀원 소스는 변경하지 않았으며 최신 가이드는 Jetson의 `gps_cpp_web_integration/TEAM_SENSOR_SYNC_GUIDE.md`다.
+
+지도에는 `blocked_by`와 별도 안전 확인 대기를 표시한다. 최신 유효 자세·local_enu·근접 미감지 상태의 일반 `near_guard_manual_resume_required`에만 미리보기 재개 버튼을 활성화한다. 현장 원인 해소를 확인하고 누르면 다음 새 입력에 1회 요청하며 500ms를 넘기거나 위험·무효 상태면 소비 후 폐기한다. `safety_review_id`가 있는 별도 안전 확인 대기는 해제하지 않는다. HTTP는 loopback 동일 Origin과 전용 헤더를 검사한다. 실차 재무장 API가 아니다.
+
+배포 위치는 `~/cpp_sensor_bridge_20261117/jetson_mower_client/`이며 실행 명령은 아래 PC 스크립트와 같다. PC·Jetson 관련 시험 각각 3개, 실제 배포 모듈과 팀원 JSONL 옵션의 help, 배포 해시 일치 및 JavaScript 재개 상태 검사를 확인했다. 실제 서버 로그인·센서 종단·브라우저 자동 열기는 이번 배포에서 실행하지 않았다. 기존 오프라인·미배포 설명은 초기 구현 시점 기록이며 현재 상태는 이 문단을 따른다.
+
 `jetson_mower_client.cpp_trial`은 구역 조회·팀원 work-plan 생성·지리 좌표 비전 관측·센서 JSONL·팀원 WebCPP를 한 프로세스에서 관리한다. 시험마다 `~/cpp_trial_runs/trial.*` 새 폴더와 전용 장애물 토픽을 사용한다. 관측기의 기존 결과 폴더를 덮어쓰지 않으며 다른 프로그램을 종료하지 않는다. 기존 수동 시험 터미널은 먼저 정상 종료해 추론을 중복 실행하지 않는다.
 
-Jetson 배포 경로 `~/cpp_sensor_bridge_20261117/jetson_mower_client/`에 `cpp_trial.py`, `cpp_trial.html`, `cpp_sensor_input.py`, `__init__.py`가 필요하다. 팀원 모듈·모델은 기존 절대 경로를 기본값으로 사용한다. 이 변경은 현재 Jetson 오프라인으로 **아직 배포하지 않았다.** 배포 뒤 PC에서 저장소 루트 기준 다음 한 명령을 실행한다.
+Jetson 배포 경로 `~/cpp_sensor_bridge_20261117/jetson_mower_client/`에 `cpp_trial.py`, `cpp_trial.html`, `cpp_sensor_input.py`, `__init__.py`가 필요하다. 팀원 모듈·모델은 기존 절대 경로를 기본값으로 사용한다. 초기 구현 때는 Jetson 오프라인으로 미배포였으나 2026-11-18 배포를 완료했다. PC에서 저장소 루트 기준 다음 한 명령을 실행한다.
 
 ```powershell
 .\tools\pc-demo\cpp-trial.ps1
@@ -20,7 +65,7 @@ PuTTY가 SSH 로그인과 Jetson 실행을 담당하고 PC의 9877 포트를 Jet
 
 창은 북쪽이 위인 미터 단위 평면 지도이며 위성지도 API를 사용하지 않는다. 구역 경계·정적/동적/미확인 장애물·현재 위치·방향·CPP 경로와 보류 사유·관측 나이를 표시한다. 입력이 오래되거나 지도가 무효면 장애물을 흐리게 하고 경로를 사용 가능하게 표시하지 않는다. 관제 웹에 경로를 저장하는 기능은 포함하지 않는다.
 
-Fixed·공분산·시각·근접 보호와 재개 잠금은 팀원 모듈과 기존 센서 연결부의 기준을 유지한다. 구역 변경 시 시험 전체를 중단하고 새 실행에서 새 지도를 준비한다. 근접 보호 재개 대기를 자동 해제하지 않으며 원인을 해결한 뒤 시험을 재시작한다. 자식 프로그램 종료·Ctrl+C·정상 전달된 SSH 종료 신호에는 자신이 생성한 프로세스 그룹만 정리한다. 전원 단절·SIGKILL에서는 정상 정리를 보장하지 않는다. `drive_ros.py`·STM32·AUTO·예초 제어는 실행하지 않는다.
+Fixed·공분산·시각·근접 보호와 재개 잠금은 팀원 모듈과 기존 센서 연결부의 기준을 유지한다. 구역 변경 시 시험 전체를 중단하고 새 실행에서 새 지도를 준비한다. 일반 근접 보호 대기는 위의 명시적 미리보기 재개 절차를 따르며 별도 안전 확인 잠금은 유지한다. 자식 프로그램 종료·Ctrl+C·정상 전달된 SSH 종료 신호에는 자신이 생성한 프로세스 그룹만 정리한다. 전원 단절·SIGKILL에서는 정상 정리를 보장하지 않는다. `drive_ros.py`·STM32·AUTO·예초 제어는 실행하지 않는다.
 
 PC에서는 자식 프로세스 실패 시 정리와 원본 시각 보존 시험, 지도 JavaScript 구문·두 화면 폭 좌표 계산·보류 상태 표시, PowerShell 구문을 확인했다. 실제 브라우저 검사는 Playwright 확장 부재로 실행하지 못했고 Jetson 오프라인으로 센서·팀원 모듈·로그인 종단 실행도 미검증이다.
 

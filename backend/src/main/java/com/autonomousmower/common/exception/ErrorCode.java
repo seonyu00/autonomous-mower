@@ -28,6 +28,8 @@ public enum ErrorCode {
     INVALID_SNAPSHOT(HttpStatus.BAD_REQUEST, "INVALID_SNAPSHOT", "Snapshot file is invalid."),
     WORK_ZONE_NOT_FOUND(HttpStatus.NOT_FOUND, "WORK_ZONE_NOT_FOUND", "Work zone was not found."),
     WORK_ZONE_CONFLICT(HttpStatus.CONFLICT, "WORK_ZONE_CONFLICT", "작업 구역이 변경되었습니다. 최신 구역을 다시 불러오세요."),
+    JETSON_ROUTE_CONFLICT(HttpStatus.CONFLICT, "JETSON_ROUTE_CONFLICT", "Jetson 경로 세션 또는 보고 순서가 변경됐습니다."),
+    JETSON_ROUTE_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "JETSON_ROUTE_TOO_LARGE", "Jetson 경로 보고의 크기 제한을 초과했습니다."),
     CONTROL_VERSION_CONFLICT(HttpStatus.CONFLICT, "CONTROL_VERSION_CONFLICT", "제어권 버전이 변경되었습니다. 최신 제어권 상태를 확인하세요."),
     CONTROL_LOCK_NOT_HELD(HttpStatus.CONFLICT, "CONTROL_LOCK_NOT_HELD", "Control lock is not held by the requester."),
     CONTROL_OWNED_BY_OTHER_USER(HttpStatus.LOCKED, "CONTROL_OWNED_BY_OTHER_USER", "Control is owned by another user."),

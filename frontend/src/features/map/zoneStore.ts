@@ -8,10 +8,11 @@ type ZoneStore = {
   mapReady: boolean;
   setMapReady: (ready: boolean) => void;
   zonesByRobotId: Record<string, PolygonGeometry | null>;
+  zoneIdsByRobotId: Record<string, number | null>;
   versionsByRobotId: Record<string, number | null>;
   draftVerticesByRobotId: Record<string, LngLat[]>;
   editingByRobotId: Record<string, boolean>;
-  setZone: (robotId: string, zone: PolygonGeometry | null, version?: number | null) => void;
+  setZone: (robotId: string, zone: PolygonGeometry | null, version?: number | null, zoneId?: number | null) => void;
   startEditing: (robotId: string, vertices?: LngLat[]) => void;
   stopEditing: (robotId: string) => void;
   addDraftVertex: (robotId: string, position: LngLat) => void;
@@ -28,14 +29,20 @@ export const useZoneStore = create<ZoneStore>((set) => ({
   mapReady: false,
   setMapReady: (mapReady) => set({ mapReady }),
   zonesByRobotId: {},
+  zoneIdsByRobotId: {},
   versionsByRobotId: {},
   draftVerticesByRobotId: {},
   editingByRobotId: {},
-  setZone: (robotId, zone, version = null) =>
+  setZone: (robotId, zone, version = null, zoneId = null) =>
     set((state) => ({
       zonesByRobotId: {
         ...state.zonesByRobotId,
         [robotId]: zone,
+      },
+      zoneIdsByRobotId: {
+        ...state.zoneIdsByRobotId,
+        [robotId]: zoneId,
+        [robotId.endsWith('::travel') ? robotId.slice(0, -8) : robotId + '::travel']: zoneId,
       },
       versionsByRobotId: {
         ...state.versionsByRobotId,

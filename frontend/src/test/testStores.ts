@@ -56,6 +56,7 @@ export function resetStores(role: Role = 'admin') {
     mapReady: true,
     zonesByRobotId: {},
     versionsByRobotId: {},
+    zoneIdsByRobotId: {},
     draftVerticesByRobotId: {},
     editingByRobotId: {},
     selectedArea: 'work',

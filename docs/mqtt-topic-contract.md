@@ -446,7 +446,7 @@ topic 계약을 변경할 때는 이 문서와 영향을 받는 구현을 같은
 
 `mowers/{robotId}/commands/mode`(QoS 1, retain 없음)에 기존 명령 봉투의 `commandType:"manual-prepare"`, `parameters:{challenge:"<ONE_TIME_VALUE>"}`를 보낸다. 요청자·제어권 버전은 봉투에 유지한다. 확인값은 `manual-challenge`의 `purpose:"rearm"`으로 받고 2초 미만·1회 사용을 검사한다. 새 토픽이나 원격 셸 실행 API는 추가하지 않는다.
 
-장비는 `commands/ack`에 같은 commandId로 `executing`을 먼저 보고하고, 포트를 열어 새 리모컨 개입·해제와 중립 진단을 확인한 뒤 `completed`를 보낸다. 이는 준비 보고이며 이동 출력이나 실제 바퀴 상태의 ACK가 아니다. 웹은 완료 뒤 새 확인값을 발급받아 `manual-rearm`을 별도 요청한다. 준비 중 방향 입력은 받지 않는다.
+장비는 `commands/ack`에 같은 commandId로 `executing`을 먼저 보고하고, 포트를 연 뒤 새로 수신한 리모컨 중립 진단과 hold 종료를 확인하면 `completed`를 보낸다. 준비를 위해 리모컨을 일부러 개입·해제할 필요는 없다. 리모컨이 활성화되거나 진단이 만료되면 기존 잠금 조건을 적용한다. 이는 준비 보고이며 이동 출력이나 실제 바퀴 상태의 ACK가 아니다. 웹은 완료 뒤 새 확인값을 발급받아 `manual-rearm`을 별도 요청한다. 준비 중 방향 입력은 받지 않는다.
 
 준비는 최대 30초, 준비 완료 후 재개 대기는 2초다. 점유 포트나 확인 실패는 `manual-port-busy-or-unverified`, 준비 한도 초과는 `manual-preparation-timeout`으로 거부한다. 일반 stop·estop·모드 변경·연결 단절은 준비를 취소하며 포트를 닫는다. 취소 시 연결되어 있으면 준비 명령에도 거부 ACK를 보내고, 최종 ACK가 없으면 서버는 35초가 지난 실행 중 준비를 시간 초과로 끝낸다. 기존 수동 이동 QoS 0과 일회용 확인값 검사를 유지한다.
 

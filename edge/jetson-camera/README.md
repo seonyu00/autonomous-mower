@@ -23,6 +23,21 @@ IMU는 Jetson의 ROS 토픽으로 제공하며 웹 송출기는 컬러 영상만
 
 ## 검증
 
+### 2026-11-17 깊이 공간 필터의 임시 실행
+
+장애물 관측 시험 중 공간·시간·깊이 채우기·간소화·시차 필터가 모두 꺼져 있음을 확인했다. 실제 추종기가 실행되지 않은 상태에서 아래 공간 필터만 활성화했다. `holes_fill`은 기존과 같이 0이며 시간 필터와 별도 깊이 채우기 필터는 꺼진 상태를 유지했다. 공간 필터의 기존 값은 magnitude=2, smooth_alpha=0.5, smooth_delta=20으로 변경하지 않았다.
+
+```bash
+source /opt/ros/humble/setup.bash
+ros2 param set /camera/camera spatial_filter.holes_fill 0
+ros2 param set /camera/camera spatial_filter.enable true
+ros2 param get /camera/camera spatial_filter.enable
+```
+
+이번 변경은 실행 중인 카메라의 임시 파라미터이며 서비스·시작 스크립트에는 저장하지 않았다. 카메라 재시작 후에는 다시 확인한다. 복구는 `ros2 param set /camera/camera spatial_filter.enable false`다. 공유 깊이 입력을 쓰는 두 관측기에 함께 영향을 주며, 별도 카메라나 관측기를 새로 시작하지 않았다.
+
+적용 후 새 관측 12개에서 근접 정지 요청 4개·미감지 8개를 확인했다. 통제된 전후 비교가 아니므로 오탐 감소·정확도 개선으로 해석하지 않는다. 모든 관측에 위치·방향 동기화 실패가 남아 지리 좌표 지도와 CPP 경로 생성 성공은 확인하지 못했다. 근접 정지 기준·재개 잠금과 센서 만료 조건은 변경하지 않았다.
+
 카메라 노드를 실행한 다른 터미널에서 다음 명령을 실행한다.
 
 ```bash

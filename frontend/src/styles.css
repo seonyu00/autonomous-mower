@@ -1303,6 +1303,10 @@ button {
   border-top-style: dashed;
 }
 
+.legend-line.jetson {
+  border-top-color: #d68cff;
+}
+
 .legend-line.completed {
   border-top-color: var(--accent);
 }
@@ -2602,6 +2606,10 @@ body:has(.map-console-page) {
 .cpp-preview-controls[open] summary { margin-bottom: 8px; }
 .cpp-preview-controls input { width: 58px; margin: 0 8px; }
 .cpp-preview-controls p { margin: 6px 0 0; }
+.jetson-route-summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 10px; }
+.jetson-route-summary label { display: inline-flex; align-items: center; gap: 5px; }
+.jetson-route-summary input { width: auto; margin: 0; }
+.jetson-route-summary p { margin: 0; }
 .cpp-preview-controls button { padding: 5px 8px; cursor: pointer; }
 .cpp-preview-controls button:disabled { cursor: default; opacity: .5; }
 .cpp-preview-marker { background: #132235; border: 1px solid #61b6ff; border-radius: 4px; color: white; padding: 2px 4px; white-space: nowrap; font-size: 12px; }

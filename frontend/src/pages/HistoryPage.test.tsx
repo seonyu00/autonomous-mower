@@ -5,6 +5,8 @@ import { useRobotStore } from '../features/robots/robotStore';
 import { env } from '../shared/config/env';
 import { HistoryPage } from './HistoryPage';
 import { getHistory } from '../features/history/api';
+import { httpClient } from '../shared/api/httpClient';
+import { ApiError } from '../shared/api/errors';
 import { mockHistoryEntries } from '../features/history/mockHistory';
 import type { HistoryEntry } from '../features/history/types';
 import { useAuthStore } from '../features/auth/authStore';
@@ -16,6 +18,24 @@ vi.mock('../features/history/components/HistoryTimeline', () => ({ HistoryTimeli
 
 beforeEach(() => { resetStores(); env.enableMockHistory = false; vi.mocked(getHistory).mockReset().mockResolvedValue([]); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
+
+it('작업 행을 선택한 뒤에만 해당 로그를 읽고 미등록 상태를 표시한다', async () => {
+  const getBlob = vi.spyOn(httpClient, 'getBlob').mockRejectedValue(new ApiError('missing', 'validation', 404));
+  try {
+    const entry: HistoryEntry = { ...mockHistoryEntries[0], id: 'run-123', recordType: 'run' };
+    vi.mocked(getHistory).mockResolvedValue([entry]);
+    render(<HistoryPage />);
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '검색' })));
+    expect(getBlob).not.toHaveBeenCalled();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: new RegExp(entry.robotId) })));
+    expect(getBlob).toHaveBeenCalledWith(`/api/history/runs/123/replay?robotId=${entry.robotId}`, expect.objectContaining({
+      headers: { Accept: 'application/octet-stream' },
+    }));
+    expect(screen.getByText('이 작업에 등록된 주행 기록이 없습니다.')).toBeInTheDocument();
+  } finally {
+    getBlob.mockRestore();
+  }
+});
 
 it('예초 추정 면적과 출처·부분 집계를 표시하고 관측이 없으면 미집계로 둔다', async () => {
   const base: HistoryEntry = { ...mockHistoryEntries[0], recordType: 'run', coveragePercent: null };

@@ -26,6 +26,7 @@ import { CppPreviewControls } from './CppPreviewControls';
 import { NaverOperationalMap } from './NaverOperationalMap';
 import { useVisionObservations } from '../visionObservations';
 import { VisionMapControls } from './VisionMapControls';
+import { useJetsonRoute } from '../jetsonRoute';
 
 const emptyDraftVertices: LngLat[] = [];
 const emptySessionRoute: LngLat[] = [];
@@ -92,6 +93,11 @@ export function MapViewMap() {
   const visionAvailable = !!storedWorkZone && !editingWorkZone && !sampleMode && zoneVersion != null;
   const vision = useVisionObservations(selectedRobotId, zoneVersion, visionEnabled && visionAvailable);
   const visibleVision = visionEnabled && visionAvailable && !vision.isError ? vision.data : undefined;
+  const [jetsonRouteEnabled, setJetsonRouteEnabled] = useState(false);
+  const zoneId = useZoneStore(state => selectedRobotId ? state.zoneIdsByRobotId[selectedRobotId] : null);
+  const routeAvailable = visionAvailable && zoneId != null && selectedRobotId != null
+    && !editingByRobotId[selectedRobotId] && !editingByRobotId[selectedRobotId + '::travel'];
+  const jetsonRoute = useJetsonRoute(selectedRobotId, zoneId, zoneVersion, jetsonRouteEnabled && routeAvailable);
   const displayedWorkZone = editingWorkZone
     ? closePolygonVertices(draftVertices)
     : area === 'travel' ? travelZone : storedWorkZone;
@@ -150,6 +156,7 @@ export function MapViewMap() {
         completedRoute={completedRoute}
         editing={editingWorkZone && mapReady}
         visionRegions={visibleVision?.regions}
+        jetsonRoute={jetsonRoute.path}
         onAddVertex={(position) => {
           if (selectedRobotId && useZoneStore.getState().mapReady) {
             addDraftVertex(scopeId!, position);
@@ -196,6 +203,25 @@ export function MapViewMap() {
           </div>
         ) : null}
         <CppPreviewControls preview={preview} />
+        <details className="cpp-preview-controls jetson-route-controls" name="map-tools">
+          <summary>Jetson 남은 경로</summary>
+          <div className="jetson-route-summary">
+            <label>
+              <input type="checkbox" checked={jetsonRouteEnabled} disabled={!routeAvailable}
+                onChange={event => setJetsonRouteEnabled(event.target.checked)} />
+              경로 표시
+            </label>
+            {routeAvailable && jetsonRouteEnabled && <p role="status">{jetsonRoute.label}</p>}
+          </div>
+          {!routeAvailable && <p>저장된 작업 구역을 불러오고 편집을 마친 뒤 조회할 수 있습니다.</p>}
+          {routeAvailable && jetsonRouteEnabled && <>
+            {jetsonRoute.preview && <p>무구동 미리보기{jetsonRoute.receivedAt && <>
+              {' · 최근 보고 '}<time dateTime={jetsonRoute.receivedAt}>{new Date(jetsonRoute.receivedAt)
+                .toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false })}</time>
+            </>}</p>}
+            {jetsonRoute.path && !mapReady && <p>배경 지도를 사용할 수 없어 경로 표시를 기다리고 있습니다.</p>}
+          </>}
+        </details>
         <VisionMapControls enabled={visionEnabled} onToggle={setVisionEnabled} data={visibleVision}
           loading={vision.isPending} error={vision.isError} available={visionAvailable} mapReady={mapReady}
           onNextHistory={vision.nextHistory} onLatestHistory={vision.latestHistory} />
@@ -227,6 +253,7 @@ export function MapViewMap() {
         </div>
       </div>
       <div className="map-legend" aria-label="지도 범례">
+        {jetsonRoute.path && mapReady && <span><i className="legend-line jetson" />Jetson 남은 경로 · 무구동 미리보기</span>}
         <span><i className="legend-line completed" />{sampleMode ? '샘플 완료 경로' : '세션 완료 경로'}</span>
         {preview.path.length ? <span><i className="legend-line planned" />CPP 예정 경로 · 시작 → 번호 → 끝</span> : sampleMode ? <span><i className="legend-line planned" />샘플 예정 경로</span> : null}
         <span><i className="legend-area" />작업 구역</span>
