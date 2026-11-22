@@ -66,10 +66,12 @@ public class JetsonRouteController {
     }
 
     @GetMapping("/latest")
-    @PreAuthorize("hasAuthority('robots:read')")
+    @PreAuthorize("hasAnyAuthority('robots:read','edge:work-zone:read')")
     public ResponseEntity<ApiResponse<Snapshot>> latest(@PathVariable String robotId,
                                                        @RequestParam(required = false) String workZoneId,
-                                                       @RequestParam(required = false) String workZoneVersion) {
+                                                       @RequestParam(required = false) String workZoneVersion,
+                                                       Authentication authentication) {
+        actor(robotId, authentication);
         long zoneId;
         int version;
         try {
