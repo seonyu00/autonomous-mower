@@ -128,7 +128,10 @@ public class TelemetryReceptionService {
                         ? edge.autonomyBlockReason() : null,
                 edge != null && !edge.stale() && edge.lastSeenAt() != null
                         && !edge.lastSeenAt().isAfter(now) && edge.lastSeenAt().isAfter(now.minusSeconds(6))
-                        ? edge.autonomyReady() : null
+                        ? edge.autonomyReady() : null,
+                edge != null && !delayed && !edge.stale() && "online".equals(connection)
+                        && ("autonomy-start-requested".equals(edge.edgeState()) || "autonomy-running".equals(edge.edgeState()))
+                        ? edge.autoMap() : null
         );
     }
 

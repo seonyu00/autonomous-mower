@@ -1,6 +1,7 @@
 package com.autonomousmower.realtime.dto;
 
 import java.time.Instant;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.autonomousmower.telemetry.dto.TelemetryReception;
 
 public record RobotStatusMessage(
@@ -14,10 +15,12 @@ public record RobotStatusMessage(
         TelemetryReception telemetryReception,
         String manualLockReason,
         String autonomyBlockReason,
-        Boolean autonomyReady
+        Boolean autonomyReady,
+        JsonNode autoMap
 ) {
     public RobotStatusMessage(String robotId, String connectionState, String mqttState, String wssState,
                              String edgeState, Instant lastSeenAt, boolean stale, TelemetryReception telemetryReception) {
-        this(robotId, connectionState, mqttState, wssState, edgeState, lastSeenAt, stale, telemetryReception, null, null, null);
+        this(robotId, connectionState, mqttState, wssState, edgeState, lastSeenAt, stale, telemetryReception,
+                null, null, null, null);
     }
 }

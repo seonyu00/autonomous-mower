@@ -95,6 +95,8 @@ class JetsonMowerClientNode(Node):
 
         self.create_timer(config.ros.telemetry_publish_period_seconds, self._publish_telemetry)
         self.create_timer(config.ros.status_publish_period_seconds, self._publish_status)
+        if config.ros.status_publish_period_seconds > 1:
+            self.create_timer(1, self._publish_active_auto_status)
         self.create_timer(0.1, self._check_manual_timeout)
         self.create_timer(0.1, self._poll_autonomy)
         if self._manual_serial is not None:
@@ -633,6 +635,10 @@ class JetsonMowerClientNode(Node):
         # TODO: 영상 송출 구현 후 카메라/WebRTC 상태를 추가한다.
         self._mqtt.publish_json(self._topics.telemetry, payload, qos=1)
 
+    def _publish_active_auto_status(self) -> None:
+        if self._autonomy.state in ("start-requested", "running"):
+            self._publish_status()
+
     def _publish_status(self) -> None:
         self._autonomy.poll()
         if self._emergency_active:
@@ -667,6 +673,14 @@ class JetsonMowerClientNode(Node):
             "manualLockReason": getattr(self._manual_serial, "lock_reason", None) if serial_state == "manual-serial-locked" else None,
             "stale": False,
         }
+        observation = self._autonomy_status
+        if (not self._emergency_active and self._autonomy.state in ("start-requested", "running")
+                and self._autonomy.owns_execution and self._autonomy_zone and observation
+                and isinstance(observation.value, dict) and 0 <= time.monotonic() - observation.received_at < 2):
+            from .cpp_live_map import live_map_frame
+            frame = live_map_frame(observation.value, self._autonomy.run_id, self._autonomy_zone, time.time_ns() // 1_000_000)
+            if frame is not None:
+                payload["autoMap"] = frame
         self._mqtt.publish_json(self._topics.status, payload, qos=1)
 
 

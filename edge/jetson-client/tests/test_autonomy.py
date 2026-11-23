@@ -443,7 +443,7 @@ class AutonomyTest(unittest.TestCase):
             authority = autonomy_authority.AutonomyAuthority("https://example.invalid", "test-only", "TEST-01", "cmd-1", 8)
             authority._opener = MagicMock()
             response = authority._opener.open.return_value.__enter__.return_value
-            response.read.return_value = b'{"success":true,"data":{"validForMs":2000}}'
+            response.read.return_value = b'{"success":true,"data":{"validForMs":4000}}'
             authority._poll()
             clock.monotonic.return_value = 11.25
             authority._opener.open.side_effect = TimeoutError
@@ -455,6 +455,8 @@ class AutonomyTest(unittest.TestCase):
             clock.monotonic.return_value = 12
             self.assertEqual(authority.status(), "valid")
             clock.monotonic.return_value = 13.75
+            self.assertEqual(authority.status(), "valid")
+            clock.monotonic.return_value = 15.75
             self.assertEqual(authority.status(), "lost")
 
     def test_web_runner_exit_before_start_allows_an_explicit_retry(self):

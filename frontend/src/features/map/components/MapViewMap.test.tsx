@@ -88,6 +88,42 @@ describe('MapViewMap', () => {
     expect(naverMapMock.props?.jetsonRoute).toBeUndefined();
   });
 
+  it('AUTO 경로와 장애물을 자동으로 표시하고 수신이 끊기면 지운다', () => {
+    envMock.naverMapClientId = 'test-client-id';
+    naverMapMock.failMessage = '';
+    useTelemetryStore.setState({ dataSource: 'real', connectionState: 'connected' });
+    useZoneStore.getState().setZone('MOWER-01', {
+      type: 'Polygon', coordinates: [[[127, 37], [127.001, 37], [127, 37.001], [127, 37]]],
+    }, 2, 3);
+    const path = [[127, 37], [127.001, 37]];
+    const obstacles = [{ kind: 'person', position: [127, 37] }];
+    const status = {
+      robotId: 'MOWER-01', connectionState: 'online', mqttState: 'connected', wssState: 'connected',
+      edgeState: 'autonomy-start-requested', lastSeenAt: new Date().toISOString(), stale: false,
+      autoMap: { runId: 'active-run', zoneId: 3, zoneVersion: 2, observedAt: new Date().toISOString(), path, obstacles },
+    } as const;
+    vi.useFakeTimers();
+    try {
+      render(<MapViewMap />);
+      act(() => useTelemetryStore.getState().upsertStatus(status));
+      expect(naverMapMock.props?.jetsonRoute).toEqual(path);
+      expect(naverMapMock.props?.autoObstacles).toEqual(obstacles);
+      expect(screen.getByText('AUTO 남은 경로')).toBeInTheDocument();
+      act(() => useTelemetryStore.getState().upsertStatus({ ...status, autoMap: { ...status.autoMap, zoneVersion: 1 } }));
+      expect(naverMapMock.props?.jetsonRoute).toBeUndefined();
+      act(() => useTelemetryStore.getState().upsertStatus(status));
+      act(() => vi.advanceTimersByTime(3100));
+      expect(naverMapMock.props?.jetsonRoute).toBeUndefined();
+      act(() => useTelemetryStore.getState().upsertStatus({ ...status,
+        autoMap: { ...status.autoMap, observedAt: new Date().toISOString() } }));
+      expect(naverMapMock.props?.jetsonRoute).toEqual(path);
+      act(() => useTelemetryStore.getState().upsertStatus({ ...status, edgeState: 'idle' }));
+      expect(naverMapMock.props?.autoObstacles).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('네이버 지도 초기화 실패 시 경고와 관제용 fallback layer를 표시한다', async () => {
     envMock.naverMapClientId = 'test-client-id';
     render(<MapViewMap />);

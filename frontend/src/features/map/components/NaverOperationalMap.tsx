@@ -9,6 +9,7 @@ import {
 } from '../mapDefaults';
 import { loadNaverMaps, subscribeNaverMapsAuthFailure } from '../naverMapsLoader';
 import { visionColors, visionPolygons, type VisionRegion } from '../visionObservations';
+import type { AutoObstacle } from '../autoMap';
 
 type NaverOperationalMapProps = {
   clientId: string;
@@ -27,6 +28,7 @@ type NaverOperationalMapProps = {
   editing: boolean;
   visionRegions?: VisionRegion[];
   jetsonRoute?: LngLat[];
+  autoObstacles?: AutoObstacle[];
   onAddVertex: (position: LngLat) => void;
   onMoveVertex: (index: number, position: LngLat) => void;
   onError: (message: string) => void;
@@ -48,6 +50,7 @@ export function NaverOperationalMap({
   editing,
   visionRegions,
   jetsonRoute,
+  autoObstacles,
   onAddVertex,
   onMoveVertex,
   onError,
@@ -68,6 +71,17 @@ export function NaverOperationalMap({
         clickable: false, zIndex: 3 })));
     return () => overlays.forEach(overlay => overlay.setMap(null));
   }, [mapsApi, visionRegions, editing]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapsApi || !map || editing || !autoObstacles) return;
+    const overlays = autoObstacles.map(obstacle => obstacle.kind === 'person'
+      ? new mapsApi.Marker({ map, position: toLatLng(mapsApi, obstacle.position), title: '비전 관측 · 사람', zIndex: 20 })
+      : new mapsApi.Polygon({ map, paths: [obstacle.ring.map(point => toLatLng(mapsApi, point))],
+        fillColor: visionColors.NOT_MOWABLE, fillOpacity: 0.35,
+        strokeColor: visionColors.NOT_MOWABLE, strokeWeight: 2, clickable: false, zIndex: 3 }));
+    return () => overlays.forEach(overlay => overlay.setMap(null));
+  }, [mapsApi, autoObstacles, editing]);
 
   useEffect(() => {
     onErrorRef.current = onError;

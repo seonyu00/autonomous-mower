@@ -122,7 +122,7 @@ public class ControlStateStore {
             refreshExpiration(now);
             if (!hasAutonomyAuthority(commandId, version, now)) return 0;
             if (!autonomyBrowserConfirmed) return -1;
-            return Math.min(2_000, Math.min(Duration.between(now, expiresAt).toMillis(),
+            return Math.min(4_000, Math.min(Duration.between(now, expiresAt).toMillis(),
                     Duration.between(now, autonomyBrowserDeadline).toMillis()));
         }
 
@@ -130,7 +130,7 @@ public class ControlStateStore {
             refreshExpiration(now);
             if (!owner.equals(controlOwner) || !hasAutonomyAuthority(commandId, version, now)) return false;
             autonomyBrowserConfirmed = true;
-            autonomyBrowserDeadline = now.plusSeconds(3);
+            autonomyBrowserDeadline = now.plusSeconds(6);
             return true;
         }
 

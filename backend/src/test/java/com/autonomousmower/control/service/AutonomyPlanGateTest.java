@@ -91,8 +91,10 @@ class AutonomyPlanGateTest {
         state.recordAutonomyCommand("cmd-1", now);
         assertThat(state.renewAutonomyBrowser("cmd-1", auto.lockVersion(), "other", now)).isFalse();
         assertThat(state.renewAutonomyBrowser("cmd-1", auto.lockVersion(), "operator", now)).isTrue();
-        assertThat(state.autonomyAuthorityMillis("cmd-1", auto.lockVersion(), now.plusSeconds(3))).isZero();
-        assertThat(state.renewAutonomyBrowser("cmd-1", auto.lockVersion(), "operator", now.plusSeconds(4))).isFalse();
+        assertThat(state.autonomyAuthorityMillis("cmd-1", auto.lockVersion(), now)).isEqualTo(4_000);
+        assertThat(state.autonomyAuthorityMillis("cmd-1", auto.lockVersion(), now.plusSeconds(4))).isEqualTo(2_000);
+        assertThat(state.autonomyAuthorityMillis("cmd-1", auto.lockVersion(), now.plusSeconds(6))).isZero();
+        assertThat(state.renewAutonomyBrowser("cmd-1", auto.lockVersion(), "operator", now.plusSeconds(6))).isFalse();
         assertThat(state.snapshot().lockState()).isEqualTo("held");
     }
 

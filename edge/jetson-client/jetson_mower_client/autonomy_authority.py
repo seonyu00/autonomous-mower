@@ -9,7 +9,8 @@ from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import Request, build_opener
 
 class AutonomyAuthority:
-    MAX_VALID_MS = 2_000
+    MAX_VALID_MS = 4_000
+    INITIAL_TIMEOUT_SECONDS = 2
     POLL_SECONDS = 0.25
 
     def __init__(self, base_url: str, token: str, robot_id: str, command_id: str, lock_version: int):
@@ -25,7 +26,7 @@ class AutonomyAuthority:
         self._opener = build_opener(NoRedirect())
         self._lock = threading.Lock()
         self._stop = threading.Event()
-        self._valid_until = time.monotonic() + self.MAX_VALID_MS / 1000
+        self._valid_until = time.monotonic() + self.INITIAL_TIMEOUT_SECONDS
         self._confirmed = False
         self._last_check = "awaiting-first-response"
         self._last_check_ms = 0

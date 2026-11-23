@@ -39,6 +39,7 @@ export type RobotStatus = {
   edgeState: string;
   manualLockReason?: string | null;
   autonomyReady?: boolean | null;
+  autoMap?: unknown;
   lastSeenAt: string | null;
   telemetryReception?: TelemetryReception;
   stale: boolean;

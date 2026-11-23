@@ -8,6 +8,7 @@ import com.autonomousmower.mqtt.dto.MqttStatusPayload;
 import com.autonomousmower.mqtt.service.TelemetrySpool;
 import com.autonomousmower.realtime.dto.RobotStatusMessage;
 import com.autonomousmower.realtime.service.RealtimePublisher;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import java.time.Clock;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +28,19 @@ class TelemetryReceptionServiceTest {
     }
 
     private final Instant start = Instant.parse("2026-09-10T00:00:00Z");
+
+    @Test
+    void forwardsAutoMapOnlyDuringAnActiveSession() {
+        var map = JsonNodeFactory.instance.objectNode().put("runId", "test-run");
+        service.recordStatus(new MqttStatusPayload("A", "online", "connected", "autonomy-start-requested",
+                start, false, null, null, true, map));
+        service.recordStatus(new MqttStatusPayload("A", "online", "connected", "idle",
+                start, false, null, null, false, map));
+        var captor = ArgumentCaptor.forClass(RobotStatusMessage.class);
+        verify(publisher, times(2)).publishStatus(captor.capture());
+        assertThat(captor.getAllValues().get(0).autoMap()).isEqualTo(map);
+        assertThat(captor.getAllValues().get(1).autoMap()).isNull();
+    }
 
     @Test
     void forwardsFreshAutonomyBlockReasonButIgnoresExpiredReport() {

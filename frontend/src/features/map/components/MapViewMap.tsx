@@ -26,6 +26,7 @@ import { useVisionObservations } from '../visionObservations';
 import { VisionMapControls } from './VisionMapControls';
 import { useJetsonRoute } from '../jetsonRoute';
 import { JetsonPreviewRunControls } from './JetsonPreviewRunControls';
+import { useAutoMap } from '../autoMap';
 
 const emptyDraftVertices: LngLat[] = [];
 const emptySessionRoute: LngLat[] = [];
@@ -41,6 +42,8 @@ export function MapViewMap() {
     selectedRobotId ? state.telemetryByRobotId[selectedRobotId] : undefined,
   );
   const dataSource = useTelemetryStore((state) => state.dataSource);
+  const robotStatus = useTelemetryStore(state => selectedRobotId ? state.statusByRobotId[selectedRobotId] : undefined);
+  const realtimeConnection = useTelemetryStore(state => state.connectionState);
   const area = useZoneStore((state) => state.selectedArea);
   const scopeId = selectedRobotId ? selectedRobotId + (area === 'travel' ? '::travel' : '') : null;
   const travelZone = selectedRobotId ? useZoneStore.getState().zonesByRobotId[selectedRobotId + '::travel'] : null;
@@ -98,6 +101,7 @@ export function MapViewMap() {
     && !editingByRobotId[selectedRobotId] && !editingByRobotId[selectedRobotId + '::travel'];
   const showJetsonRoute = routeAvailable && (jetsonRouteEnabled || !!previewSessionId);
   const jetsonRoute = useJetsonRoute(selectedRobotId, zoneId, zoneVersion, showJetsonRoute, previewSessionId);
+  const autoMap = useAutoMap(robotStatus, zoneId, zoneVersion, routeAvailable && realtimeConnection === 'connected');
   const displayedWorkZone = editingWorkZone
     ? closePolygonVertices(draftVertices)
     : area === 'travel' ? travelZone : storedWorkZone;
@@ -153,8 +157,9 @@ export function MapViewMap() {
         plannedRoute={plannedRoute}
         completedRoute={completedRoute}
         editing={editingWorkZone && mapReady}
-        visionRegions={visibleVision?.regions}
-        jetsonRoute={jetsonRoute.path}
+        visionRegions={autoMap ? undefined : visibleVision?.regions}
+        jetsonRoute={autoMap ? autoMap.path : jetsonRoute.path}
+        autoObstacles={autoMap?.obstacles}
         onAddVertex={(position) => {
           if (selectedRobotId && useZoneStore.getState().mapReady) {
             addDraftVertex(scopeId!, position);
@@ -250,7 +255,9 @@ export function MapViewMap() {
         </div>
       </div>
       <div className="map-legend" aria-label="지도 범례">
-        {jetsonRoute.path && mapReady && <span><i className="legend-line jetson" />Jetson 남은 경로 · 무구동 미리보기</span>}
+        {autoMap && mapReady && autoMap.path.length > 1 && <span><i className="legend-line jetson" />AUTO 남은 경로</span>}
+        {autoMap && mapReady && autoMap.obstacles.length > 0 && <span>비전 장애물 {autoMap.obstacles.length}건</span>}
+        {!autoMap && jetsonRoute.path && mapReady && <span><i className="legend-line jetson" />Jetson 남은 경로 · 무구동 미리보기</span>}
         <span><i className="legend-line completed" />{sampleMode ? '샘플 완료 경로' : '세션 완료 경로'}</span>
         {sampleMode && <span><i className="legend-line planned" />샘플 예정 경로</span>}
         <span><i className="legend-area" />작업 구역</span>
