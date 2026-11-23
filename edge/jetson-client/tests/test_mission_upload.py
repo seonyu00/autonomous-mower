@@ -9,7 +9,9 @@ from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError
 from uuid import uuid4
 
-from jetson_mower_client.mission_upload import pack, queue_lifecycle, upload_pending
+from jetson_mower_client.mission_upload import (
+    GATEWAY_EXITED, GATEWAY_MANAGED, LOG_END_UNCONFIRMED, pack, queue_lifecycle, upload_pending,
+)
 
 
 class MissionUploadTest(unittest.TestCase):
@@ -54,6 +56,42 @@ class MissionUploadTest(unittest.TestCase):
                 self.assertEqual(json.loads(gzip.decompress(replay.data).splitlines()[0])["server_run_id"], str(run_id))
                 self.assertEqual(source.read_bytes(), original)
                 self.assertTrue((folder / ".uploaded").is_file())
+
+    def test_gateway_session_waits_for_group_exit_then_closes_history_once(self):
+        with tempfile.TemporaryDirectory() as root:
+            spool, run_id = Path(root), uuid4()
+            folder = spool / str(run_id)
+            self.make_session(folder)
+            (folder / GATEWAY_MANAGED).touch()
+            with patch("jetson_mower_client.mission_upload.build_opener") as opener:
+                send = opener.return_value.open
+                send.return_value.__enter__.return_value.status = 204
+                upload_pending(spool, "https://test", "TEST-01", "test-token")
+                send.assert_not_called()
+                (folder / GATEWAY_EXITED).touch()
+                upload_pending(spool, "https://test", "TEST-01", "test-token")
+                physical_end = {"runId": str(run_id), "id": str(uuid4()), "kind": "end",
+                                "signalAt": "2026-11-24T12:00:00Z"}
+                queue_lifecycle(spool, physical_end)
+                upload_pending(spool, "https://test", "TEST-01", "test-token")
+                self.assertEqual(send.call_count, 3)
+                event = (folder / ".lifecycle-end.json").read_bytes()
+                self.assertEqual(send.call_args_list[1].args[0].data, event)
+                self.assertNotEqual(json.loads(event)["id"], physical_end["id"])
+                self.assertFalse((folder / ".confirmed-end.json").exists())
+
+    def test_gateway_session_exposes_unconfirmed_summary_without_sending_events(self):
+        with tempfile.TemporaryDirectory() as root:
+            spool = Path(root)
+            folder = spool / str(uuid4())
+            source, _, _ = self.make_session(folder)
+            source.with_name("summary.json").write_text("{}")
+            (folder / GATEWAY_MANAGED).touch()
+            (folder / GATEWAY_EXITED).touch()
+            with patch("jetson_mower_client.mission_upload.build_opener") as opener:
+                upload_pending(spool, "https://test", "TEST-01", "test-token")
+                opener.return_value.open.assert_not_called()
+            self.assertTrue((folder / LOG_END_UNCONFIRMED).is_file())
 
     def test_skips_dry_unarmed_unclosed_and_mismatched_managed_sessions(self):
         cases = ("preview", "no permit", "no summary", "unclosed", "wrong zone", "wrong end")

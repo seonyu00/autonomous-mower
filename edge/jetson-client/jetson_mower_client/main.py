@@ -651,6 +651,9 @@ class JetsonMowerClientNode(Node):
             serial_state = "manual-preparing"
         if self._autonomy.run_id is not None or self._autonomy.state in {"start-failed", "stop-unconfirmed", "authority-lost"}:
             serial_state = "autonomy-" + self._autonomy.state
+        history_end_state = self._autonomy.history_end_state()
+        if history_end_state is not None and self._mode == "idle":
+            serial_state = "autonomy-" + history_end_state
         payload = {
             "robotId": self._config.robot_id,
             "connectionState": "degraded" if self._emergency_active else "online",

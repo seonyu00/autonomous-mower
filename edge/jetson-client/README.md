@@ -31,6 +31,8 @@ python -m jetson_mower_client.r41_web replay-preview-routes --robot-id <ROBOT_ID
 
 설치 시 인증된 관리자 계정으로 `POST /api/robots/<ROBOT_ID>/edge-work-zone-tokens`에 `{"label":"작업 이력 업로더","purpose":"mission-upload"}`를 보내 해당 로봇의 업로드 전용 토큰을 발급한다. `~/.config/mower-mission-upload.env`를 권한 600으로 만들고 `MOWER_MISSION_API_BASE_URL`, `MOWER_MISSION_ROBOT_ID`, `MOWER_MISSION_UPLOAD_TOKEN`과 게이트웨이와 같은 `MOWER_MISSION_SPOOL` 절대 경로를 지정한다. 사용자 서비스 `mower-mission-upload.service`의 `WorkingDirectory`는 배포한 Jetson 클라이언트 폴더에 맞춰 적용한다. 단독 실행 시에는 같은 환경에서 `python -m jetson_mower_client.mission_upload --api-base-url <HTTPS_API> --robot-id <ROBOT_ID>`를 사용한다. 원본은 로컬에 보존하며, 실패 시 같은 신호 UUID로 다시 시도하고 성공한 기록은 재전송하지 않는다.
 
+웹 실행의 로그 마감은 게이트웨이가 해당 실행 그룹의 종료를 확인한 뒤 업로더에 넘긴다. 업로더는 같은 작업 폴더의 최초 구동 허용 기록, 작업 구역, `run_end`와 `summary.json`을 검증하고 시작·종료 이벤트와 재생 로그를 등록한다. 운영자가 중단한 경우 남은 경로와 관계없이 작업 이력을 종료한다. 이 이벤트는 주행 세션의 종료를 뜻하며 실제 장비 상태에 사용하는 `.confirmed-end.json`은 별도로 검증한다.
+
 r60 무구동 상태를 격리 관제 서버에 전달하려면 서버에서 `APP_JETSON_ROUTE_PREVIEW_WRITE_ENABLED=true`를 설정하고, Jetson의 `MOWER_PREVIEW_TOKEN`에 해당 서버의 조회·제어 쓰기 권한 토큰을 설정한다. 같은 작업 구역이 저장된 시험 로봇을 대상으로 `edge/jetson-client`에서 실행한다.
 
 ```bash
@@ -529,6 +531,8 @@ python3 -m jetson_mower_client.preview_run --api-base-url <HTTPS_API> --robot-id
 r60의 STM32 상태는 리모컨 개입과 통신 상태를 제공한다. 궤도·날의 실측 상태를 확인해 이벤트를 발생시키는 어댑터는 미연결이다. `run_end`는 로그 마감에 사용한다. 실제 작업이 확인됐거나 구동 허용 여부가 불명확하면 프로세스 종료 후에도 별도 종료 확인을 기다린다.
 
 웹 AUTO의 시작 프레임 전송 후 실제 작업이 확인되기 전에 감독 실행기를 정지한 경우, 다음 AUTO 요청에서 이전 프로세스 그룹이 사라졌는지 검사한다. 해당 작업의 구역·시각, `run_end`와 `summary.json`이 일치하고 전체 판단에 구동 허용이 없으며 출력 기록이 모두 0일 때만 이전 준비 세션을 정리한다. 확인 파일이나 기록이 모호하면 재요청을 거절한다. 이 절차는 작업 이력이나 물리 정지 확인을 생성하지 않으며, 새 실행은 새 요청의 권한과 장비 준비 조건을 다시 확인한다.
+
+실제 작업의 종료 확인은 이전 실행 프로세스 그룹이 사라지고 같은 작업의 시작·종료 기록이 검증된 뒤 적용한다. 작업 정지를 요청한 뒤에는 그 시점보다 오래된 종료 확인을 거절한다. 어댑터의 시작·종료 확인이 실행기 종료 뒤에 도착해도 작업 UUID와 시각 순서를 확인해 기존 작업을 마감할 수 있다. 현재 r63 브리지의 리모컨 개입·응답 신선도 보고에는 궤도나 칼날의 실측 정지 신호가 없다. 실제 장비 상태를 확인하는 발행자가 연결되기 전에는 웹 정지 ACK나 모터 명령값으로 종료 확인을 생성하지 않는다.
 
 stop, E-Stop과 다른 모드·수동 요청은 관리 중인 프로세스의 종료를 요청한다. MQTT 연결 해제를 감지하면 기존 AUTO 준비를 무효화하고 준비 중이거나 실행 중인 자식도 종료한다. POSIX에서는 별도 프로세스 그룹을 생성해 그룹에 종료 신호를 보내고, Windows 모의 시험에서는 직접 실행한 프로세스를 종료한다. E-Stop의 기존 출력과 로컬 비상 상태 설정은 프로세스 정리보다 먼저 수행한다. 프로세스 종료는 기체·날·현장 리모컨의 물리 정지 확인이 아니다. 실제 통신 단절 응답 시간과 물리 정지는 현장 인터록과 STM32를 포함해 별도로 검증한다.
 

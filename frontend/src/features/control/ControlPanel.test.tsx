@@ -32,6 +32,22 @@ describe('ControlPanel compact dock', () => {
   });
 
   it.each([
+    ['autonomy-ending', '작업 종료 중'],
+    ['autonomy-history-end-pending', '실행 종료 · 작업 로그 확인 대기'],
+    ['autonomy-history-end-queued', '작업 종료 이벤트 전송 대기'],
+    ['autonomy-history-end-sent', '작업 이력 종료 · 장비 상태는 별도 확인'],
+    ['autonomy-history-end-unconfirmed', '작업 이력 종료 확인 불가'],
+  ])('종료 처리 상태 %s를 제어 화면에 표시한다', (edgeState, label) => {
+    holdControl({ mode: 'idle' });
+    useTelemetryStore.getState().upsertStatus({
+      robotId: TEST_ROBOT_ID, connectionState: 'online', mqttState: 'connected', wssState: 'connected',
+      edgeState, lastSeenAt: new Date().toISOString(), stale: false,
+    });
+    render(<AuthProvider><ControlPanel compact /></AuthProvider>);
+    expect(screen.getByText(label)).toBeVisible();
+  });
+
+  it.each([
     ['edge-ack', '장비 수신 확인 · 실행 완료 미확인'],
     ['completed', '장비 실행 완료 응답 확인'],
     ['failed', '명령 실패'],

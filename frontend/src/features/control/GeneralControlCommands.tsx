@@ -21,6 +21,14 @@ const mowerActions: Array<{ label: string; action: MowerAttachmentAction }> = [
   { label: '하강', action: 'lower' },
 ];
 
+const historyEndLabels: Record<string, string> = {
+  'autonomy-ending': '작업 종료 중',
+  'autonomy-history-end-pending': '실행 종료 · 작업 로그 확인 대기',
+  'autonomy-history-end-unconfirmed': '작업 이력 종료 확인 불가',
+  'autonomy-history-end-queued': '작업 종료 이벤트 전송 대기',
+  'autonomy-history-end-sent': '작업 이력 종료 · 장비 상태는 별도 확인',
+};
+
 type GeneralControlCommandsProps = {
   compact?: boolean;
 };
@@ -126,6 +134,7 @@ export function GeneralControlCommands({ compact = false }: GeneralControlComman
         </div>
         {autoActive && <p role="status">{autoState === 'autonomy-awaiting-start' ? 'AUTO 준비 중'
           : autoState === 'autonomy-start-requested' ? 'AUTO 시작 신호 전송 · 구동 확인 대기' : 'AUTO 시작 확인'}</p>}
+        {autoState && historyEndLabels[autoState] && <p role="status">{historyEndLabels[autoState]}</p>}
       </div>
 
       <div className="command-section attachment-control" aria-label="예초 장치 제어" aria-describedby={compact && disabledReason ? disabledReasonId : undefined}>

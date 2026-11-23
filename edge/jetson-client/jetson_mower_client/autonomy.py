@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from .mission_upload import MAX_UPLOAD_BYTES, pack
+from .mission_upload import GATEWAY_EXITED, GATEWAY_MANAGED, LOG_END_UNCONFIRMED, MAX_UPLOAD_BYTES, pack
 
 
 class AutonomyExecution:
@@ -27,9 +27,11 @@ class AutonomyExecution:
         self.started = False
         self._last_at = None
         self._process_group = None
+        self._stopped_process_group: int | None = None
         self._stopped_web_group: int | None = None
         self._confirmation_dir: Path | None = None
         self._launched_at: datetime | None = None
+        self._stop_requested_at: datetime | None = None
         self._lock = threading.RLock()
         self._stdout_buffer = b""
         self._start_permitted = False
@@ -89,6 +91,9 @@ class AutonomyExecution:
                 self.state = "stop-unconfirmed"
                 return "autonomy-stop-unconfirmed"
             try:
+                if robot_id is not None:
+                    confirmation_dir.mkdir(mode=0o700, parents=True)
+                    (confirmation_dir / GATEWAY_MANAGED).touch()
                 launched_at = datetime.now(timezone.utc)
                 self.process = subprocess.Popen(
                     command, shell=False, stdin=subprocess.PIPE,
@@ -102,7 +107,9 @@ class AutonomyExecution:
             self._confirmation_dir = confirmation_dir
             self._launched_at = launched_at
             self._process_group = self.process.pid if os.name == "posix" else None
+            self._stopped_process_group = None
             self._stopped_web_group = None
+            self._stop_requested_at = None
             self._last_at = None
             self._stdout_buffer = b""
             # 웹 요청은 이 실행에서 새로 수신한 준비 입력을 기다린다.
@@ -132,28 +139,67 @@ class AutonomyExecution:
             self._relay_supervision_frames()
             if self.run_id is None or self._confirmation_dir is None:
                 return
-            kind = "end" if self.started else "start"
-            if kind == "start" and self.process is None:
-                return
-            path = self._confirmation_dir / f".confirmed-{kind}.json"
-            try:
-                with path.open("rb") as stream:
-                    raw = stream.read(4097)
-            except FileNotFoundError:
-                return
-            if len(raw) > 4096:
-                raise ValueError("작업 확인 이벤트가 너무 큽니다.")
-            event = json.loads(raw)
-            if (not isinstance(event, dict) or event.get("runId") != self.run_id
-                    or event.get("kind") != kind or not isinstance(event.get("signalAt"), str)):
-                raise ValueError("작업 확인 이벤트가 현재 실행과 일치하지 않습니다.")
-            stamp = datetime.fromisoformat(event["signalAt"].replace("Z", "+00:00"))
-            if stamp.tzinfo is None or not self._launched_at <= stamp <= datetime.now(timezone.utc):
-                raise ValueError("작업 확인 이벤트의 시각이 유효하지 않습니다.")
-            if kind == "start":
-                self.confirm_started(self.run_id, event["signalAt"])
-            else:
-                self.confirm_ended(self.run_id, event["signalAt"])
+            ended = self.process is None and self._previous_group_gone()
+            if ended:
+                self._handoff_closed_log()
+            ended_at = self._read_confirmation("end") if ended else None
+            if not self.started:
+                # 프로세스가 먼저 종료되면 같은 작업의 시작·종료 확인을 함께 기다린다.
+                if self.process is None and ended_at is None:
+                    return
+                started_at = self._read_confirmation("start")
+                if started_at is None:
+                    return
+                if ended_at is not None and ended_at < started_at:
+                    raise ValueError("작업 시작과 종료 확인의 시각 순서가 올바르지 않습니다.")
+                self._emit("start", started_at.isoformat())
+                self.started = True
+                if self.process is not None:
+                    self.state = "running"
+            if ended_at is not None:
+                self.confirm_ended(self.run_id, ended_at.isoformat())
+
+    def _handoff_closed_log(self) -> None:
+        folder = self._confirmation_dir
+        if (folder / GATEWAY_MANAGED).is_file() and not (folder / GATEWAY_EXITED).is_file():
+            (folder / GATEWAY_EXITED).touch()
+
+    def history_end_state(self) -> str | None:
+        folder = self._confirmation_dir
+        if (folder is None or self.state == "idle" or self._stop_requested_at is None
+                or not (folder / GATEWAY_MANAGED).is_file()):
+            return None
+        if (folder / ".lifecycle-end.sent").is_file():
+            return "history-end-sent"
+        if (folder / ".lifecycle-end.json").is_file():
+            return "history-end-queued"
+        if self.state == "stop-unconfirmed" or (folder / LOG_END_UNCONFIRMED).is_file():
+            return "history-end-unconfirmed"
+        if not (folder / GATEWAY_EXITED).is_file():
+            if (datetime.now(timezone.utc) - self._stop_requested_at).total_seconds() > 5:
+                return "history-end-unconfirmed"
+            return "ending"
+        return "history-end-pending"
+
+    def _read_confirmation(self, kind: str) -> datetime | None:
+        path = self._confirmation_dir / f".confirmed-{kind}.json"
+        try:
+            with path.open("rb") as stream:
+                raw = stream.read(4097)
+        except FileNotFoundError:
+            return None
+        if len(raw) > 4096:
+            raise ValueError("작업 확인 이벤트가 너무 큽니다.")
+        event = json.loads(raw)
+        if (not isinstance(event, dict) or event.get("runId") != self.run_id
+                or event.get("kind") != kind or not isinstance(event.get("signalAt"), str)):
+            raise ValueError("작업 확인 이벤트가 현재 실행과 일치하지 않습니다.")
+        at = event["signalAt"]
+        stamp = datetime.fromisoformat(at.replace("Z", "+00:00"))
+        if (stamp.tzinfo is None or not self._launched_at <= stamp <= datetime.now(timezone.utc)
+                or (kind == "end" and self._stop_requested_at is not None and stamp < self._stop_requested_at)):
+            raise ValueError("작업 확인 이벤트의 시각이 유효하지 않습니다.")
+        return stamp
 
     def confirm_started(self, run_id: str, at: str) -> None:
         with self._lock:
@@ -178,9 +224,14 @@ class AutonomyExecution:
         with self._lock:
             if run_id != self.run_id or not self.started:
                 raise ValueError("시작이 확인된 작업이 아닙니다.")
+            self.poll()
+            if self.process is not None or not self._previous_group_gone():
+                raise ValueError("이전 작업 프로세스가 종료되지 않았습니다.")
             self._emit("end", at)
             self.started = False
             self.run_id = None
+            self._process_group = None
+            self._stopped_process_group = None
             self.state = "end-confirmed"
 
     def poll(self) -> None:
@@ -235,6 +286,8 @@ class AutonomyExecution:
             self._start_permitted = False
             cancelled_before_start = self._web_supervised and not self._start_sent and not self.started
             if self.process is not None or self._process_group is not None:
+                if self.run_id is not None and self._stop_requested_at is None:
+                    self._stop_requested_at = datetime.now(timezone.utc)
                 try:
                     if os.name == "posix":
                         os.killpg(self._process_group, signal.SIGTERM)
@@ -252,6 +305,7 @@ class AutonomyExecution:
                     self.process.wait(timeout=2)
                 if self._web_supervised and self._start_sent and not self.started:
                     self._stopped_web_group = self._process_group
+                self._stopped_process_group = self._process_group
                 self._close_process_pipes()
                 self._process_group = None
                 self._start_sent = False
@@ -260,6 +314,18 @@ class AutonomyExecution:
                 self.run_id = None
                 self.state = "idle"
             self._web_supervised = False
+
+    def _previous_group_gone(self) -> bool:
+        group = self._process_group if self._process_group is not None else self._stopped_process_group
+        if group is None:
+            return True
+        try:
+            os.killpg(group, 0)
+        except ProcessLookupError:
+            return True
+        except OSError:
+            pass
+        return False
 
     def _verify_unarmed_exit(self) -> bool:
         """새 요청에서만 준비 중 종료를 확인하며 작업 이력 신호를 만들지 않는다."""

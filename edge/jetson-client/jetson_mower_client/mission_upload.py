@@ -18,6 +18,9 @@ from uuid import UUID, uuid5
 MAX_UPLOAD_BYTES = 16 * 1024 * 1024
 ZONE_FIELDS = ("work_zone_id", "work_zone_version", "polygon")
 SESSION_END_REASONS = {"operator_quit", "terminal_closed", "terminal_disconnected", "terminal_interrupted"}
+GATEWAY_MANAGED = ".gateway-managed"
+GATEWAY_EXITED = ".gateway-exited"
+LOG_END_UNCONFIRMED = ".log-end-unconfirmed"
 
 
 @dataclass(frozen=True)
@@ -50,6 +53,9 @@ def queue_lifecycle(spool: Path, signal: dict) -> None:
             os.link(temporary, target)
         except FileExistsError:
             existing = json.loads(target.read_bytes())
+            # 로그로 먼저 마감한 작업에는 뒤늦은 장비 확인으로 두 번째 이력 이벤트를 보내지 않는다.
+            if existing["id"] == str(uuid5(run_id, f"cpp-session-{kind}")):
+                return
             if any(existing[key] != body[key] for key in ("kind", "signalAt")):
                 raise ValueError("이미 기록된 작업 신호와 시각이 다릅니다.")
     finally:
@@ -154,8 +160,8 @@ def upload_pending(spool: Path, base: str, robot: str, token: str) -> None:
             if response.status != 204:
                 raise ValueError(f"예상하지 못한 응답 상태 {response.status}")
 
-    def send_lifecycle(folder, path):
-        for kind in ("start", "end"):
+    def send_lifecycle(folder, path, kinds=("start", "end")):
+        for kind in kinds:
             event = folder / f".lifecycle-{kind}.json"
             sent = event.with_suffix(".sent")
             if event.is_file() and not sent.exists():
@@ -172,14 +178,25 @@ def upload_pending(spool: Path, base: str, robot: str, token: str) -> None:
         marker = folder / ".uploaded"
         if marker.exists():
             continue
+        managed = (folder / GATEWAY_MANAGED).is_file()
+        exited = (folder / GATEWAY_EXITED).is_file()
+        checking_log = False
         try:
             path = f"{base}/api/history/runs/{run_id}"
-            send_lifecycle(folder, path)
+            send_lifecycle(folder, path, ("start",) if managed else ("start", "end"))
+            if managed and not exited:
+                continue
+            checking_log = managed
             sources = list(folder.glob("session.*/mission-*/mission.jsonl"))
             if len(sources) != 1 or not sources[0].with_name("summary.json").is_file():
+                if managed:
+                    raise ValueError("실행이 종료됐지만 마감된 미션 로그가 하나로 확인되지 않습니다.")
                 continue
             source = sources[0]
             zone_path = folder / "requested-work-zone.json"
+            if managed and any(p.resolve() != folder.resolve() / p.relative_to(folder)
+                               for p in (source, source.with_name("summary.json"), zone_path)):
+                raise ValueError("작업 폴더 외부의 로그는 마감할 수 없습니다.")
             kinds = ("start", "end")
             signal_ids = {kind: str(uuid5(run_id, f"cpp-session-{kind}")) for kind in kinds}
             explicit_confirmation = False
@@ -189,20 +206,38 @@ def upload_pending(spool: Path, base: str, robot: str, token: str) -> None:
                         or event.is_file() and json.loads(event.read_bytes())["id"] != signal_ids[kind]):
                     explicit_confirmation = True
                     break
-            zone = json.loads(zone_path.read_bytes()) if zone_path.is_file() and not explicit_confirmation else None
-            if zone_path.is_file() and not explicit_confirmation and not isinstance(zone, dict):
+            validate_managed_log = managed or (zone_path.is_file() and not explicit_confirmation)
+            zone = json.loads(zone_path.read_bytes()) if validate_managed_log else None
+            if validate_managed_log and not isinstance(zone, dict):
                 raise ValueError("웹에서 준비한 작업 구역의 형식이 다릅니다.")
             archive = pack(source, run_id, requested_zone=zone)
             if archive is None:
+                if managed:
+                    raise ValueError("구동 허용과 로그 마감이 확인된 세션이 아닙니다.")
                 continue
             if archive.session_times is not None:
+                if managed:
+                    start_event = folder / ".lifecycle-start.json"
+                    if start_event.is_file() and not (folder / ".lifecycle-end.json").is_file():
+                        start_at = datetime.fromisoformat(json.loads(start_event.read_bytes())["signalAt"])
+                        end_at = datetime.fromtimestamp(archive.session_times[1] / 1000, timezone.utc)
+                        if start_at.tzinfo is None or start_at > end_at:
+                            raise ValueError("작업 시작 보고가 로그 종료보다 늦습니다.")
                 for kind, stamp in zip(kinds, archive.session_times):
+                    if (folder / f".lifecycle-{kind}.json").is_file():
+                        continue
                     at = datetime.fromtimestamp(stamp / 1000, timezone.utc).isoformat(timespec="milliseconds")
                     queue_lifecycle(spool, {"runId": str(run_id), "id": signal_ids[kind], "kind": kind, "signalAt": at})
+                checking_log = False
                 send_lifecycle(folder, path)
             send(f"{path}/replay?{query}", archive.data, "application/gzip")
             marker.touch(exist_ok=True)
         except (OSError, ValueError, KeyError, TypeError) as error:
+            if checking_log:
+                try:
+                    (folder / LOG_END_UNCONFIRMED).touch()
+                except OSError as marker_error:
+                    print(f"작업 {run_id} 종료 상태 기록 보류: {marker_error}", flush=True)
             print(f"작업 {run_id} 업로드 보류: {error}", flush=True)
 
 

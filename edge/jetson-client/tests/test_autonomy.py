@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 from jetson_mower_client.autonomy import AutonomyExecution
 from jetson_mower_client import autonomy_authority
 from jetson_mower_client.mission_confirmation import publish_confirmation
-from jetson_mower_client.mission_upload import queue_lifecycle
+from jetson_mower_client.mission_upload import GATEWAY_EXITED, GATEWAY_MANAGED, queue_lifecycle
 from jetson_mower_client.config import _autonomy_command
 from jetson_mower_client.manual_serial_session import ManualSerialSession
 
@@ -41,6 +41,25 @@ def load_client():
 
 
 class AutonomyTest(unittest.TestCase):
+    def test_hands_off_closed_group_without_confirming_physical_stop(self):
+        with tempfile.TemporaryDirectory() as root:
+            folder = Path(root)
+            (folder / GATEWAY_MANAGED).touch()
+            execution = AutonomyExecution()
+            execution.run_id = "test-run"
+            execution._confirmation_dir = folder
+            execution._stop_requested_at = datetime.now(timezone.utc)
+            execution.state = "end-unconfirmed"
+            with patch.object(execution, "_previous_group_gone", side_effect=[False, True]):
+                execution.poll_confirmations()
+                self.assertFalse((folder / GATEWAY_EXITED).exists())
+                self.assertEqual(execution.history_end_state(), "ending")
+                execution.poll_confirmations()
+            self.assertTrue((folder / GATEWAY_EXITED).is_file())
+            self.assertEqual(execution.history_end_state(), "history-end-pending")
+            self.assertEqual(execution.request_start(True), "autonomy-end-unconfirmed")
+            self.assertFalse((folder / ".confirmed-end.json").exists())
+
     def test_main_cleans_up_after_external_shutdown_or_interrupt(self):
         client = load_client()
         for exception in (client.ExternalShutdownException(), KeyboardInterrupt()):
@@ -166,6 +185,37 @@ class AutonomyTest(unittest.TestCase):
             runner.stop()
             kill.assert_called_once()
             self.assertEqual(kill.call_args.args[0], 123)
+
+    def test_late_confirmations_close_stopped_run_only_after_group_exits(self):
+        signals = []
+        process = MagicMock(pid=123)
+        process.poll.return_value = None
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"MOWER_MISSION_SPOOL": directory}), \
+                patch("jetson_mower_client.autonomy.subprocess.Popen", return_value=process) as spawn, \
+                patch("jetson_mower_client.autonomy.os.killpg", create=True) as kill_group:
+            runner = AutonomyExecution([sys.executable], signals.append)
+            self.assertEqual(runner.request_start(True), "autonomy-process-started")
+            run_id = runner.run_id
+            started_at = datetime.now(timezone.utc).isoformat()
+            runner._process_group = 123
+            runner.stop()
+            self.assertEqual(runner.request_start(True), "autonomy-end-unconfirmed")
+            with patch.dict(os.environ, spawn.call_args.kwargs["env"]):
+                publish_confirmation("end", datetime.now(timezone.utc).isoformat())
+                runner.poll_confirmations()
+                self.assertEqual(signals, [])
+                publish_confirmation("start", started_at)
+                runner.poll_confirmations()
+                self.assertEqual(runner.run_id, run_id)
+                self.assertEqual(signals, [])
+                kill_group.side_effect = ProcessLookupError
+                runner.poll_confirmations()
+            self.assertEqual(runner.state, "end-confirmed")
+            self.assertEqual([event["kind"] for event in signals], ["start", "end"])
+            self.assertTrue(all(event["runId"] == run_id for event in signals))
+            spawn.assert_called_once()
+            self.assertEqual(runner.request_start(True), "autonomy-process-started")
+            self.assertNotEqual(runner.run_id, run_id)
 
     def test_start_confirmation_requires_live_matching_run_and_aware_timestamp(self):
         runner = AutonomyExecution([sys.executable, str(MOCK)])
