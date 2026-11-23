@@ -10,11 +10,12 @@ import { httpClient } from '../shared/api/httpClient';
 import { ApiError } from '../shared/api/errors';
 import { mockHistoryEntries } from '../features/history/mockHistory';
 import type { HistoryEntry } from '../features/history/types';
+import { HistoryMap } from '../features/history/components/HistoryMap';
 import { useAuthStore } from '../features/auth/authStore';
 
 vi.mock('../features/history/api', () => ({ getHistory: vi.fn() }));
 
-vi.mock('../features/history/components/HistoryMap', () => ({ HistoryMap: () => null }));
+vi.mock('../features/history/components/HistoryMap', () => ({ HistoryMap: vi.fn(() => null) }));
 vi.mock('../features/history/components/HistoryTimeline', () => ({ HistoryTimeline: () => null }));
 
 beforeEach(() => { resetStores(); env.enableMockHistory = false; vi.mocked(getHistory).mockReset().mockResolvedValue([]); });
@@ -38,7 +39,7 @@ it('작업 행을 선택한 뒤에만 해당 로그를 읽고 미등록 상태�
   }
 });
 
-it('서버에서 받은 미션 파일을 선택한 작업의 지도에 재생한다', async () => {
+it('서버 기록을 위성 지도 패널에 연결하고 날짜가 바뀌면 재생 프레임을 제거한다', async () => {
   const polygon = [{ lat: 36, lon: 127 }, { lat: 36.001, lon: 127 }, { lat: 36, lon: 127.001 }];
   const rows = [
     { type: 'run_start', schema: 'mower.mission.log.v1',
@@ -55,11 +56,19 @@ it('서버에서 받은 미션 파일을 선택한 작업의 지도에 재생한
     render(<HistoryPage />);
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '검색' })));
     fireEvent.click(screen.getByRole('button', { name: new RegExp(entry.robotId) }));
-    expect(await screen.findByRole('img', { name: '작업 구역과 기록 시점의 경로·장애물 지도' })).toBeVisible();
-    expect(screen.getByLabelText('남은 경로')).toBeVisible();
+    const mapPanel = screen.getByRole('region', { name: '작업 이력 지도 및 재생' });
+    expect(mapPanel).toHaveFocus();
+    expect(await screen.findByRole('slider', { name: '주행 판단 탐색' })).toBeVisible();
+    expect(mapPanel).toContainElement(screen.getByRole('slider', { name: '주행 판단 탐색' }));
+    expect(vi.mocked(HistoryMap).mock.lastCall?.[0]).toEqual(expect.objectContaining({
+      selectedEntry: entry,
+      replay: expect.objectContaining({ anchor: polygon[0] }),
+      frame: expect.objectContaining({ revision: 1, path: expect.any(Array) }),
+    }));
     expect(screen.getByText('v1 · 3점')).toBeVisible();
     fireEvent.change(screen.getByLabelText('시작일 (한국 시간)'), { target: { value: '2026-11-21' } });
-    expect(screen.queryByLabelText('남은 경로')).not.toBeInTheDocument();
+    expect(screen.queryByRole('slider', { name: '주행 판단 탐색' })).not.toBeInTheDocument();
+    expect(vi.mocked(HistoryMap).mock.lastCall?.[0]).toEqual(expect.objectContaining({ replay: null, frame: null }));
   } finally {
     getBlob.mockRestore();
   }

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { readMissionReplay, type MissionReplay } from './missionReplay';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { readMissionReplay, type MissionReplay, type ReplayFrame } from './missionReplay';
 
 const reasons: Record<string, string> = {
   initial_or_resume: '최초 계획·재개', near_obstacle_or_connector_blocks_route: '장애물이 경로와 겹침',
@@ -15,66 +15,51 @@ const formatTime = new Intl.DateTimeFormat('ko-KR', {
 });
 function pointsText(points: number[][]) { return points.map(pair => pair.join(',')).join(' '); }
 
-export function ReplayPlayer({ mission }: { mission: MissionReplay }) {
-  const [index, setIndex] = useState(0);
-  const [playing, setPlaying] = useState(false);
+export function ReplayPlayer({ mission, renderMap }: {
+  mission: MissionReplay | null;
+  renderMap?: (replay: MissionReplay | null, frame: ReplayFrame | null) => ReactNode;
+}) {
+  const [playback, setPlayback] = useState({ mission, index: 0, playing: false });
+  const current = playback.mission === mission ? playback : { mission, index: 0, playing: false };
+  if (current !== playback) setPlayback(current);
+  const { index, playing } = current;
   const cursor = useRef(0);
-  const frames = mission.frames;
-  const frame = frames[index];
-  const last = frames.length - 1;
+  const frames = mission?.frames;
+  const frame = frames?.[index] ?? null;
+  const last = (frames?.length ?? 0) - 1;
   function seek(value: number) {
-    setPlaying(false);
     cursor.current = value;
-    setIndex(value);
+    setPlayback({ mission, index: value, playing: false });
   }
   useEffect(() => {
-    if (!playing) return;
+    if (!playing || !frames) return;
     const started = performance.now();
     const base = frames[cursor.current].time;
     const timer = window.setInterval(() => {
       const time = base + performance.now() - started;
       while (cursor.current < last && frames[cursor.current + 1].time <= time) cursor.current++;
-      setIndex(cursor.current);
-      if (cursor.current === last) setPlaying(false);
+      const next = cursor.current;
+      setPlayback(previous => previous.mission !== mission || !previous.playing || (previous.index === next && next !== last)
+        ? previous : { mission, index: next, playing: next !== last });
     }, 40);
     return () => window.clearInterval(timer);
-  }, [frames, last, playing]);
+  }, [frames, last, mission, playing]);
 
-  const viewBox = useMemo(() => {
-    const xs = mission.boundary.map(p => p[0]), ys = mission.boundary.map(p => p[1]);
-    const width = Math.max(...xs) - Math.min(...xs), height = Math.max(...ys) - Math.min(...ys);
-    const pad = Math.max(width, height, 1) * 0.18;
-    return [Math.min(...xs) - pad, Math.min(...ys) - pad, width + 2 * pad, height + 2 * pad].join(' ');
-  }, [mission]);
+  const map = renderMap?.(mission, frame);
+  if (!mission || !frames || !frame) return <>{map}</>;
   const latestChange = mission.changes.filter(item => item.frame <= index).at(-1);
-  return <>
+  const controls = <>
     <div className="replay-heading">
       <h2>작업 구역 {mission.zoneId} <small>버전 {mission.version}</small></h2>
       <span>기록 시각 <b>{formatTime.format(frame.time)}</b> KST</span>
     </div>
-    <svg className="replay-map" viewBox={viewBox} role="img" aria-label="작업 구역과 기록 시점의 경로·장애물 지도">
-      <polygon points={pointsText(mission.boundary)} fill="#edf3eb" stroke="#59795f" strokeWidth=".10" />
-      <g aria-label="장애물 지도" opacity={frame.fresh ? 1 : 0.42}>
-        {frame.objects.map(obj => {
-          const color = obj.label === 'person' ? '#ae253d' : '#835117';
-          return <g key={obj.id} aria-label={`${obj.label} ${obj.id}`} opacity={obj.visible ? 1 : 0.55}>
-            <title>{obj.label} · {obj.id} · {obj.visible ? '관측 중' : '지도에 보존'}</title>
-            <polygon points={pointsText(obj.safety)} fill="none" stroke={color} strokeDasharray=".16 .12" strokeWidth=".05" />
-            <polygon points={pointsText(obj.region)} fill={color} fillOpacity=".32" stroke={color} strokeWidth=".06" />
-            {(obj.label === 'person' || obj.region.length < 3) &&
-              <circle cx={obj.position[0]} cy={obj.position[1]} r=".16" fill={color} />}
-          </g>;
-        })}
-      </g>
-      {frame.path.length > 1 && <polyline aria-label="남은 경로" points={pointsText(frame.path)} fill="none" stroke="#17639b" strokeWidth=".13" />}
-      {frame.target && <circle aria-label="다음 목표점" cx={frame.target[0]} cy={frame.target[1]} r=".21" fill="white" stroke="#17639b" strokeWidth=".09" />}
-      {frame.pose && <circle aria-label="기록 위치" cx={frame.pose[0]} cy={frame.pose[1]} r=".22" fill="#174b34" stroke="white" strokeWidth=".07" />}
-    </svg>
-    <p className="replay-key">북쪽 ↑ · 파란 선은 남은 경로, 빈 원은 다음 목표점, 녹색 점은 기체 위치입니다. 장애물 점선은 기록된 안전 영역입니다.</p>
+    {!renderMap && <ReplayDiagram mission={mission} frame={frame} />}
+    <p className="replay-key">{!renderMap && '북쪽 ↑ · '}파란 선은 남은 경로, 빈 원은 다음 목표점, 녹색 점은 기체 위치입니다. 장애물 점선은 기록된 안전 영역입니다.</p>
     <div className="replay-controls">
       <button type="button" onClick={() => {
-        if (!playing && index === last) { cursor.current = 0; setIndex(0); }
-        setPlaying(!playing);
+        const next = !playing && index === last ? 0 : index;
+        cursor.current = next;
+        setPlayback({ mission, index: next, playing: !playing });
       }}>{playing ? '일시정지' : index === last ? '처음부터 재생' : '재생'}</button>
       <input type="range" aria-label="주행 판단 탐색" aria-valuetext={`${index + 1}번째 판단`}
         min={0} max={last} value={index} onChange={e => seek(Number(e.target.value))} />
@@ -97,6 +82,36 @@ export function ReplayPlayer({ mission }: { mission: MissionReplay }) {
       </dl>
     </div>
   </>;
+  return <>{map}{renderMap
+    ? <section className="mission-replay history-map-replay" aria-label="선택한 작업의 CPP 주행 기록">{controls}</section>
+    : controls}</>;
+}
+
+export function ReplayDiagram({ mission, frame }: { mission: MissionReplay; frame: ReplayFrame }) {
+  const viewBox = useMemo(() => {
+    const xs = mission.boundary.map(p => p[0]), ys = mission.boundary.map(p => p[1]);
+    const width = Math.max(...xs) - Math.min(...xs), height = Math.max(...ys) - Math.min(...ys);
+    const pad = Math.max(width, height, 1) * 0.18;
+    return [Math.min(...xs) - pad, Math.min(...ys) - pad, width + 2 * pad, height + 2 * pad].join(' ');
+  }, [mission]);
+  return <svg className="replay-map" viewBox={viewBox} role="img" aria-label="작업 구역과 기록 시점의 경로·장애물 지도">
+    <polygon points={pointsText(mission.boundary)} fill="#edf3eb" stroke="#59795f" strokeWidth=".10" />
+    <g aria-label="장애물 지도" opacity={frame.fresh ? 1 : 0.42}>
+      {frame.objects.map(obj => {
+        const color = obj.label === 'person' ? '#ae253d' : '#835117';
+        return <g key={obj.id} aria-label={`${obj.label} ${obj.id}`} opacity={obj.visible ? 1 : 0.55}>
+          <title>{obj.label} · {obj.id} · {obj.visible ? '관측 중' : '지도에 보존'}</title>
+          <polygon points={pointsText(obj.safety)} fill="none" stroke={color} strokeDasharray=".16 .12" strokeWidth=".05" />
+          <polygon points={pointsText(obj.region)} fill={color} fillOpacity=".32" stroke={color} strokeWidth=".06" />
+          {(obj.label === 'person' || obj.region.length < 3) &&
+            <circle cx={obj.position[0]} cy={obj.position[1]} r=".16" fill={color} />}
+        </g>;
+      })}
+    </g>
+    {frame.path.length > 1 && <polyline aria-label="남은 경로" points={pointsText(frame.path)} fill="none" stroke="#17639b" strokeWidth=".13" />}
+    {frame.target && <circle aria-label="다음 목표점" cx={frame.target[0]} cy={frame.target[1]} r=".21" fill="white" stroke="#17639b" strokeWidth=".09" />}
+    {frame.pose && <circle aria-label="기록 위치" cx={frame.pose[0]} cy={frame.pose[1]} r=".22" fill="#174b34" stroke="white" strokeWidth=".07" />}
+  </svg>;
 }
 
 export function MissionReplayPage() {

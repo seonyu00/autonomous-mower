@@ -1,6 +1,7 @@
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadNaverMaps, subscribeNaverMapsAuthFailure } from '../../map/naverMapsLoader';
+import type { MissionReplay, ReplayFrame } from '../missionReplay';
 import type { HistoryEntry } from '../types';
 import { HistoryMap } from './HistoryMap';
 
@@ -21,9 +22,12 @@ const naverMock = vi.hoisted(() => {
       };
     }),
     Polyline: vi.fn(function MockPolyline() {
-      return { setMap: vi.fn() };
+      return { setMap: vi.fn(), setPath: vi.fn(), setVisible: vi.fn() };
     }),
     Marker: vi.fn(function MockMarker() {
+      return { setMap: vi.fn(), setPosition: vi.fn(), setVisible: vi.fn() };
+    }),
+    Polygon: vi.fn(function MockPolygon() {
       return { setMap: vi.fn() };
     }),
   };
@@ -70,6 +74,17 @@ const selectedEntry: HistoryEntry = {
   ],
 };
 
+const replayFrame: ReplayFrame = {
+  time: 1000, revision: 1, path: [[0, 0], [10, -10]], pose: [5, -5], target: [10, -10],
+  reason: '', fresh: true, complete: false,
+  objects: [{ id: 'person-1', label: 'person', visible: true, position: [4, -5],
+    region: [[3, -4], [5, -4], [5, -6]], safety: [[2, -3], [6, -3], [6, -7]] }],
+};
+const replay: MissionReplay = {
+  zoneId: '2', version: 11, anchor: { lon: 127, lat: 37 }, boundary: [[0, 0], [20, 0], [20, -20]],
+  frames: [replayFrame], changes: [],
+};
+
 describe('HistoryMap', () => {
   beforeEach(() => {
     vi.mocked(loadNaverMaps).mockResolvedValue(naverMock.maps as unknown as typeof naver.maps);
@@ -100,6 +115,41 @@ describe('HistoryMap', () => {
     }} />);
     await waitFor(() => expect(naverMock.maps.Marker).toHaveBeenCalledTimes(1));
     expect(naverMock.maps.Polyline).not.toHaveBeenCalled();
+  });
+
+  it('재생 프레임을 위성 지도에 겹치고 다음 프레임에서 누락된 지도 표시를 숨긴다', async () => {
+    const { rerender } = render(<HistoryMap selectedEntry={null} replay={replay} frame={replayFrame} />);
+    await waitFor(() => expect(naverMock.maps.Polygon).toHaveBeenCalledTimes(3));
+    expect(naverMock.maps.Polygon).toHaveBeenCalledWith(expect.objectContaining({ strokeStyle: 'shortdash' }));
+    const map = naverMock.maps.Map.mock.results[0].value;
+    const path = naverMock.maps.Polyline.mock.results[0].value;
+    const pose = naverMock.maps.Marker.mock.results[0].value;
+    const target = naverMock.maps.Marker.mock.results[1].value;
+    expect(map.fitBounds).toHaveBeenCalledOnce();
+    expect(path.setPath).toHaveBeenCalledWith([expect.anything(), expect.anything()]);
+    const coord = (pose.setPosition.mock.lastCall as unknown as [{lat: () => number; lng: () => number}])[0];
+    expect(coord.lat()).toBeCloseTo(37.000045, 6);
+    expect(coord.lng()).toBeCloseTo(127.000056, 6);
+    expect(target.setVisible).toHaveBeenLastCalledWith(true);
+
+    rerender(<HistoryMap selectedEntry={null} replay={replay}
+      frame={{ ...replayFrame, path: [], pose: null, target: null, objects: [] }} />);
+    expect(map.fitBounds).toHaveBeenCalledOnce();
+    expect(path.setVisible).toHaveBeenLastCalledWith(false);
+    expect(pose.setVisible).toHaveBeenLastCalledWith(false);
+    expect(target.setVisible).toHaveBeenLastCalledWith(false);
+    expect(naverMock.maps.Polygon.mock.results[1].value.setMap).toHaveBeenCalledWith(null);
+
+    rerender(<HistoryMap selectedEntry={null} />);
+    expect(path.setMap).toHaveBeenCalledWith(null);
+    expect(naverMock.maps.Map).toHaveBeenCalledOnce();
+  });
+
+  it('배경 지도 초기화에 실패해도 같은 패널에 재생 도식을 표시한다', async () => {
+    vi.mocked(loadNaverMaps).mockRejectedValueOnce(new Error('네이버 지도 준비 오류'));
+    const { findByRole } = render(<HistoryMap selectedEntry={null} replay={replay} frame={replayFrame} />);
+    expect(await findByRole('alert')).toHaveTextContent('네이버 지도 준비 오류');
+    expect(await findByRole('img', { name: '작업 구역과 기록 시점의 경로·장애물 지도' })).toBeInTheDocument();
   });
 });
 

@@ -2,18 +2,25 @@ import { useEffect, useRef, useState } from 'react';
 import { env } from '../../../shared/config/env';
 import { DEFAULT_MAP_CENTER, MAX_OPERATIONAL_MAP_ZOOM } from '../../map/mapDefaults';
 import { loadNaverMaps, subscribeNaverMapsAuthFailure } from '../../map/naverMapsLoader';
+import { ReplayDiagram } from '../MissionReplayPage';
+import type { MissionReplay, ReplayFrame } from '../missionReplay';
 import type { HistoryEntry, HistoryEventSeverity } from '../types';
+import { HistoryReplayLayer } from './HistoryReplayLayer';
 
 type HistoryMapProps = {
   selectedEntry: HistoryEntry | null;
+  replay?: MissionReplay | null;
+  frame?: ReplayFrame | null;
 };
 
-export function HistoryMap({ selectedEntry }: HistoryMapProps) {
+export function HistoryMap({ selectedEntry, replay, frame }: HistoryMapProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<naver.maps.Map | null>(null);
   const overlaysRef = useRef<Array<naver.maps.Polyline | naver.maps.Marker>>([]);
-  const [mapsApi, setMapsApi] = useState<typeof naver.maps | null>(null);
+  const [mapInstance, setMapInstance] = useState<{ maps: typeof naver.maps; map: naver.maps.Map } | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
+  const mapsApi = mapInstance?.maps;
+  const hasReplay = !!replay;
 
   useEffect(() => {
     let cancelled = false;
@@ -25,7 +32,7 @@ export function HistoryMap({ selectedEntry }: HistoryMapProps) {
       overlaysRef.current = [];
       mapRef.current?.destroy();
       mapRef.current = null;
-      setMapsApi(null);
+      setMapInstance(null);
     });
 
     loadNaverMaps(env.naverMapClientId)
@@ -45,7 +52,7 @@ export function HistoryMap({ selectedEntry }: HistoryMapProps) {
           },
         });
         mapRef.current = map;
-        setMapsApi(maps);
+        setMapInstance({ maps, map });
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -60,7 +67,7 @@ export function HistoryMap({ selectedEntry }: HistoryMapProps) {
       overlaysRef.current = [];
       mapRef.current?.destroy();
       mapRef.current = null;
-      setMapsApi(null);
+      setMapInstance(null);
     };
   }, []);
 
@@ -110,7 +117,7 @@ export function HistoryMap({ selectedEntry }: HistoryMapProps) {
       );
     });
 
-    if (coordinates.length) {
+    if (!hasReplay && coordinates.length) {
       const first = coordinates[0];
       const firstPosition = new mapsApi.LatLng(first[1], first[0]);
       const bounds = new mapsApi.LatLngBounds(firstPosition, firstPosition);
@@ -125,7 +132,7 @@ export function HistoryMap({ selectedEntry }: HistoryMapProps) {
         maxZoom: 18,
       });
     }
-  }, [mapsApi, selectedEntry]);
+  }, [mapsApi, selectedEntry, hasReplay]);
 
   return (
     <div className="history-map-shell">
@@ -135,15 +142,19 @@ export function HistoryMap({ selectedEntry }: HistoryMapProps) {
         aria-label="네이버 위성 작업 이력 지도"
         style={{ width: '100%', height: '100%' }}
       />
+      {mapInstance && replay && frame && <HistoryReplayLayer {...mapInstance} replay={replay} frame={frame} />}
+      {mapError && replay && frame && <div className="history-replay-fallback">
+        <ReplayDiagram mission={replay} frame={frame} />
+      </div>}
       {mapError ? <div className="map-fallback-warning" role="alert">{mapError}</div> : null}
-      <div className="map-readout">
+      {!hasReplay && <div className="map-readout">
         <strong>{selectedEntry?.robotId ?? '선택된 이력 없음'}</strong>
         <span>{selectedEntry ? selectedEntry.distanceMeters == null ? '거리 미집계' : `${selectedEntry.distanceMeters.toFixed(1)} m${selectedEntry.distancePartial ? ' (부분 거리)' : ' 경로'}` : '작업 기록을 선택하면 경로 데이터를 볼 수 있습니다.'}</span>
         {selectedEntry?.route?.geometry.type === 'Point' ? <span>단일 위치 기록 · 경로를 구성할 좌표가 부족합니다.</span> : null}
         {selectedEntry?.recordType === 'run' && !selectedEntry.routeSegments?.length ? <span>저장된 GPS 위치가 없습니다.</span> : null}
         {selectedEntry?.hasGpsGap ? <span>GPS 수신 끊김 · 확인된 구간만 표시합니다.</span> : null}
         <small>읽기 전용 과거 경로와 이벤트 위치를 네이버 위성 지도에 표시합니다.</small>
-      </div>
+      </div>}
     </div>
   );
 }

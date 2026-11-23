@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '../features/auth/authStore';
 import { getHistory } from '../features/history/api';
 import { StoredReplay } from '../features/history/StoredReplay';
-import { HistoryMap } from '../features/history/components/HistoryMap';
 import { HistoryTimeline } from '../features/history/components/HistoryTimeline';
 import { mockHistoryEntries } from '../features/history/mockHistory';
 import type { HistoryEntry } from '../features/history/types';
@@ -32,6 +31,7 @@ export function HistoryPage() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(env.enableMockHistory ? 'success' : 'idle');
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
+  const mapPanelRef = useRef<HTMLElement>(null);
   const visibleEntries = resultKey === queryKey ? entries : [];
 
   useEffect(() => () => { requestId.current += 1; }, [queryKey]);
@@ -110,8 +110,9 @@ export function HistoryPage() {
         {!robotId && !robotError ? <p className="muted">조회할 로봇이 없습니다.</p> : null}
       </section>
 
-      <section className="workspace-panel history-map-panel">
-        <HistoryMap selectedEntry={selectedEntry} />
+      <section ref={mapPanelRef} className="workspace-panel history-map-panel" aria-label="작업 이력 지도 및 재생" tabIndex={-1}>
+        <StoredReplay key={JSON.stringify([sessionVersion, robotId])}
+          id={selectedEntry?.id === replayId ? replayId : null} robotId={robotId} selectedEntry={selectedEntry} />
       </section>
 
       <section className="workspace-panel">
@@ -128,9 +129,12 @@ export function HistoryPage() {
               key={entry.id}
               className={entry.id === selectedEntry?.id ? 'history-result selected' : 'history-result'}
               type="button"
+              aria-pressed={entry.id === selectedEntry?.id}
               onClick={() => {
                 setSelectedEntryId(entry.id);
                 setReplayId(entry.recordType === 'run' && entry.startedAt && !env.enableMockHistory ? entry.id : null);
+                mapPanelRef.current?.focus({ preventScroll: true });
+                mapPanelRef.current?.scrollIntoView?.({ block: 'start' });
               }}
             >
               <strong>{entry.robotId}</strong>
@@ -154,9 +158,6 @@ export function HistoryPage() {
           {status === 'idle' || resultKey !== queryKey ? <p className="muted">조회 조건을 선택하고 검색해 주세요.</p> : null}
         </div>
       </section>
-
-      {selectedEntry && replayId === selectedEntry.id &&
-        <StoredReplay key={JSON.stringify([sessionVersion, robotId, replayId])} id={replayId} robotId={robotId} />}
 
       <section className="workspace-panel">
         <div className="panel-heading compact">

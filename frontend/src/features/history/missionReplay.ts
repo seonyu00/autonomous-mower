@@ -1,4 +1,4 @@
-import { isValidLngLat } from '../map/geojson';
+import { isValidLngLat, type LngLat } from '../map/geojson';
 
 type Coordinate = { lat: number; lon: number };
 type Offset = { east: number; north: number };
@@ -14,12 +14,13 @@ type Snapshot = Pick<Zone, 'work_zone_id' | 'work_zone_version'> & {
   static_objects: RawObject[]; dynamic_objects: RawObject[]; temporary_objects: RawObject[];
 };
 type MapObject = { id: string; label: string; visible: boolean; position: Point; region: Point[]; safety: Point[] };
-type ReplayFrame = {
+export type ReplayFrame = {
   time: number; revision: number | null; path: Point[]; target: Point | null; pose: Point | null;
   reason: string; objects: MapObject[]; fresh: boolean; complete: boolean;
 };
 export type MissionReplay = {
   zoneId: string; version: number; boundary: Point[]; frames: ReplayFrame[];
+  anchor: Coordinate;
   changes: { frame: number; revision: number; reason: string }[];
 };
 
@@ -34,6 +35,12 @@ function project(point: Coordinate, anchor: Coordinate): Point {
   check(point && isValidLngLat(point.lon, point.lat), '위경도 좌표를 확인해 주세요.');
   return [(point.lon - anchor.lon) * metersPerDegree * Math.cos(anchor.lat * Math.PI / 180),
     (anchor.lat - point.lat) * metersPerDegree];
+}
+
+// 재생 도식의 미터 좌표를 로그의 구역 원점으로 되돌려 위성 지도에 표시한다.
+export function replayLngLat([east, south]: Point, anchor: Coordinate): LngLat {
+  return [anchor.lon + east / (metersPerDegree * Math.cos(anchor.lat * Math.PI / 180)),
+    anchor.lat - south / metersPerDegree];
 }
 
 function objectsAt(snapshot: Snapshot, anchor: Coordinate): MapObject[] {
@@ -75,7 +82,7 @@ export async function readMissionReplay(file: Blob, signal?: AbortSignal): Promi
         && input.polygon.length >= 3,
         '시작 기록에 작업 구역이 누락됐습니다.');
       zone = input;
-      mission = { zoneId: input.work_zone_id, version: input.work_zone_version,
+      mission = { zoneId: input.work_zone_id, version: input.work_zone_version, anchor: input.polygon[0],
         boundary: input.polygon.map(p => project(p, input.polygon[0])), frames: [], changes: [] };
       return;
     }
