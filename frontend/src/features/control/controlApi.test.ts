@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { httpClient } from '../../shared/api/httpClient';
+import { ApiError } from '../../shared/api/errors';
 import { env } from '../../shared/config/env';
 import { useAuthStore } from '../auth/authStore';
 import { useZoneStore } from '../map/zoneStore';
@@ -135,7 +136,7 @@ describe('control command prechecks', () => {
     }
   });
 
-  it.each(['pagehide', 'edge-rejection'] as const)('AUTO 권한을 갱신하고 %s 후에는 멈춘다', async (ending) => {
+  it.each(['pagehide', 'edge-rejection', 'transient-failure', 'version-conflict'] as const)('AUTO 갱신을 %s 상황에 맞게 처리한다', async (ending) => {
     const previousMock = env.enableMockControl;
     env.enableMockControl = false;
     vi.useFakeTimers();
@@ -151,18 +152,31 @@ describe('control command prechecks', () => {
         { commandId: 'cmd-auto', lockVersion: 3 }, expect.anything());
       // 준비 중인 장비는 실제 모드를 idle로 보고할 수 있다.
       useControlStore.getState().patchControlState(TEST_ROBOT_ID, { mode: 'idle' });
+      if (ending === 'transient-failure') {
+        post.mockRejectedValueOnce(new ApiError('temporary timeout', 'network'));
+      } else if (ending === 'version-conflict') {
+        post.mockRejectedValueOnce(new ApiError('version conflict', 'validation', 409));
+      }
       await vi.advanceTimersByTimeAsync(750);
       expect(post).toHaveBeenCalledTimes(3);
-      if (ending === 'pagehide') {
+      let expectedCalls = 3;
+      if (ending === 'transient-failure') {
+        await vi.advanceTimersByTimeAsync(150);
+        expect(post).toHaveBeenCalledTimes(4);
+        await vi.advanceTimersByTimeAsync(750);
+        expect(post).toHaveBeenCalledTimes(5);
+        expectedCalls = 5;
         window.dispatchEvent(new Event('pagehide'));
-      } else {
+      } else if (ending === 'pagehide') {
+        window.dispatchEvent(new Event('pagehide'));
+      } else if (ending === 'edge-rejection') {
         useControlStore.getState().applyCommandEvent({
           robotId: TEST_ROBOT_ID, commandId: 'cmd-auto', commandType: 'change-mode', status: 'rejected',
           reason: 'autonomy-end-unconfirmed', requestedBy: 'admin', serverTimestamp: new Date().toISOString(), edgeAckAt: null,
         });
       }
       await vi.advanceTimersByTimeAsync(3000);
-      expect(post).toHaveBeenCalledTimes(3);
+      expect(post).toHaveBeenCalledTimes(expectedCalls);
     } finally {
       window.dispatchEvent(new Event('pagehide'));
       post.mockRestore();

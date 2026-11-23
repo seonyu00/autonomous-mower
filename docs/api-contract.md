@@ -1076,7 +1076,7 @@ CPP 생성 요청의 선택적 `start:{lat,lon}`은 검토용 시작 좌표이�
 
 Jetson은 같은 로봇의 전용 토큰으로 `GET /api/control/{robotId}/autonomy-authority?commandId=…&lockVersion=…`를 조회한다. 최초 브라우저 확인 전에는 `data.validForMs`가 -1이고, 확인 후에는 최대 2000ms 안에서 제어권과 브라우저 갱신의 남은 시간을 반환한다. 반납·만료·인수·정지·모드 변경·긴급 정지 후에는 값이 0이다. 응답은 캐시하지 않는다. Jetson은 확인 전 시작 프레임을 보내지 않으며, 권한 종료 시 감독 신호를 끊고 실행기를 종료한다. 제어권을 다시 얻어도 새 AUTO 요청이 필요하다.
 
-웹은 AUTO 접수 후 `POST /api/control/{robotId}/autonomy-keepalive`에 `{commandId, lockVersion}`을 보내고 약 750ms 간격으로 갱신한다. 서버는 현재 제어권 보유자와 명령을 검사하며 마지막 확인 후 3초가 지나면 늦은 갱신을 거부한다. 페이지 종료나 연결 단절 시 웹은 갱신을 끝낸다.
+웹은 AUTO 접수 후 `POST /api/control/{robotId}/autonomy-keepalive`에 `{commandId, lockVersion}`을 보내고 약 750ms 간격으로 갱신한다. 요청 제한은 1초다. 일시적인 네트워크 또는 서버 오류가 나면 150ms 뒤 한 번 재시도하며, 재시도 전에도 현재 세션과 제어권을 검사한다. 서버는 현재 제어권 보유자와 명령을 검사하며 마지막 확인 후 3초가 지나면 늦은 갱신을 거부한다. 페이지 종료나 연결 단절 시 웹은 갱신을 끝낸다.
 # 수동 시리얼 조작 재개와 입력 식별자 (개발 중)
 
 ### 웹에서 수동 제어부 준비 요청 — 2026-11-11

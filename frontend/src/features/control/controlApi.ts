@@ -1,5 +1,6 @@
 import { useZoneStore } from '../map/zoneStore';
 import { httpClient } from '../../shared/api/httpClient';
+import { ApiError } from '../../shared/api/errors';
 import { env } from '../../shared/config/env';
 import { useAuthStore } from '../auth/authStore';
 import { hasPermission } from '../../shared/lib/permissions';
@@ -93,6 +94,7 @@ function keepAutonomy(robotId: string, commandId: string, lockVersion: number, s
   let stopped = false;
   let timer: number | undefined;
   let pending: AbortController | undefined;
+  let retrying = false;
   const stop = () => {
     stopped = true;
     window.clearTimeout(timer);
@@ -114,12 +116,18 @@ function keepAutonomy(robotId: string, commandId: string, lockVersion: number, s
       return;
     }
     pending = new AbortController();
-    const timeout = window.setTimeout(() => pending?.abort(), 1500);
+    const timeout = window.setTimeout(() => pending?.abort(), 1000);
     try {
       await httpClient.post(path, { commandId, lockVersion }, { signal: pending.signal });
+      retrying = false;
       if (!stopped) timer = window.setTimeout(() => void renew(), 750);
-    } catch {
-      stop();
+    } catch (error) {
+      if (!stopped && !retrying && error instanceof ApiError && (error.kind === 'network' || error.kind === 'server')) {
+        retrying = true;
+        timer = window.setTimeout(() => void renew(), 150);
+      } else {
+        stop();
+      }
     } finally {
       window.clearTimeout(timeout);
       pending = undefined;
