@@ -22,6 +22,7 @@ from std_msgs.msg import Bool, Int8, String
 
 from .command_ack import publish_command_ack
 from .autonomy import AutonomyExecution
+from .autonomy_authority import AutonomyAuthority
 from .autonomy_readiness import Observation, readiness
 from .command_mapping import TwistCommand, is_stale_client_command, manual_to_twist, parse_iso_utc
 from .config import EdgeConfig, load_config
@@ -62,6 +63,7 @@ class JetsonMowerClientNode(Node):
         self._autonomy_ready: bool | None = None
         self._autonomy_readiness_reason: str | None = "autonomy-readiness-unknown"
         self._autonomy_zone: tuple[int, int] | None = None
+        self._autonomy_authority: AutonomyAuthority | None = None
         self._autonomy_remote: Observation | None = None
         self._autonomy_feedback: Observation | None = None
         self._autonomy_status: Observation | None = None
@@ -107,8 +109,16 @@ class JetsonMowerClientNode(Node):
                 # MQTT 정지·단절 처리와 직렬화하고, 시작 프레임 직전에 최신 입력을 평가한다.
                 if self._autonomy.owns_execution and (self._emergency_active or not self._mqtt.is_connected()):
                     self._stop_autonomy()
-                self._refresh_autonomy_readiness()
+                authority = self._autonomy_authority.status() if self._autonomy_authority else "pending"
+                if self._autonomy.owns_execution and authority == "lost":
+                    self._stop_autonomy()
+                    self._autonomy.state = "authority-lost"
+                    self._publish_status()
+                    return
+                self._refresh_autonomy_readiness(authority == "valid")
                 self._autonomy.poll_confirmations()
+                if not self._autonomy.owns_execution:
+                    self._close_autonomy_authority()
             except (OSError, ValueError) as error:
                 self.get_logger().warning(f"작업 확인 보류: {error}", throttle_duration_sec=5)
 
@@ -129,7 +139,7 @@ class JetsonMowerClientNode(Node):
             value = None
         self._autonomy_status = Observation(value, time.monotonic())
 
-    def _refresh_autonomy_readiness(self) -> None:
+    def _refresh_autonomy_readiness(self, authority_valid: bool) -> None:
         if self._autonomy_zone is None or not self._autonomy.owns_execution:
             self._autonomy_ready = None
             self._autonomy_readiness_reason = "autonomy-readiness-unknown"
@@ -153,7 +163,7 @@ class JetsonMowerClientNode(Node):
                            remote=self._autonomy_remote, feedback=self._autonomy_feedback,
                            pose=Observation(pose, self._autonomy_status.received_at) if pose is not None and self._autonomy_status else None,
                            obstacles=Observation(obstacles, self._autonomy_status.received_at) if obstacles is not None and self._autonomy_status else None,
-                           authority_available=self._mqtt.is_connected(), max_age=2.5)
+                           authority_available=authority_valid and self._mqtt.is_connected(), max_age=2.5)
         self._autonomy_readiness_reason = reason
         self._autonomy_ready = reason is None
         self._autonomy.set_start_permitted(self._autonomy_ready)
@@ -161,7 +171,7 @@ class JetsonMowerClientNode(Node):
     def stop(self) -> None:
         self._publish_zero_twist()
         try:
-            self._autonomy.stop()
+            self._stop_autonomy()
         finally:
             self._mqtt.disconnect()
             if self._manual_serial_device is not None:
@@ -327,6 +337,14 @@ class JetsonMowerClientNode(Node):
                 return
             parameters = _parameters(command)
             zone_id, zone_version = parameters.get("workZoneId"), parameters.get("workZoneVersion")
+            if any(type(value) is not int or value <= 0 for value in (zone_id, zone_version)):
+                raise ValueError("autonomy-work-zone-invalid")
+            command_id, lock_version = command.get("commandId"), command.get("lockVersion")
+            if not isinstance(command_id, str) or not command_id or type(lock_version) is not int or lock_version <= 0:
+                raise ValueError("autonomy-authority-invalid")
+            authority = AutonomyAuthority(os.environ.get("MOWER_WORK_ZONE_API_BASE_URL", ""),
+                                          os.environ.get("WORK_ZONE_API_TOKEN", ""), self._config.robot_id,
+                                          command_id, lock_version)
             # r61의 입력은 실행 뒤에 생긴다. 프로세스 자체는 첫 r 프레임 전까지
             # 정지 상태이며, 아래 준비 판정이 true가 될 때만 출발 요청을 전달한다.
             reason = self._autonomy.request_start(
@@ -334,6 +352,9 @@ class JetsonMowerClientNode(Node):
                 work_zone_id=zone_id, work_zone_version=zone_version,
             )
             if reason == "autonomy-process-started":
+                self._close_autonomy_authority()
+                self._autonomy_authority = authority
+                authority.start()
                 self._autonomy_zone = (zone_id, zone_version)
                 self._autonomy_remote = self._autonomy_feedback = self._autonomy_status = None
                 self._autonomy_ready = None
@@ -365,6 +386,7 @@ class JetsonMowerClientNode(Node):
         self._publish_status()
 
     def _stop_autonomy(self) -> None:
+        self._close_autonomy_authority()
         self._autonomy_zone = None
         self._autonomy_ready = None
         self._autonomy_readiness_reason = "autonomy-readiness-unknown"
@@ -373,6 +395,11 @@ class JetsonMowerClientNode(Node):
         except (OSError, subprocess.TimeoutExpired) as error:
             self._autonomy.state = "stop-unconfirmed"
             raise ValueError("autonomy-stop-unconfirmed") from error
+
+    def _close_autonomy_authority(self) -> None:
+        if self._autonomy_authority is not None:
+            self._autonomy_authority.close()
+            self._autonomy_authority = None
 
     def _check_manual_timeout(self) -> None:
         if self._last_manual_command_monotonic is None:
@@ -606,7 +633,7 @@ class JetsonMowerClientNode(Node):
             "manual-serial-ready" if self._manual_serial.armed else "manual-serial-locked")
         if self._pending_manual_prepare is not None:
             serial_state = "manual-preparing"
-        if self._autonomy.run_id is not None or self._autonomy.state in {"start-failed", "stop-unconfirmed"}:
+        if self._autonomy.run_id is not None or self._autonomy.state in {"start-failed", "stop-unconfirmed", "authority-lost"}:
             serial_state = "autonomy-" + self._autonomy.state
         payload = {
             "robotId": self._config.robot_id,

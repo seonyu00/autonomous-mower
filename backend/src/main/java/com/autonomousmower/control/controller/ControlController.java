@@ -1,6 +1,7 @@
 package com.autonomousmower.control.controller;
 
 import com.autonomousmower.auth.security.SecurityUser;
+import com.autonomousmower.auth.security.EdgeWorkZonePrincipal;
 import com.autonomousmower.common.api.ApiResponse;
 import com.autonomousmower.control.dto.ChangeModeRequest;
 import com.autonomousmower.control.dto.ClaimControlRequest;
@@ -21,12 +22,16 @@ import java.util.Map;
 import com.autonomousmower.control.service.EmergencyStopService;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -68,6 +73,17 @@ public class ControlController {
     @PreAuthorize("hasAuthority('telemetry:read')")
     public ApiResponse<ControlLockSnapshot> currentState(@PathVariable String robotId) {
         return ApiResponse.success(controlLockService.snapshot(robotId));
+    }
+
+    @GetMapping("/autonomy-authority")
+    @PreAuthorize("hasAuthority('edge:work-zone:read')")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> autonomyAuthority(@PathVariable String robotId,
+            @RequestParam String commandId, @RequestParam long lockVersion,
+            @AuthenticationPrincipal EdgeWorkZonePrincipal device) {
+        if (device == null || !device.robotId().equals(robotId)) throw new AccessDeniedException("Permission denied.");
+        long validForMs = controlCommandService.autonomyAuthorityMillis(robotId, commandId, lockVersion);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(ApiResponse.success(Map.of("validForMs", validForMs)));
     }
 
     @PostMapping("/claim")

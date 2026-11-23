@@ -153,6 +153,7 @@ public class ControlCommandService {
                 mqttCommandPublisher.publishModeCommand(new MqttCommandPayload(
                         response.commandId(), robotId, response.commandType(), request.idempotencyKey(),
                         snapshot.lockVersion(), null, user.getAdminId(), requestedAt, "normal", parameters));
+                state.recordAutonomyCommand(response.commandId());
                 return response;
             }
             state.requireVersion(request.lockVersion());
@@ -171,6 +172,14 @@ public class ControlCommandService {
                     Map.of("mode", request.mode())
             ));
             return response;
+        }
+    }
+
+    public long autonomyAuthorityMillis(String robotId, String commandId, long version) {
+        controlRobotGuard.requireKnownRobot(robotId);
+        var state = controlStateStore.stateFor(robotId);
+        synchronized (state) {
+            return state.autonomyAuthorityMillis(commandId, version, Instant.now());
         }
     }
 
@@ -216,6 +225,7 @@ public class ControlCommandService {
             state.requireOwner(user.getAdminId());
             ControlLockSnapshot snapshot = state.snapshot();
             ControlCommandResponse response = responseFactory.accepted("stop", snapshot, requestedAt);
+            state.recordAutonomyCommand(null);
             mqttCommandPublisher.publishStopCommand(new MqttCommandPayload(
                     response.commandId(),
                     robotId,

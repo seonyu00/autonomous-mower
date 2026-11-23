@@ -11,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.autonomousmower.auth.security.JwtAuthenticationFilter;
 import com.autonomousmower.auth.security.JwtTokenProvider;
+import com.autonomousmower.auth.security.EdgeWorkZonePrincipal;
+import com.autonomousmower.auth.service.EdgeWorkZoneTokenService;
 import com.autonomousmower.auth.security.RestAccessDeniedHandler;
 import com.autonomousmower.auth.security.RestAuthenticationEntryPoint;
 import com.autonomousmower.config.SecurityConfig;
@@ -21,6 +23,7 @@ import com.autonomousmower.control.service.ControlLockService;
 import com.autonomousmower.control.service.EmergencyStopService;
 import com.autonomousmower.control.service.ManualChallengeService;
 import java.time.Instant;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -56,6 +59,23 @@ class ControlControllerSecurityTest {
 
     @MockBean
     private JwtTokenProvider jwtTokenProvider;
+
+    @MockBean
+    private EdgeWorkZoneTokenService edgeTokens;
+
+    @Test
+    void autonomyAuthorityRequiresTheMatchingJetsonTokenAndDisablesCaching() throws Exception {
+        when(edgeTokens.authenticate("test-only")).thenReturn(new EdgeWorkZonePrincipal(UUID.randomUUID(), "MOWER-01"));
+        when(controlCommandService.autonomyAuthorityMillis("MOWER-01", "cmd-1", 8L)).thenReturn(1200L);
+        mockMvc.perform(get("/api/control/MOWER-01/autonomy-authority").param("commandId", "cmd-1")
+                        .param("lockVersion", "8").header("Authorization", "Bearer test-only"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.validForMs", is(1200)));
+        mockMvc.perform(get("/api/control/MOWER-02/autonomy-authority").param("commandId", "cmd-1")
+                        .param("lockVersion", "8").header("Authorization", "Bearer test-only"))
+                .andExpect(status().isForbidden());
+    }
 
     @Test
     @WithMockUser(authorities = "robots:read")

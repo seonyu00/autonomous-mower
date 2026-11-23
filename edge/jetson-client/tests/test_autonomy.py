@@ -10,6 +10,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from jetson_mower_client.autonomy import AutonomyExecution
+from jetson_mower_client import autonomy_authority
 from jetson_mower_client.mission_confirmation import publish_confirmation
 from jetson_mower_client.mission_upload import queue_lifecycle
 from jetson_mower_client.config import _autonomy_command
@@ -181,6 +182,7 @@ class AutonomyTest(unittest.TestCase):
         node._pending_manual_prepare = None
         node._publish_emergency_stop_outputs = MagicMock()
         node._autonomy = MagicMock()
+        node._autonomy_authority = None
         node._autonomy.stop.side_effect = OSError()
         with self.assertRaisesRegex(ValueError, "autonomy-stop-unconfirmed"):
             node._handle_estop({}, "now")
@@ -193,6 +195,7 @@ class AutonomyTest(unittest.TestCase):
         node._manual_setup_lock = threading.RLock()
         node._disarm_manual_serial = MagicMock()
         node._autonomy = AutonomyExecution([sys.executable, str(MOCK)])
+        node._autonomy_authority = None
         node._autonomy_ready = True
         try:
             self.assertEqual(node._autonomy.request_start(True), "autonomy-process-started")
@@ -245,6 +248,7 @@ class AutonomyTest(unittest.TestCase):
         node._manual_challenge = MagicMock()
         node._pending_manual_prepare = None
         node._autonomy = AutonomyExecution([sys.executable, str(MOCK)])
+        node._autonomy_authority = None
         node._autonomy_ready = None
         opener = MagicMock()
         node._manual_serial = ManualSerialSession("/dev/test", opener)
@@ -253,11 +257,13 @@ class AutonomyTest(unittest.TestCase):
         node._publish_ack = MagicMock()
         node._publish_status = MagicMock()
         node._config = MagicMock(robot_id="TEST-01")
-        command = {"parameters": {"mode": "autonomous", "command": "untrusted-command"}}
-        with patch("jetson_mower_client.autonomy.subprocess.Popen") as spawn:
+        command = {"commandId": "cmd-1", "lockVersion": 8,
+                   "parameters": {"mode": "autonomous", "command": "untrusted-command"}}
+        with patch("jetson_mower_client.autonomy.subprocess.Popen") as spawn, \
+                patch.object(client.AutonomyAuthority, "start") as start_authority:
             spawn.return_value.poll.return_value = None
-            node._handle_mode(command, "now")
-            self.assertEqual(node._publish_ack.call_args.args[2:4], ("rejected", "autonomy-work-zone-invalid"))
+            with self.assertRaisesRegex(ValueError, "autonomy-work-zone-invalid"):
+                node._handle_mode(command, "now")
             spawn.assert_not_called()
             command["parameters"].update(workZoneId=2, workZoneVersion=11)
             with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {
@@ -265,6 +271,8 @@ class AutonomyTest(unittest.TestCase):
                 "WORK_ZONE_API_TOKEN": "test-only",
             }):
                 node._handle_mode(command, "now")
+                start_authority.assert_called_once()
+                self.assertEqual(node._autonomy_authority.status(), "pending")
             self.assertEqual(node._publish_ack.call_args.args[2:4], ("accepted", "autonomy-process-started"))
             self.assertEqual(spawn.call_args.args[0][2:6],
                              ("jetson_mower_client.autonomy_zone", "TEST-01", "2", "11"))
@@ -274,7 +282,9 @@ class AutonomyTest(unittest.TestCase):
             self.assertEqual(node._autonomy_zone, (2, 11))
             opener.assert_not_called()
             command["parameters"].update(workZoneId=3)
-            node._handle_mode(command, "now")
+            with patch.dict(os.environ, {"MOWER_WORK_ZONE_API_BASE_URL": "https://example.invalid",
+                                         "WORK_ZONE_API_TOKEN": "test-only"}):
+                node._handle_mode(command, "now")
             self.assertEqual(node._publish_ack.call_args.args[2:4], ("rejected", "autonomy-already-running"))
             self.assertEqual(node._autonomy_zone, (2, 11))
             node._emergency_active = True
@@ -289,10 +299,50 @@ class AutonomyTest(unittest.TestCase):
         node._mqtt = MagicMock()
         node._mqtt.is_connected.return_value = True
         node._autonomy = MagicMock()
-        node._refresh_autonomy_readiness = lambda: node._autonomy.set_start_permitted(False)
+        node._autonomy_authority = None
+        node._refresh_autonomy_readiness = lambda valid: node._autonomy.set_start_permitted(valid)
         node._poll_autonomy()
         self.assertEqual([call[0] for call in node._autonomy.method_calls],
                          ["set_start_permitted", "poll_confirmations"])
+
+    def test_revoked_or_expired_authority_stops_the_mock_runner_without_restart(self):
+        client = load_client()
+        for revoked in (True, False):
+            with self.subTest(revoked=revoked):
+                node = client.JetsonMowerClientNode.__new__(client.JetsonMowerClientNode)
+                node._manual_setup_lock = threading.RLock()
+                node._emergency_active = False
+                node._mqtt = MagicMock()
+                node._publish_status = MagicMock()
+                node._autonomy = AutonomyExecution([sys.executable, str(MOCK)])
+                with patch.object(autonomy_authority, "time") as clock:
+                    clock.monotonic.return_value = 10
+                    authority = client.AutonomyAuthority("https://example.invalid", "test-only", "TEST-01", "cmd-1", 8)
+                    node._autonomy_authority = authority
+                    authority._opener = MagicMock()
+                    response = authority._opener.open.return_value.__enter__.return_value
+                    response.read.return_value = b'{"success":true,"data":{"validForMs":750}}'
+                    authority._poll()
+                    self.assertEqual(authority.status(), "valid")
+                    self.assertEqual(node._autonomy.request_start(True), "autonomy-process-started")
+                    child = node._autonomy.process
+                    try:
+                        if revoked:
+                            response.read.return_value = b'{"success":true,"data":{"validForMs":0}}'
+                            authority._poll()
+                        else:
+                            clock.monotonic.return_value = 10.75
+                        node._poll_autonomy()
+                        self.assertIsNotNone(child.poll())
+                        self.assertEqual(node._autonomy.state, "authority-lost")
+                        self.assertIsNone(node._autonomy_authority)
+                        response.read.return_value = b'{"success":true,"data":{"validForMs":2000}}'
+                        authority._poll()
+                        self.assertEqual(authority.status(), "lost")
+                        node._poll_autonomy()
+                        self.assertIsNone(node._autonomy.process)
+                    finally:
+                        node._autonomy.stop()
 
     def test_web_runner_exit_before_start_allows_an_explicit_retry(self):
         runner = AutonomyExecution([sys.executable])

@@ -30,6 +30,8 @@ public class ControlStateStore {
         private String mode = "idle";
         private boolean emergency;
         private long lockVersion;
+        private String autonomyCommandId;
+        private long autonomyCommandVersion;
         private Instant expiresAt;
         private String reason;
         private Instant updatedAt = Instant.now();
@@ -100,6 +102,21 @@ public class ControlStateStore {
             updatedAt = now;
             lockVersion++;
             return snapshotWithoutRefresh();
+        }
+
+        public synchronized void recordAutonomyCommand(String commandId) {
+            autonomyCommandId = commandId;
+            autonomyCommandVersion = lockVersion;
+        }
+
+        public synchronized long autonomyAuthorityMillis(String commandId, long version, Instant now) {
+            refreshExpiration(now);
+            if (!"held".equals(lockState) || !"autonomous".equals(mode) || emergency
+                    || lockVersion != version || autonomyCommandVersion != version
+                    || !commandId.equals(autonomyCommandId) || expiresAt == null) {
+                return 0;
+            }
+            return Math.min(2_000, Duration.between(now, expiresAt).toMillis());
         }
 
         public synchronized ControlLockSnapshot activateEmergency(String reason, Instant now) {

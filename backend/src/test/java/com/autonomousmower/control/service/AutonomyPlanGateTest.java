@@ -45,6 +45,23 @@ class AutonomyPlanGateTest {
         verify(publisher).publishModeCommand(argThat(payload -> payload.lockVersion() == result.lockVersion()
                 && payload.parameters().get("mode").equals("autonomous")));
         assertThat(state.snapshot().mode()).isEqualTo("autonomous");
+        assertThat(service.autonomyAuthorityMillis("R1", result.commandId(), result.lockVersion())).isPositive();
+        assertThat(service.autonomyAuthorityMillis("R1", "unrelated", result.lockVersion())).isZero();
+        state.release("operator", Instant.now());
+        assertThat(service.autonomyAuthorityMillis("R1", result.commandId(), result.lockVersion())).isZero();
+    }
+
+    @Test void authorityLeaseNeverOutlivesTheLockAndCannotCarryOverToAnotherVersion() {
+        var state = states.stateFor("R1");
+        var now = Instant.now();
+        var lock = state.claim("operator", "운영자", "manual", now);
+        var auto = state.changeMode("operator", "autonomous", now);
+        state.recordAutonomyCommand("cmd-1");
+        assertThat(state.autonomyAuthorityMillis("cmd-1", auto.lockVersion(), lock.expiresAt().minusMillis(700)))
+                .isEqualTo(700);
+        assertThat(state.autonomyAuthorityMillis("cmd-1", auto.lockVersion(), lock.expiresAt())).isZero();
+        var next = state.claim("operator", "운영자", "autonomous", lock.expiresAt());
+        assertThat(state.autonomyAuthorityMillis("cmd-1", next.lockVersion(), lock.expiresAt())).isZero();
     }
 
     @Test void rejectsLostControlAndEmergencyBeforeReadingPlan() {
