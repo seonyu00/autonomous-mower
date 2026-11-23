@@ -142,6 +142,10 @@ class AutonomyExecution:
             ended = self.process is None and self._previous_group_gone()
             if ended:
                 self._handoff_closed_log()
+                if self._history_closed():
+                    self._write_logged_start_confirmation()
+                    self._clear_ended_execution()
+                    return
             ended_at = self._read_confirmation("end") if ended else None
             if not self.started:
                 # 프로세스가 먼저 종료되면 같은 작업의 시작·종료 확인을 함께 기다린다.
@@ -158,6 +162,32 @@ class AutonomyExecution:
                     self.state = "running"
             if ended_at is not None:
                 self.confirm_ended(self.run_id, ended_at.isoformat())
+
+    def _history_closed(self) -> bool:
+        return all((self._confirmation_dir / name).is_file() for name in (
+            GATEWAY_MANAGED, GATEWAY_EXITED, ".lifecycle-start.sent", ".lifecycle-end.sent",
+        ))
+
+    def _write_logged_start_confirmation(self) -> None:
+        """검증되어 서버에 등록된 시작 시각을 작업 폴더에 보존한다."""
+        folder = self._confirmation_dir
+        target = folder / ".confirmed-start.json"
+        if target.is_file():
+            return
+        source = json.loads((folder / ".lifecycle-start.json").read_bytes())
+        at = source.get("signalAt")
+        stamp = datetime.fromisoformat(at.replace("Z", "+00:00")) if isinstance(at, str) else None
+        if stamp is None or stamp.tzinfo is None or not self._launched_at <= stamp <= datetime.now(timezone.utc):
+            raise ValueError("서버에 등록된 작업 시작 시각이 유효하지 않습니다.")
+        event = {"runId": self.run_id, "kind": "start", "signalAt": stamp.astimezone(timezone.utc).isoformat()}
+        temporary = folder / ".confirmed-start.json.pending"
+        try:
+            temporary.write_text(json.dumps(event), encoding="utf-8")
+            os.link(temporary, target)
+        except FileExistsError:
+            pass
+        finally:
+            temporary.unlink(missing_ok=True)
 
     def _handoff_closed_log(self) -> None:
         folder = self._confirmation_dir
@@ -228,11 +258,14 @@ class AutonomyExecution:
             if self.process is not None or not self._previous_group_gone():
                 raise ValueError("이전 작업 프로세스가 종료되지 않았습니다.")
             self._emit("end", at)
-            self.started = False
-            self.run_id = None
-            self._process_group = None
-            self._stopped_process_group = None
-            self.state = "end-confirmed"
+            self._clear_ended_execution()
+
+    def _clear_ended_execution(self) -> None:
+        self.started = False
+        self.run_id = None
+        self._process_group = None
+        self._stopped_process_group = None
+        self.state = "end-confirmed"
 
     def poll(self) -> None:
         with self._lock:

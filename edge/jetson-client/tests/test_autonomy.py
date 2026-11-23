@@ -217,6 +217,43 @@ class AutonomyTest(unittest.TestCase):
             self.assertEqual(runner.request_start(True), "autonomy-process-started")
             self.assertNotEqual(runner.run_id, run_id)
 
+    def test_closed_history_creates_logged_start_confirmation_and_allows_new_auto(self):
+        signals = []
+        process = MagicMock(pid=123)
+        process.poll.return_value = None
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {
+            "MOWER_MISSION_SPOOL": directory,
+            "MOWER_WORK_ZONE_API_BASE_URL": "https://test",
+            "WORK_ZONE_API_TOKEN": "test-token",
+        }), patch("jetson_mower_client.autonomy.subprocess.Popen", return_value=process) as spawn, \
+                patch("jetson_mower_client.autonomy.os.killpg", create=True) as kill_group:
+            runner = AutonomyExecution([sys.executable], signals.append)
+            args = {"robot_id": "TEST-01", "work_zone_id": 1, "work_zone_version": 2}
+            self.assertEqual(runner.request_start(True, **args), "autonomy-process-started")
+            run_id = runner.run_id
+            folder = Path(directory) / run_id
+            runner._start_sent = True
+            runner._process_group = 123
+            runner.stop()
+            runner.poll_confirmations()
+            self.assertFalse((folder / GATEWAY_EXITED).exists())
+            kill_group.side_effect = ProcessLookupError
+            runner.poll_confirmations()
+            now = datetime.now(timezone.utc).isoformat()
+            queue_lifecycle(Path(directory), {"runId": run_id, "id": "start-id", "kind": "start", "signalAt": now})
+            queue_lifecycle(Path(directory), {"runId": run_id, "id": "end-id", "kind": "end", "signalAt": now})
+            (folder / ".lifecycle-start.sent").touch()
+            (folder / ".lifecycle-end.sent").touch()
+            runner.poll_confirmations()
+            self.assertEqual(runner.state, "end-confirmed")
+            self.assertEqual(signals, [])
+            logged_start = json.loads((folder / ".confirmed-start.json").read_text())
+            self.assertEqual(logged_start["runId"], run_id)
+            self.assertFalse((folder / ".confirmed-end.json").exists())
+            self.assertEqual(runner.request_start(False, **args), "autonomy-not-ready")
+            self.assertEqual(runner.request_start(True, **args), "autonomy-process-started")
+            self.assertNotEqual(runner.run_id, run_id)
+
     def test_start_confirmation_requires_live_matching_run_and_aware_timestamp(self):
         runner = AutonomyExecution([sys.executable, str(MOCK)])
         try:
