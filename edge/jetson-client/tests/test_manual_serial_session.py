@@ -37,7 +37,7 @@ class ManualSerialSessionTest(unittest.TestCase):
         self.assertTrue(session.command("arm", "press", "forward", 0.5, 0.31))
         session.tick(0.32)
         self.assertEqual(port.sent[-1], encode_packet(1, 1900, 1900))
-        session.tick(0.7)
+        session.tick(0.72)
         self.assertTrue(port.closed)
         self.assertFalse(session.armed)
 

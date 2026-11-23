@@ -10,7 +10,7 @@ from urllib.request import Request, build_opener
 
 class AutonomyAuthority:
     MAX_VALID_MS = 2_000
-    POLL_SECONDS = 0.5
+    POLL_SECONDS = 0.25
 
     def __init__(self, base_url: str, token: str, robot_id: str, command_id: str, lock_version: int):
         url = urlsplit(base_url)

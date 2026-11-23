@@ -9,7 +9,8 @@ from .manual_serial_protocol import encode_packet, manual_wheels
 _REMOTE_STATUS = re.compile(r"^Remote active:\s*([01])\s*\(hold remaining=(\d+)ms\)$")
 _STATUS_TIMEOUT = 2.5
 # 100ms 출력 주기에서 500ms 데드맨 한계를 넘지 않도록 여유를 둔다.
-_INPUT_TIMEOUT = 0.35
+MANUAL_INPUT_TIMEOUT_MS = 400
+_INPUT_TIMEOUT = MANUAL_INPUT_TIMEOUT_MS / 1000
 _REMOTE_PACKET = encode_packet(0, 1500, 1500)
 
 

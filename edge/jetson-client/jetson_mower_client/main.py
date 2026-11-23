@@ -29,6 +29,7 @@ from .config import EdgeConfig, load_config
 from .hardware_safety import publish_emergency_stop_outputs
 from .manual_serial_bridge import ManualSerialBridge
 from .manual_serial_session import ManualSerialSession
+from .manual_serial_state import MANUAL_INPUT_TIMEOUT_MS
 from .manual_challenge import ChallengeScope, ManualChallenge
 from .mission_upload import queue_lifecycle
 from .mqtt_edge import MqttEdgeClient
@@ -257,7 +258,7 @@ class JetsonMowerClientNode(Node):
         token = parameters.get("challenge")
         challenge_age = None
         if token is not None and self._manual_serial is not None:
-            challenge_age = self._consume_challenge(command, "movement", 350_000_000)
+            challenge_age = self._consume_challenge(command, "movement", MANUAL_INPUT_TIMEOUT_MS * 1_000_000)
             if challenge_age is None:
                 self._publish_zero_twist()
                 self._publish_ack(command, "manual-command", "rejected", "manual-challenge-invalid", received_at)

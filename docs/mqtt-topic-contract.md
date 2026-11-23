@@ -50,7 +50,7 @@
 
 서버는 기존 `commands/mode`에 QoS 0의 `manual-challenge`를 보낸다. `parameters`에 재개 목적 또는 이동 목적과 재개·누름 식별자, 방향 및 속도를 포함한다. Jetson은 기존 `commands/ack`에 QoS 1로 `{robotId,commandId,commandType:"manual-challenge",challenge}`를 발행한다. 서버는 대기 중인 동일 로봇과 요청 ID만 연결하고 확인값을 명령 이력이나 로그에 저장하지 않는다. retain은 사용하지 않는다.
 
-재개·이동 명령의 `parameters.challenge`이 존재하면 Jetson은 일회용 확인값과 발급 시 결합한 로봇·조작자·제어권 버전·입력 범위 및 발급 후 단조 시간으로 검사한다. 재개는 2초 미만, 이동은 350ms 미만이다. 정지·비상 정지·MQTT 단절 및 리모컨 활성 상태 관측 시 확인값을 무효화한다. 재개 및 이동에 확인값이 없으면 아래의 기존 시각 검사로 처리한다. 실장비 적용과 종단 지연은 미검증이다.
+재개·이동 명령의 `parameters.challenge`이 존재하면 Jetson은 일회용 확인값과 발급 시 결합한 로봇·조작자·제어권 버전·입력 범위 및 발급 후 단조 시간으로 검사한다. 재개는 2초 미만, 이동은 400ms 미만이다. 정지·비상 정지·MQTT 단절 및 리모컨 활성 상태 관측 시 확인값을 무효화한다. 재개 및 이동에 확인값이 없으면 아래의 기존 시각 검사로 처리한다. 실장비 적용과 종단 지연은 미검증이다.
 
 All backend-to-edge command messages use the same envelope:
 

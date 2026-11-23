@@ -10,7 +10,7 @@ class ManualSerialStateTest(unittest.TestCase):
         state.observe("Remote active: 0 (hold remaining=0ms)", 1)
         state.arm("arm", 1)
         state.command("arm", "press", "forward", 0.5, 1)
-        state.packet(1.4)
+        state.packet(1.41)
         self.assertEqual(state.lock_reason, "input-timeout")
         state.observe("Remote active: 1 (hold remaining=5000ms)", 2)
         self.assertEqual(state.lock_reason, "remote-active")
@@ -38,8 +38,8 @@ class ManualSerialStateTest(unittest.TestCase):
         self.assertEqual(state.packet(1.1), encode_packet(0, 1500, 1500))
         self.assertFalse(state.command("epoch", "press-1", "forward", 1, 1.15))
         state.command("epoch", "press-2", "forward", 1, 1.2)
-        self.assertEqual(state.packet(1.6), encode_packet(0, 1500, 1500))
-        self.assertFalse(state.command("epoch", "press-1", "forward", 1, 1.8))
+        self.assertEqual(state.packet(1.61), encode_packet(0, 1500, 1500))
+        self.assertFalse(state.command("epoch", "press-2", "forward", 1, 1.8))
 
     def test_remote_override_latches_until_explicit_rearm(self):
         state = ManualSerialState()
@@ -82,8 +82,9 @@ class ManualSerialStateTest(unittest.TestCase):
         state.observe("Remote active: 1 (hold remaining=5000ms)", 0.9)
         state.observe("Remote active: 0 (hold remaining=0ms)", 1)
         state.arm("arm", 1)
-        self.assertTrue(state.command("arm", "press", "forward", 1, 1, 0.3))
-        self.assertEqual(state.packet(1.06), encode_packet(0, 1500, 1500))
+        self.assertTrue(state.command("arm", "press", "forward", 1, 1, 0.36))
+        self.assertEqual(state.packet(1.02), encode_packet(1, 1900, 1900))
+        self.assertEqual(state.packet(1.05), encode_packet(0, 1500, 1500))
 
 
 if __name__ == "__main__":

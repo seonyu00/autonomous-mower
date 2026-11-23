@@ -437,6 +437,26 @@ class AutonomyTest(unittest.TestCase):
                     finally:
                         node._autonomy.stop()
 
+    def test_authority_recovers_from_timeout_before_lease_expires(self):
+        with patch.object(autonomy_authority, "time") as clock:
+            clock.monotonic.return_value = 10
+            authority = autonomy_authority.AutonomyAuthority("https://example.invalid", "test-only", "TEST-01", "cmd-1", 8)
+            authority._opener = MagicMock()
+            response = authority._opener.open.return_value.__enter__.return_value
+            response.read.return_value = b'{"success":true,"data":{"validForMs":2000}}'
+            authority._poll()
+            clock.monotonic.return_value = 11.25
+            authority._opener.open.side_effect = TimeoutError
+            authority._poll()
+            self.assertEqual(authority.status(), "valid")
+            clock.monotonic.return_value = 11.75
+            authority._opener.open.side_effect = None
+            authority._poll()
+            clock.monotonic.return_value = 12
+            self.assertEqual(authority.status(), "valid")
+            clock.monotonic.return_value = 13.75
+            self.assertEqual(authority.status(), "lost")
+
     def test_web_runner_exit_before_start_allows_an_explicit_retry(self):
         runner = AutonomyExecution([sys.executable])
         failed, replacement = MagicMock(pid=123), MagicMock(pid=124)
