@@ -56,7 +56,10 @@ def queue_lifecycle(spool: Path, signal: dict) -> None:
         Path(temporary).unlink()
 
 
-def pack(source: Path, run_id: UUID, *, requested_zone: dict | None = None) -> MissionArchive | None:
+def pack(source: Path, run_id: UUID, *, requested_zone: dict | None = None,
+         unarmed_since_ms: int | None = None) -> MissionArchive | None:
+    if unarmed_since_ms is not None and requested_zone is None:
+        return None
     output = io.BytesIO()
     ended = False
     first = True
@@ -86,6 +89,8 @@ def pack(source: Path, run_id: UUID, *, requested_zone: dict | None = None) -> M
                     log_start = row.get("started_at_unix_ms")
                     if type(log_start) is not int or log_start <= 0:
                         raise ValueError("로그 시작 시각이 유효하지 않습니다.")
+                    if unarmed_since_ms is not None and log_start < unarmed_since_ms:
+                        return None
                 row["server_run_id"] = str(run_id)
                 raw = json.dumps(row, ensure_ascii=False, allow_nan=False).encode("utf-8") + b"\n"
                 first = False
@@ -101,6 +106,15 @@ def pack(source: Path, run_id: UUID, *, requested_zone: dict | None = None) -> M
                 inputs = row.get("input")
                 decision = inputs.get("decision_inputs") if isinstance(inputs, dict) else None
                 command = row.get("actuator_command")
+                if unarmed_since_ms is not None and (
+                    at < log_start or not isinstance(decision, dict) or "permit" not in decision
+                    or (decision["permit"] is not False and decision["permit"] is not None)
+                    or not isinstance(command, dict) or command.get("output_topic") != "/mower_cpp/drive_cmd_vel"
+                    or command.get("mode") != "stop"
+                    or any(type(command.get(k)) not in (int, float) or command[k] != 0
+                           for k in ("linear_mps", "angular_radps"))
+                ):
+                    return None
                 if (first_permitted is None and at >= log_start
                         and isinstance(decision, dict) and decision.get("permit") is True
                         and isinstance(command, dict) and command.get("output_topic") == "/mower_cpp/drive_cmd_vel"
@@ -118,12 +132,14 @@ def pack(source: Path, run_id: UUID, *, requested_zone: dict | None = None) -> M
         return MissionArchive(output.getvalue())
     end_at = row.get("ended_at_unix_ms")
     end_reason = row.get("ended_reason")
-    if first_permitted is None or end_reason not in SESSION_END_REASONS:
+    if (unarmed_since_ms is None and first_permitted is None) or end_reason not in SESSION_END_REASONS:
         return None
     if (row.get("dry_run") is not False or row.get("started_at_unix_ms") != log_start or row.get("steps") != steps
             or type(end_at) is not int or not last_step <= end_at <= time.time_ns() // 1_000_000
             or json.loads(source.with_name("summary.json").read_bytes()) != {k: v for k, v in row.items() if k != "type"}):
         raise ValueError("로그 종료와 마감 요약이 일치하지 않습니다.")
+    if unarmed_since_ms is not None:
+        return MissionArchive(output.getvalue())
     return MissionArchive(output.getvalue(), (first_permitted, end_at))
 
 

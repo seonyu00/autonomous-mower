@@ -4,6 +4,7 @@ import { AuthProvider } from '../../app/providers/AuthProvider';
 import { httpClient } from '../../shared/api/httpClient';
 import { env } from '../../shared/config/env';
 import { holdControl, resetStores, TEST_ROBOT_ID } from '../../test/testStores';
+import { useTelemetryStore } from '../telemetry/telemetryStore';
 import { ControlPanel } from './ControlPanel';
 import { useControlStore } from './controlStore';
 import type { ControlCommandResult } from './types';
@@ -14,6 +15,21 @@ describe('ControlPanel compact dock', () => {
   });
 
   afterEach(cleanup);
+
+  it('장비가 idle을 보고해도 AUTO 준비 중에는 중복 시작만 차단한다', () => {
+    holdControl({ mode: 'idle' });
+    useTelemetryStore.getState().upsertStatus({
+      robotId: TEST_ROBOT_ID, connectionState: 'online', mqttState: 'connected', wssState: 'connected',
+      edgeState: 'autonomy-awaiting-start', lastSeenAt: new Date().toISOString(), stale: false,
+    });
+    render(<AuthProvider><ControlPanel compact /></AuthProvider>);
+    const auto = screen.getByRole('button', { name: 'AUTO' });
+    expect(auto).toHaveClass('primary-button');
+    expect(auto).toBeDisabled();
+    expect(screen.getByRole('button', { name: '작업 시작' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '작업 정지' })).toBeEnabled();
+    expect(screen.getByText('AUTO 준비 중')).toBeVisible();
+  });
 
   it.each([
     ['edge-ack', '장비 수신 확인 · 실행 완료 미확인'],

@@ -68,6 +68,21 @@ class AutonomyPlanGateTest {
         assertThat(state.autonomyAuthorityMillis("cmd-1", next.lockVersion(), lock.expiresAt())).isZero();
     }
 
+    @Test void duplicateAutonomyDoesNotReplaceTheExistingCommandOrItsAuthority() {
+        var state = states.stateFor("R1");
+        var before = state.claim("operator", "운영자", "manual", Instant.now());
+        var user = mock(SecurityUser.class);
+        when(user.getAdminId()).thenReturn("operator");
+        var first = service.changeMode("R1", new ChangeModeRequest("change-mode", "R1", "autonomous", "first",
+                before.lockVersion(), planId), user);
+        reject("operator", first.lockVersion(), ErrorCode.AUTONOMY_ALREADY_ACTIVE);
+        service.renewAutonomyBrowser("R1", first.commandId(), first.lockVersion(), user);
+        reject("operator", first.lockVersion(), ErrorCode.AUTONOMY_ALREADY_ACTIVE);
+        assertThat(service.autonomyAuthorityMillis("R1", first.commandId(), first.lockVersion())).isPositive();
+        assertThat(state.snapshot().lockVersion()).isEqualTo(first.lockVersion());
+        verify(publisher, times(1)).publishModeCommand(any());
+    }
+
     @Test void aClosedBrowserCannotRestoreAnExpiredAutonomyLease() {
         var state = states.stateFor("R1");
         var now = Instant.now();

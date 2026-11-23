@@ -1,9 +1,11 @@
 import importlib.util
+import json
 import os
 import tempfile
 import threading
 from datetime import datetime, timezone
 import sys
+import time
 from pathlib import Path
 from types import ModuleType
 import unittest
@@ -392,3 +394,55 @@ class AutonomyTest(unittest.TestCase):
             self.assertEqual([call.args[0] for call in process.stdin.write.call_args_list],
                              [b"a" * 32 + ending for ending in (b" .\n", b" r\n", b" .\n")])
             runner.stop()
+
+    def test_stopped_web_run_retries_only_after_verified_unarmed_exit(self):
+        options = dict(robot_id="TEST-01", work_zone_id=2, work_zone_version=11)
+        for case in ("verified", "group-alive", "permit", "output", "missing-permit", "unclosed", "summary", "marker"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {
+                "MOWER_MISSION_SPOOL": directory, "MOWER_WORK_ZONE_API_BASE_URL": "https://example.invalid",
+                "WORK_ZONE_API_TOKEN": "test-only",
+            }), patch("jetson_mower_client.autonomy.subprocess.Popen") as launch, \
+                    patch("jetson_mower_client.autonomy.os.killpg", create=True) as kill_group:
+                process = MagicMock(pid=123)
+                process.poll.return_value = None
+                launch.return_value = process
+                signals = []
+                runner = AutonomyExecution([sys.executable], on_signal=signals.append)
+                self.assertEqual(runner.request_start(True, **options), "autonomy-process-started")
+                original = runner.run_id
+                folder = Path(directory) / original
+                source = folder / "session.test" / "mission-test" / "mission.jsonl"
+                source.parent.mkdir(parents=True)
+                zone = {"work_zone_id": "2", "work_zone_version": 11, "polygon": []}
+                (folder / "requested-work-zone.json").write_text(json.dumps(zone), encoding="utf-8")
+                started = time.time_ns() // 1_000_000
+                start = {"type": "run_start", "schema": "mower.mission.log.v1", "dry_run": False,
+                         "work_zone": zone, "started_at_unix_ms": started}
+                step = {"type": "step", "at_unix_ms": started,
+                        "input": {"decision_inputs": {} if case == "missing-permit" else {"permit": case == "permit"}},
+                        "actuator_command": {"output_topic": "/mower_cpp/drive_cmd_vel", "mode": "stop",
+                                             "linear_mps": 0.1 if case == "output" else 0, "angular_radps": 0}}
+                summary = {"ended_at_unix_ms": started, "started_at_unix_ms": started,
+                           "ended_reason": "terminal_interrupted", "dry_run": False, "steps": 1}
+                rows = [start, step] if case == "unclosed" else [start, step, {"type": "run_end", **summary}]
+                source.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+                source.with_name("summary.json").write_text(json.dumps({} if case == "summary" else summary), encoding="utf-8")
+                if case == "marker":
+                    (folder / ".confirmed-start.json").touch()
+                runner._process_group = 123
+                runner._start_sent = True
+                runner.stop()
+                runner.poll_confirmations()
+                launch.assert_called_once()
+                self.assertEqual(runner.run_id, original)
+                if case != "group-alive":
+                    kill_group.side_effect = ProcessLookupError
+                result = runner.request_start(True, **options)
+                if case == "verified":
+                    self.assertEqual(result, "autonomy-process-started")
+                    self.assertNotEqual(runner.run_id, original)
+                    self.assertEqual(launch.call_count, 2)
+                else:
+                    self.assertEqual(result, "autonomy-end-unconfirmed")
+                    launch.assert_called_once()
+                self.assertEqual(signals, [])

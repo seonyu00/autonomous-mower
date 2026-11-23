@@ -103,10 +103,13 @@ function keepAutonomy(robotId: string, commandId: string, lockVersion: number, s
   const renew = async () => {
     const auth = useAuthStore.getState();
     const control = useControlStore.getState().getControlState(robotId);
+    const event = control.lastCommandEvent;
+    const rejected = event?.commandId === commandId
+      && (event.status === 'rejected' || event.status === 'failed' || event.status === 'edge-timeout');
     // 장비 텔레메트리는 실제 모드를 보고한다. 승인된 AUTO의 변경은 제어권 버전으로 확인한다.
     if (stopped || auth.sessionVersion !== sessionVersion || control.lockVersion !== lockVersion
         || control.controlOwner !== auth.user?.id || control.lockState !== 'held'
-        || control.emergency) {
+        || control.emergency || rejected) {
       stop();
       return;
     }

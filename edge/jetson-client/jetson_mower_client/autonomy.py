@@ -10,7 +10,9 @@ import threading
 from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
+
+from .mission_upload import MAX_UPLOAD_BYTES, pack
 
 
 class AutonomyExecution:
@@ -25,6 +27,7 @@ class AutonomyExecution:
         self.started = False
         self._last_at = None
         self._process_group = None
+        self._stopped_web_group: int | None = None
         self._confirmation_dir: Path | None = None
         self._launched_at: datetime | None = None
         self._lock = threading.RLock()
@@ -45,6 +48,10 @@ class AutonomyExecution:
             self.poll()
             if self.process is not None:
                 return "autonomy-already-running"
+            if self.run_id is not None and self._verify_unarmed_exit():
+                self.run_id = None
+                self._stopped_web_group = None
+                self.state = "idle"
             if self.run_id is not None:
                 return "autonomy-end-unconfirmed"
             if not self.command:
@@ -95,6 +102,7 @@ class AutonomyExecution:
             self._confirmation_dir = confirmation_dir
             self._launched_at = launched_at
             self._process_group = self.process.pid if os.name == "posix" else None
+            self._stopped_web_group = None
             self._last_at = None
             self._stdout_buffer = b""
             # 웹 요청은 이 실행에서 새로 수신한 준비 입력을 기다린다.
@@ -242,6 +250,8 @@ class AutonomyExecution:
                     else:
                         self.process.kill()
                     self.process.wait(timeout=2)
+                if self._web_supervised and self._start_sent and not self.started:
+                    self._stopped_web_group = self._process_group
                 self._close_process_pipes()
                 self._process_group = None
                 self._start_sent = False
@@ -250,6 +260,41 @@ class AutonomyExecution:
                 self.run_id = None
                 self.state = "idle"
             self._web_supervised = False
+
+    def _verify_unarmed_exit(self) -> bool:
+        """새 요청에서만 준비 중 종료를 확인하며 작업 이력 신호를 만들지 않는다."""
+        folder = self._confirmation_dir
+        if (self.started or self._stopped_web_group is None or self._process_group is not None
+                or folder is None or self._launched_at is None):
+            return False
+        try:
+            os.killpg(self._stopped_web_group, 0)
+        except ProcessLookupError:
+            pass
+        except OSError:
+            return False
+        else:
+            return False
+
+        try:
+            if folder.is_symlink() or any((folder / name).exists() for name in (
+                ".confirmed-start.json", ".confirmed-end.json", ".lifecycle-start.json", ".lifecycle-end.json",
+            )):
+                return False
+            sources = list(folder.glob("session.*/mission-*/mission.jsonl"))
+            if len(sources) != 1:
+                return False
+            source = sources[0]
+            zone_path = folder / "requested-work-zone.json"
+            for path in (source, source.with_name("summary.json"), zone_path):
+                if (not path.is_file() or path.resolve() != folder.resolve() / path.relative_to(folder)
+                        or path.stat().st_size > MAX_UPLOAD_BYTES):
+                    return False
+            zone = json.loads(zone_path.read_bytes())
+            return pack(source, UUID(self.run_id), requested_zone=zone,
+                        unarmed_since_ms=int(self._launched_at.timestamp() * 1000)) is not None
+        except (OSError, ValueError, KeyError, TypeError):
+            return False
 
     def _emit(self, kind: str, at: str) -> None:
         stamp = datetime.fromisoformat(at.replace("Z", "+00:00"))

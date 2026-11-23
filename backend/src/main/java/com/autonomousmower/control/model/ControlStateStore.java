@@ -113,6 +113,11 @@ public class ControlStateStore {
             autonomyBrowserConfirmed = false;
         }
 
+        public synchronized boolean hasActiveAutonomy(Instant now) {
+            refreshExpiration(now);
+            return autonomyCommandId != null && hasAutonomyAuthority(autonomyCommandId, lockVersion, now);
+        }
+
         public synchronized long autonomyAuthorityMillis(String commandId, long version, Instant now) {
             refreshExpiration(now);
             if (!hasAutonomyAuthority(commandId, version, now)) return 0;

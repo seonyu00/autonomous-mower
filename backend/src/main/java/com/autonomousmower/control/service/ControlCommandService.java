@@ -128,6 +128,9 @@ public class ControlCommandService {
                 state.requireOwner(user.getAdminId());
                 state.requireNotEmergency();
                 state.requireVersion(request.lockVersion());
+                if (state.hasActiveAutonomy(requestedAt)) {
+                    throw new BusinessException(ErrorCode.AUTONOMY_ALREADY_ACTIVE);
+                }
                 if (request.workZoneId() == null && request.workZoneVersion() == null && request.planId() != null) {
                     // 배포 전 구형 웹에서 보낸 계획 ID도 현재 구역과 대조한다.
                     routePlans.get(robotId, request.planId());

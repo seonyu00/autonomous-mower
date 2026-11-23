@@ -135,7 +135,7 @@ describe('control command prechecks', () => {
     }
   });
 
-  it('AUTO 요청의 제어권을 갱신하고 브라우저 이탈 후에는 멈춘다', async () => {
+  it.each(['pagehide', 'edge-rejection'] as const)('AUTO 권한을 갱신하고 %s 후에는 멈춘다', async (ending) => {
     const previousMock = env.enableMockControl;
     env.enableMockControl = false;
     vi.useFakeTimers();
@@ -153,7 +153,14 @@ describe('control command prechecks', () => {
       useControlStore.getState().patchControlState(TEST_ROBOT_ID, { mode: 'idle' });
       await vi.advanceTimersByTimeAsync(750);
       expect(post).toHaveBeenCalledTimes(3);
-      window.dispatchEvent(new Event('pagehide'));
+      if (ending === 'pagehide') {
+        window.dispatchEvent(new Event('pagehide'));
+      } else {
+        useControlStore.getState().applyCommandEvent({
+          robotId: TEST_ROBOT_ID, commandId: 'cmd-auto', commandType: 'change-mode', status: 'rejected',
+          reason: 'autonomy-end-unconfirmed', requestedBy: 'admin', serverTimestamp: new Date().toISOString(), edgeAckAt: null,
+        });
+      }
       await vi.advanceTimersByTimeAsync(3000);
       expect(post).toHaveBeenCalledTimes(3);
     } finally {

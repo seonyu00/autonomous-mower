@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import { Button } from '../../shared/ui/Button';
 import { useRobotStore } from '../robots/robotStore';
+import { useTelemetryStore } from '../telemetry/telemetryStore';
 import { changeMode, ControlPrecheckError, sendMowerAttachmentCommand } from './controlApi';
 import { canControlRobot } from './controlSelectors';
 import { createDefaultControlState, useControlStore } from './controlStore';
@@ -28,12 +29,17 @@ export function GeneralControlCommands({ compact = false }: GeneralControlComman
   const disabledReasonId = useId();
   const selectedRobotId = useRobotStore((state) => state.selectedRobotId);
   const controlByRobotId = useControlStore((state) => state.controlByRobotId);
+  const robotStatus = useTelemetryStore(state => selectedRobotId ? state.statusByRobotId[selectedRobotId] : undefined);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const controlState = selectedRobotId
     ? controlByRobotId[selectedRobotId] ?? createDefaultControlState(selectedRobotId)
     : null;
   const eligibility = selectedRobotId ? canControlRobot(selectedRobotId) : { allowed: false, reasons: ['robot-not-selected'] };
+  const autoState = robotStatus?.stale === false && robotStatus.connectionState === 'online'
+    ? robotStatus.edgeState : undefined;
+  const autoActive = autoState === 'autonomy-awaiting-start' || autoState === 'autonomy-start-requested'
+    || autoState === 'autonomy-running';
   const disabled = !selectedRobotId || !eligibility.allowed || Boolean(controlState?.pendingCommand) || Boolean(controlState?.manualInteracting);
   const disabledReason = eligibility.reasons[0]
     ? formatControlReason(eligibility.reasons[0])
@@ -44,7 +50,7 @@ export function GeneralControlCommands({ compact = false }: GeneralControlComman
       : null;
 
   const handleMode = async (mode: ControlMode) => {
-    if (!selectedRobotId || disabled) {
+    if (!selectedRobotId || disabled || (mode === 'autonomous' && autoActive)) {
       return;
     }
 
@@ -94,8 +100,8 @@ export function GeneralControlCommands({ compact = false }: GeneralControlComman
             <Button
               key={item.mode}
               type="button"
-              variant={controlState?.mode === item.mode ? 'primary' : 'secondary'}
-              disabled={disabled}
+              variant={(autoActive ? item.mode === 'autonomous' : controlState?.mode === item.mode) ? 'primary' : 'secondary'}
+              disabled={disabled || (item.mode === 'autonomous' && autoActive)}
               onClick={() => void handleMode(item.mode)}
             >
               {item.label}
@@ -111,13 +117,15 @@ export function GeneralControlCommands({ compact = false }: GeneralControlComman
           {!compact ? <small>선택한 모드에서 작업을 시작하거나 정지합니다.</small> : null}
         </div>
         <div className="command-actions">
-          <Button type="button" variant="primary" disabled={disabled} onClick={() => void handleMode('autonomous')}>
+          <Button type="button" variant="primary" disabled={disabled || autoActive} onClick={() => void handleMode('autonomous')}>
             작업 시작
           </Button>
           <Button type="button" disabled={disabled} onClick={() => void handleMode('idle')}>
             작업 정지
           </Button>
         </div>
+        {autoActive && <p role="status">{autoState === 'autonomy-awaiting-start' ? 'AUTO 준비 중'
+          : autoState === 'autonomy-start-requested' ? 'AUTO 시작 신호 전송 · 구동 확인 대기' : 'AUTO 시작 확인'}</p>}
       </div>
 
       <div className="command-section attachment-control" aria-label="예초 장치 제어" aria-describedby={compact && disabledReason ? disabledReasonId : undefined}>

@@ -160,14 +160,29 @@ class JetsonMowerClientNode(Node):
                 parsed_id, parsed_version = 0, 0
             if parsed_id > 0 and parsed_version > 0:
                 actual = (parsed_id, parsed_version)
-        reason = readiness(now=time.monotonic(), expected_zone=self._autonomy_zone, actual_zone=actual,
+        now = time.monotonic()
+        reason = readiness(now=now, expected_zone=self._autonomy_zone, actual_zone=actual,
                            remote=self._autonomy_remote, feedback=self._autonomy_feedback,
                            pose=Observation(pose, self._autonomy_status.received_at) if pose is not None and self._autonomy_status else None,
                            obstacles=Observation(obstacles, self._autonomy_status.received_at) if obstacles is not None and self._autonomy_status else None,
                            authority_available=authority_valid and self._mqtt.is_connected(), max_age=2.5)
+        planner_accepts_start = False
+        if reason is None:
+            planning = status.get("planning")
+            path = planning.get("remaining_path") if isinstance(planning, dict) else None
+            # r61은 경로가 준비된 operator_disarmed 상태에서 첫 시작 프레임을 받는다.
+            # 시작 판단에는 r61 감독기의 상태 보고 유효시간(0.5초)을 적용한다.
+            planner_accepts_start = (
+                status.get("armed") is False and status.get("reason") == "operator_disarmed"
+                and 0 <= now - self._autonomy_status.received_at <= 0.5
+                and isinstance(path, list) and len(path) >= 2
+                and planning.get("status") in ("replanned", "unchanged")
+            )
+            if status.get("armed") is not True and not planner_accepts_start:
+                reason = "planner-start-not-ready"
         self._autonomy_readiness_reason = reason
         self._autonomy_ready = reason is None
-        self._autonomy.set_start_permitted(self._autonomy_ready)
+        self._autonomy.set_start_permitted(planner_accepts_start)
 
     def stop(self) -> None:
         self._publish_zero_twist()
