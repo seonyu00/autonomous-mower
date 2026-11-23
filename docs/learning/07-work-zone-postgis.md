@@ -174,6 +174,8 @@ VITE_ENABLE_MOCK_WORK_ZONE=false  # 백엔드 GET/PUT와 PostGIS 사용
 
 ## CPP 예정 경로 미리보기
 
+> 아래는 기존 구현과 검증 기록이다. 2026-11-23부터 관제 지도에서 웹 CPP 예정 경로 미리보기를 제공하지 않는다. Jetson 경로 표시는 별도 기능이다.
+
 2026-09-23 추가. `MapViewMap`의 생성 버튼 → `useCppPreview` → `POST /api/robots/{robotId}/work-zone/cpp-preview` → `CppPreviewService` → 기존 `WorkZoneService.getWorkZone` → `CppProcessRunner` → 반입한 C++ `cpp_map_cli` 순서로 실행한다. 알고리즘은 C++만 사용한다. DB·기존 저장 계약은 바꾸지 않았다.
 
 서버는 조회된 저장본 버전과 요청 버전을 비교하고 CLI 종료 후 다시 조회한다. 응답에는 해당 robotId·zoneId·version을 포함한다. 셸 없이 서버가 지정한 절대 경로를 실행하고 JSON은 표준 입력으로 전달한다. 입력 격자 상한, 동시 실행 제한, 비동기 입출력, 시간 초과 및 출력 크기 초과 시 프로세스 종료를 적용했다. 자세한 수치와 오류는 [API 계약](../api-contract.md)의 cpp-preview 절을 따른다.

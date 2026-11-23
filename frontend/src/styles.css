@@ -1734,6 +1734,10 @@ button {
   display: none;
 }
 
+.work-zone-drawer .work-zone-editor > p {
+  margin: 0;
+}
+
 .work-zone-drawer .coordinate-list {
   max-height: 132px;
 }

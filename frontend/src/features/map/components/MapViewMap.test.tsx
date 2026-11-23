@@ -83,25 +83,9 @@ describe('MapViewMap', () => {
     fireEvent.click(screen.getByLabelText('경로 표시'));
     expect(await screen.findByText('Jetson 남은 경로 수신')).toBeInTheDocument();
     expect(naverMapMock.props?.jetsonRoute).toEqual([[127, 37], [127.001, 37]]);
-    expect(naverMapMock.props?.previewRoute).toEqual([]);
+    expect(screen.queryByText('CPP 예정 경로 · 검토용 미리보기')).not.toBeInTheDocument();
     act(() => useZoneStore.getState().startEditing('MOWER-01::travel'));
     expect(naverMapMock.props?.jetsonRoute).toBeUndefined();
-  });
-
-  it('실제 모드 대체 지도에 CPP 선과 시작·끝을 표시하고 구역 변경 시 제거한다', async () => {
-    envMock.enableMockWorkZone = false;
-    useZoneStore.getState().setZone('MOWER-01', { type: 'Polygon', coordinates: [[[127, 37], [127.001, 37], [127, 37.001], [127, 37]]] }, 2);
-    vi.spyOn(httpClient, 'post').mockResolvedValue({ planId: 'test-plan', sha256: 'a'.repeat(64), preview: { robotId: 'MOWER-01', version: 2,
-      path: [{ lon: 127.0001, lat: 37.0001 }, { lon: 127.0002, lat: 37.0002 }] } });
-    render(<MapViewMap />);
-    fireEvent.click(screen.getByRole('button', { name: '예정 경로 생성' }));
-    expect(await screen.findByLabelText('예정 경로 시작 1')).toBeInTheDocument();
-    expect(screen.getByLabelText('예정 경로 끝 2')).toBeInTheDocument();
-    expect(screen.getByLabelText('CPP 예정 경로 좌표 도식').querySelector('polyline')).toHaveAttribute('points');
-    expect(naverMapMock.props?.previewRoute).toEqual([[127.0001, 37.0001], [127.0002, 37.0002]]);
-    act(() => useZoneStore.getState().setZone('MOWER-01', null, 3));
-    expect(screen.queryByLabelText('예정 경로 시작 1')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '예정 경로 생성' })).toBeDisabled();
   });
 
   it('네이버 지도 초기화 실패 시 경고와 관제용 fallback layer를 표시한다', async () => {

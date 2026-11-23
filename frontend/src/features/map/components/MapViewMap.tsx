@@ -21,8 +21,6 @@ import {
   toFallbackSvgPoint,
   type MapBounds,
 } from '../workZoneEditing';
-import { useCppPreview, previewMarkers } from '../cppPreview';
-import { CppPreviewControls } from './CppPreviewControls';
 import { NaverOperationalMap } from './NaverOperationalMap';
 import { useVisionObservations } from '../visionObservations';
 import { VisionMapControls } from './VisionMapControls';
@@ -33,7 +31,6 @@ const emptyDraftVertices: LngLat[] = [];
 const emptySessionRoute: LngLat[] = [];
 
 export function MapViewMap() {
-  const preview = useCppPreview();
   const [mapError, setMapError] = useState<string | null>(null);
   const [sessionRoutes, setSessionRoutes] = useState<Record<string, LngLat[]>>({});
   const [headingNow, setHeadingNow] = useState(() => performance.now());
@@ -153,9 +150,7 @@ export function MapViewMap() {
         workZone={area === 'travel' ? storedWorkZone : displayedWorkZone}
         travelZone={area === 'travel' ? displayedWorkZone : travelZone}
         draftVertices={draftVertices}
-        plannedRoute={preview.path.length ? [] : plannedRoute}
-        previewRoute={preview.path}
-        transitRoute={preview.transitPath}
+        plannedRoute={plannedRoute}
         completedRoute={completedRoute}
         editing={editingWorkZone && mapReady}
         visionRegions={visibleVision?.regions}
@@ -176,9 +171,7 @@ export function MapViewMap() {
       {mapError ? (
           <FallbackMapLayer
             robotId={selectedRobotId}
-            sampleMode={sampleMode && !preview.path.length}
-            previewRoute={preview.path}
-            transitRoute={preview.transitPath}
+            sampleMode={sampleMode}
             travelZone={travelZone}
             headingDegrees={headingDegrees}
             workZone={sampleEditing ? displayedWorkZone : storedWorkZone}
@@ -205,7 +198,6 @@ export function MapViewMap() {
             <span>{sampleEditing ? '개발용 샘플 좌표 편집 · 실제 DB 저장 안 함' : '저장 구역 좌표 도식 · 실제 배경 지도 아님 · 편집 및 저장 불가'}</span>
           </div>
         ) : null}
-        <CppPreviewControls preview={preview} />
         <details className="cpp-preview-controls jetson-route-controls" name="map-tools">
           <summary>Jetson 남은 경로</summary>
           {routeAvailable && <JetsonPreviewRunControls key={`${selectedRobotId}/${zoneId}/${zoneVersion}`}
@@ -260,17 +252,16 @@ export function MapViewMap() {
       <div className="map-legend" aria-label="지도 범례">
         {jetsonRoute.path && mapReady && <span><i className="legend-line jetson" />Jetson 남은 경로 · 무구동 미리보기</span>}
         <span><i className="legend-line completed" />{sampleMode ? '샘플 완료 경로' : '세션 완료 경로'}</span>
-        {preview.path.length ? <span><i className="legend-line planned" />CPP 예정 경로 · 시작 → 번호 → 끝</span> : sampleMode ? <span><i className="legend-line planned" />샘플 예정 경로</span> : null}
+        {sampleMode && <span><i className="legend-line planned" />샘플 예정 경로</span>}
         <span><i className="legend-area" />작업 구역</span>
-        {travelZone && <span>주황색: 이동 가능 범위·진입 경로</span>}
+        {travelZone && <span>주황색: 이동 가능 범위</span>}
       </div>
     </div>
   );
 }
 
 function FallbackMapLayer({
-  previewRoute,
-  transitRoute = [], travelZone,
+  travelZone,
   robotId,
   sampleMode,
   headingDegrees,
@@ -281,8 +272,6 @@ function FallbackMapLayer({
   onAddVertex,
   onMoveVertex,
 }: {
-  previewRoute: LngLat[];
-  transitRoute?: LngLat[];
   travelZone?: PolygonGeometry | null;
   robotId: string | null;
   sampleMode: boolean;
@@ -304,8 +293,8 @@ function FallbackMapLayer({
       <svg
         viewBox="0 0 1000 620"
         preserveAspectRatio="none"
-        aria-label={editing ? '작업 구역 편집 지도' : previewRoute.length ? 'CPP 예정 경로 좌표 도식' : undefined}
-        aria-hidden={editing || previewRoute.length ? undefined : true}
+        aria-label={editing ? '작업 구역 편집 지도' : undefined}
+        aria-hidden={editing ? undefined : true}
         className={editing ? 'zone-editing' : undefined}
         onClick={(event) => {
           if (!editing) {
@@ -344,22 +333,7 @@ function FallbackMapLayer({
         <rect width="1000" height="620" className="fallback-map-ground" />
         <rect width="1000" height="620" fill="url(#fallback-grid)" />
         {travelZone && <path aria-label="이동 가능 범위" d={toFallbackPath(travelZone, bounds) ?? ''} fill="none" stroke="#e5a42b" strokeWidth="3" />}
-        {transitRoute.length > 0 && <polyline aria-label="진입 경로" fill="none" stroke="#e5a42b" strokeWidth="4" points={transitRoute.map(point => toFallbackSvgPoint(point, bounds).join(',')).join(' ')} />}
         {workZonePath ? <path className="fallback-work-zone" d={workZonePath} /> : null}
-        {previewRoute.length > 0 && <g aria-label="CPP 예정 경로">
-          <polyline fill="none" stroke="#61b6ff" strokeWidth="3" points={previewRoute.map((point) => toFallbackSvgPoint(point, bounds).join(',')).join(' ')} />
-          {previewMarkers(previewRoute).map(({ position, index, label }) => {
-            const [x, y] = toFallbackSvgPoint(position, bounds);
-            const next = previewRoute[index + 1];
-            const target = next ? toFallbackSvgPoint(next, bounds) : null;
-            const angle = target ? Math.atan2(target[1] - y, target[0] - x) * 180 / Math.PI : 0;
-            return <g key={index} aria-label={`예정 경로 ${label}`}>
-              <circle cx={x} cy={y} r="5" fill={index === 0 ? '#49d37b' : '#61b6ff'} />
-              {target && <path d="M-5 -4 L5 0 L-5 4" fill="none" stroke="#fff" strokeWidth="2" transform={`translate(${x} ${y}) rotate(${angle})`} />}
-              <text x={x + 7} y={y - 8} fill="#fff" fontSize="14" stroke="#172234" strokeWidth="3" paintOrder="stroke">{label}</text>
-            </g>;
-          })}
-        </g>}
         {draftVertices.map((position, index) => {
           const [x, y] = toFallbackSvgPoint(position, bounds);
 
