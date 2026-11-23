@@ -1,9 +1,12 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider } from '../../app/providers/AuthProvider';
-import { resetStores, TEST_ROBOT_ID } from '../../test/testStores';
+import { httpClient } from '../../shared/api/httpClient';
+import { env } from '../../shared/config/env';
+import { holdControl, resetStores, TEST_ROBOT_ID } from '../../test/testStores';
 import { ControlPanel } from './ControlPanel';
 import { useControlStore } from './controlStore';
+import type { ControlCommandResult } from './types';
 
 describe('ControlPanel compact dock', () => {
   beforeEach(() => {
@@ -30,6 +33,29 @@ describe('ControlPanel compact dock', () => {
     useControlStore.getState().patchControlState(TEST_ROBOT_ID, { commandError: '명령을 보내지 못했습니다.' });
     render(<AuthProvider><ControlPanel compact /></AuthProvider>);
     expect(screen.getByText('명령을 보내지 못했습니다.')).toBeVisible();
+  });
+
+  it('반납 버튼을 누르면 진행 중으로 표시하고 서버 응답으로 제어권 상태를 갱신한다', async () => {
+    const previousMock = env.enableMockControl;
+    env.enableMockControl = false;
+    holdControl({ lockVersion: 7, expiresAt: '2026-11-23T13:05:00Z' });
+    let finish!: (result: ControlCommandResult) => void;
+    const post = vi.spyOn(httpClient, 'post').mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    try {
+      render(<AuthProvider><ControlPanel compact /></AuthProvider>);
+      const release = screen.getByRole('button', { name: '반납' });
+      fireEvent.click(release);
+      expect(screen.getByText('반납 중…')).toBeVisible();
+      expect(release).toBeDisabled();
+      finish({ accepted: true, robotId: TEST_ROBOT_ID, commandType: 'release-control', requestedAt: '2026-11-23T13:00:00Z',
+        lockState: 'none', lockVersion: 8, controlOwner: null, mode: 'idle' });
+      expect(await screen.findByText('제어권 없음')).toBeVisible();
+      expect(screen.getByRole('button', { name: '제어권 요청' })).toBeEnabled();
+      expect(useControlStore.getState().getControlState(TEST_ROBOT_ID).expiresAt).toBeNull();
+    } finally {
+      post.mockRestore();
+      env.enableMockControl = previousMock;
+    }
   });
 
   it('기본 화면에는 사용자용 제어 상태와 한글 경고만 표시한다', () => {

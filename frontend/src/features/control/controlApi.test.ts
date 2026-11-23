@@ -149,6 +149,8 @@ describe('control command prechecks', () => {
       await changeMode(TEST_ROBOT_ID, 'autonomous');
       expect(post).toHaveBeenLastCalledWith(`/api/control/${TEST_ROBOT_ID}/autonomy-keepalive`,
         { commandId: 'cmd-auto', lockVersion: 3 }, expect.anything());
+      // 준비 중인 장비는 실제 모드를 idle로 보고할 수 있다.
+      useControlStore.getState().patchControlState(TEST_ROBOT_ID, { mode: 'idle' });
       await vi.advanceTimersByTimeAsync(750);
       expect(post).toHaveBeenCalledTimes(3);
       window.dispatchEvent(new Event('pagehide'));

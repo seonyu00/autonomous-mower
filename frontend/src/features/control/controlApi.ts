@@ -103,9 +103,10 @@ function keepAutonomy(robotId: string, commandId: string, lockVersion: number, s
   const renew = async () => {
     const auth = useAuthStore.getState();
     const control = useControlStore.getState().getControlState(robotId);
+    // 장비 텔레메트리는 실제 모드를 보고한다. 승인된 AUTO의 변경은 제어권 버전으로 확인한다.
     if (stopped || auth.sessionVersion !== sessionVersion || control.lockVersion !== lockVersion
         || control.controlOwner !== auth.user?.id || control.lockState !== 'held'
-        || control.mode !== 'autonomous' || control.emergency) {
+        || control.emergency) {
       stop();
       return;
     }
@@ -333,6 +334,7 @@ function applyBackendControlResult(robotId: string, result: ControlCommandResult
     lockVersion: result.lockVersion,
     ...(result.lockState ? { lockState: result.lockState } : {}),
     ...(result.controlOwner !== undefined ? { controlOwner: result.controlOwner } : {}),
+    ...(result.lockState === 'none' ? { expiresAt: null } : {}),
     ...(result.mode ? { mode: result.mode } : {}),
     ...(result.emergency !== undefined ? { emergency: result.emergency } : {}),
   };

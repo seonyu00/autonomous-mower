@@ -84,6 +84,8 @@ export function ControlPanel({ compact = false }: ControlPanelProps) {
     controlState?.lockState === 'held-by-other' ||
     (controlState?.lockState === 'held' && Boolean(controlState.controlOwner) && !ownedByCurrentUser);
   const emergencyActive = Boolean(controlState?.emergency || controlState?.mode === 'emergency');
+  const releasing = controlState?.pendingCommand?.type === 'release-control';
+  const lockLabel = releasing ? '반납 중…' : lockStateLabels[controlState?.lockState ?? 'none'];
   const compactReasons = eligibility.reasons.slice(0, 3);
 
   if (compact) {
@@ -92,7 +94,7 @@ export function ControlPanel({ compact = false }: ControlPanelProps) {
         <section className="control-dock-group control-lock-group" aria-label="제어권 상태와 요청">
           <div className="compact-group-heading">
             <span>제어권</span>
-            <strong>{lockStateLabels[controlState?.lockState ?? 'none']}</strong>
+            <strong aria-live="polite">{lockLabel}</strong>
           </div>
           <div className="control-actions">
             <Button
@@ -107,7 +109,7 @@ export function ControlPanel({ compact = false }: ControlPanelProps) {
             </Button>
             <Button
               type="button"
-              disabled={emergencyActive || !selectedRobotId || !ownedByCurrentUser}
+              disabled={emergencyActive || !selectedRobotId || !ownedByCurrentUser || releasing}
               onClick={() => void handleAction('release')}
             >
               반납
@@ -190,7 +192,7 @@ export function ControlPanel({ compact = false }: ControlPanelProps) {
 
       <div className="control-summary">
         <Metric label="로봇" value={selectedRobotId ?? '없음'} />
-        <Metric label="제어권" value={controlState?.lockState ?? 'none'} />
+        <Metric label="제어권" value={lockLabel} />
         <Metric label="소유자" value={controlState?.controlOwner ?? '미할당'} />
         <Metric label="모드" value={controlState?.mode ?? 'idle'} />
         <Metric label="긴급 정지" value={emergencyActive ? '활성' : '정상'} />
@@ -236,7 +238,7 @@ export function ControlPanel({ compact = false }: ControlPanelProps) {
         </Button>
         <Button
           type="button"
-          disabled={emergencyActive || !selectedRobotId || !ownedByCurrentUser}
+          disabled={emergencyActive || !selectedRobotId || !ownedByCurrentUser || releasing}
           onClick={() => void handleAction('release')}
         >
           제어권 반납
