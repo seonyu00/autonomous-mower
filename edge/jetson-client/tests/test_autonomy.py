@@ -13,6 +13,7 @@ from jetson_mower_client.autonomy import AutonomyExecution
 from jetson_mower_client.mission_confirmation import publish_confirmation
 from jetson_mower_client.mission_upload import queue_lifecycle
 from jetson_mower_client.config import _autonomy_command
+from jetson_mower_client.manual_serial_session import ManualSerialSession
 
 MOCK = Path(__file__).parent / "fixtures/autonomy_mock.py"
 
@@ -238,23 +239,23 @@ class AutonomyTest(unittest.TestCase):
             finally:
                 runner.stop()
 
-    def test_mode_handler_uses_existing_command_and_never_accepts_missing_readiness(self):
+    def test_web_auto_with_idle_manual_serial_waits_for_new_readiness(self):
         client = load_client()
         node = client.JetsonMowerClientNode.__new__(client.JetsonMowerClientNode)
         node._manual_challenge = MagicMock()
         node._pending_manual_prepare = None
         node._autonomy = AutonomyExecution([sys.executable, str(MOCK)])
         node._autonomy_ready = None
-        node._manual_serial = None
+        opener = MagicMock()
+        node._manual_serial = ManualSerialSession("/dev/test", opener)
+        node._autonomy_status = MagicMock()
         node._emergency_active = False
         node._publish_ack = MagicMock()
         node._publish_status = MagicMock()
         node._config = MagicMock(robot_id="TEST-01")
         command = {"parameters": {"mode": "autonomous", "command": "untrusted-command"}}
-        node._handle_mode(command, "now")
-        self.assertEqual(node._publish_ack.call_args.args[2:4], ("rejected", "autonomy-readiness-unknown"))
-        node._autonomy_ready = True
         with patch("jetson_mower_client.autonomy.subprocess.Popen") as spawn:
+            spawn.return_value.poll.return_value = None
             node._handle_mode(command, "now")
             self.assertEqual(node._publish_ack.call_args.args[2:4], ("rejected", "autonomy-work-zone-invalid"))
             spawn.assert_not_called()
@@ -268,6 +269,72 @@ class AutonomyTest(unittest.TestCase):
             self.assertEqual(spawn.call_args.args[0][2:6],
                              ("jetson_mower_client.autonomy_zone", "TEST-01", "2", "11"))
             self.assertEqual(spawn.call_args.args[0][-2:], (sys.executable, str(MOCK)))
+            self.assertFalse(node._autonomy._start_permitted)
+            self.assertIsNone(node._autonomy_status)
+            self.assertEqual(node._autonomy_zone, (2, 11))
+            opener.assert_not_called()
+            command["parameters"].update(workZoneId=3)
+            node._handle_mode(command, "now")
+            self.assertEqual(node._publish_ack.call_args.args[2:4], ("rejected", "autonomy-already-running"))
+            self.assertEqual(node._autonomy_zone, (2, 11))
             node._emergency_active = True
             node._handle_mode(command, "now")
             self.assertEqual(node._publish_ack.call_args.args[2:4], ("rejected", "emergency-active"))
+
+    def test_supervision_uses_latest_readiness_before_replying(self):
+        client = load_client()
+        node = client.JetsonMowerClientNode.__new__(client.JetsonMowerClientNode)
+        node._manual_setup_lock = threading.RLock()
+        node._emergency_active = False
+        node._mqtt = MagicMock()
+        node._mqtt.is_connected.return_value = True
+        node._autonomy = MagicMock()
+        node._refresh_autonomy_readiness = lambda: node._autonomy.set_start_permitted(False)
+        node._poll_autonomy()
+        self.assertEqual([call[0] for call in node._autonomy.method_calls],
+                         ["set_start_permitted", "poll_confirmations"])
+
+    def test_web_runner_exit_before_start_allows_an_explicit_retry(self):
+        runner = AutonomyExecution([sys.executable])
+        failed, replacement = MagicMock(pid=123), MagicMock(pid=124)
+        failed.poll.side_effect = [7]
+        replacement.poll.return_value = None
+        options = dict(robot_id="TEST-01", work_zone_id=2, work_zone_version=11)
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {
+            "MOWER_MISSION_SPOOL": directory, "MOWER_WORK_ZONE_API_BASE_URL": "https://example.invalid",
+            "WORK_ZONE_API_TOKEN": "test-only",
+        }), patch("jetson_mower_client.autonomy.subprocess.Popen", side_effect=[failed, replacement]), \
+                patch("jetson_mower_client.autonomy.os.killpg", create=True):
+            self.assertEqual(runner.request_start(True, **options), "autonomy-process-started")
+            runner.poll_confirmations()
+            self.assertEqual(runner.state, "start-failed")
+            self.assertIsNone(runner.run_id)
+            self.assertFalse(runner.owns_execution)
+            failed.stdin.close.assert_called_once()
+            failed.stdout.close.assert_called_once()
+            self.assertEqual(runner.request_start(True, **options), "autonomy-process-started")
+            runner.stop()
+
+    def test_web_runner_sends_start_frame_once_after_readiness(self):
+        runner = AutonomyExecution([sys.executable])
+        process = MagicMock(pid=123)
+        process.poll.return_value = None
+        ping = b"MOWER_PING " + b"a" * 32 + b"\n"
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {
+            "MOWER_MISSION_SPOOL": directory, "MOWER_WORK_ZONE_API_BASE_URL": "https://example.invalid",
+            "WORK_ZONE_API_TOKEN": "test-only",
+        }), patch("jetson_mower_client.autonomy.subprocess.Popen", return_value=process), \
+                patch("jetson_mower_client.autonomy.select.select", return_value=([process.stdout], [], [])), \
+                patch("jetson_mower_client.autonomy.os.read", return_value=ping), \
+                patch("jetson_mower_client.autonomy.os.killpg", create=True):
+            self.assertEqual(runner.request_start(True, robot_id="TEST-01", work_zone_id=2,
+                                                  work_zone_version=11), "autonomy-process-started")
+            runner.poll()
+            process.stdin.write.assert_not_called()
+            runner.poll_confirmations()
+            runner.set_start_permitted(True)
+            runner.poll_confirmations()
+            runner.poll_confirmations()
+            self.assertEqual([call.args[0] for call in process.stdin.write.call_args_list],
+                             [b"a" * 32 + ending for ending in (b" .\n", b" r\n", b" .\n")])
+            runner.stop()

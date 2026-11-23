@@ -31,6 +31,7 @@ class ManualSerialClientTest(TestCase):
         self.node._publish_ack = MagicMock()
         self.node._publish_status = MagicMock()
         self.node._stop_autonomy = MagicMock()
+        self.node._autonomy = MagicMock(owns_execution=False)
         self.node._emergency_active = False
 
     def test_prepare_requires_fresh_challenge_and_never_arms_by_itself(self):
@@ -63,6 +64,15 @@ class ManualSerialClientTest(TestCase):
         self.node._handle_stop({"parameters": {}}, "now")
         self.assertFalse(self.node._manual_serial.has_port)
         self.assertIsNone(self.node._pending_manual_prepare)
+
+    def test_manual_prepare_cannot_open_serial_during_auto_supervision(self):
+        opener = MagicMock()
+        self.node._manual_serial = ManualSerialSession("/dev/test", opener)
+        self.node._autonomy.owns_execution = True
+        self.node._handle_manual_prepare({}, "now")
+        self.assertEqual(self.node._publish_ack.call_args.args[2:4],
+                         ("rejected", "manual-preparation-unavailable"))
+        opener.assert_not_called()
 
     def test_challenge_rearm_and_move_ignore_wall_clock_and_prevent_replay(self):
         envelope = {"robotId": "robot", "requestedBy": "operator", "lockVersion": 1}

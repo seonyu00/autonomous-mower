@@ -102,11 +102,15 @@ class JetsonMowerClientNode(Node):
         self._publish_status()
 
     def _poll_autonomy(self) -> None:
-        try:
-            self._autonomy.poll_confirmations()
-            self._refresh_autonomy_readiness()
-        except (OSError, ValueError) as error:
-            self.get_logger().warning(f"작업 확인 보류: {error}", throttle_duration_sec=5)
+        with self._manual_setup_lock:
+            try:
+                # MQTT 정지·단절 처리와 직렬화하고, 시작 프레임 직전에 최신 입력을 평가한다.
+                if self._autonomy.owns_execution and (self._emergency_active or not self._mqtt.is_connected()):
+                    self._stop_autonomy()
+                self._refresh_autonomy_readiness()
+                self._autonomy.poll_confirmations()
+            except (OSError, ValueError) as error:
+                self.get_logger().warning(f"작업 확인 보류: {error}", throttle_duration_sec=5)
 
     def _handle_autonomy_remote(self, message: Bool) -> None:
         self._autonomy_remote = Observation(message.data, time.monotonic())
@@ -126,7 +130,7 @@ class JetsonMowerClientNode(Node):
         self._autonomy_status = Observation(value, time.monotonic())
 
     def _refresh_autonomy_readiness(self) -> None:
-        if self._autonomy_zone is None:
+        if self._autonomy_zone is None or not self._autonomy.owns_execution:
             self._autonomy_ready = None
             self._autonomy_readiness_reason = "autonomy-readiness-unknown"
             self._autonomy.set_start_permitted(False)
@@ -304,31 +308,36 @@ class JetsonMowerClientNode(Node):
     def _handle_mode(self, command: dict[str, Any], received_at: str) -> None:
         self._cancel_manual_prepare("manual-preparation-cancelled")
         self._manual_challenge.invalidate()
-        if self._manual_serial is not None:
-            self._manual_serial.disarm()
         if self._emergency_active:
             self._publish_ack(command, "change-mode", "rejected", "emergency-active", received_at)
             return
         mode = str(_parameters(command).get("mode", "idle"))
         if mode not in {"idle", "manual", "autonomous", "home"}:
             raise ValueError("invalid-mode")
+        if self._manual_serial is not None:
+            try:
+                self._manual_serial.disarm()
+            except (OSError, ValueError):
+                raise ValueError("manual-serial-release-failed") from None
         if mode == "autonomous":
-            if self._manual_serial is not None:
+            if self._manual_serial is not None and (
+                not isinstance(self._manual_serial, ManualSerialSession) or self._manual_serial.has_port
+            ):
                 self._publish_ack(command, "change-mode", "rejected", "manual-serial-active", received_at)
                 return
             parameters = _parameters(command)
             zone_id, zone_version = parameters.get("workZoneId"), parameters.get("workZoneVersion")
-            if type(zone_id) is int and type(zone_version) is int:
-                self._autonomy_zone = (zone_id, zone_version)
             # r61의 입력은 실행 뒤에 생긴다. 프로세스 자체는 첫 r 프레임 전까지
             # 정지 상태이며, 아래 준비 판정이 true가 될 때만 출발 요청을 전달한다.
             reason = self._autonomy.request_start(
                 True, robot_id=self._config.robot_id,
                 work_zone_id=zone_id, work_zone_version=zone_version,
             )
-            # request_start의 기존 API는 즉시 시작 가능한 실행에도 쓰인다. 웹 경로는
-            # 첫 ping 전까지 명시적으로 닫아 실제 ROS 입력을 받은 뒤에만 연다.
-            self._autonomy.set_start_permitted(False)
+            if reason == "autonomy-process-started":
+                self._autonomy_zone = (zone_id, zone_version)
+                self._autonomy_remote = self._autonomy_feedback = self._autonomy_status = None
+                self._autonomy_ready = None
+                self._autonomy_readiness_reason = "autonomy-readiness-unknown"
             # 프로세스 생성은 실제 주행 시작 확인이나 완료 응답이 아니다.
             self._publish_ack(command, "change-mode", "accepted" if reason == "autonomy-process-started" else "rejected", reason, received_at)
             self._publish_status()
@@ -489,7 +498,8 @@ class JetsonMowerClientNode(Node):
             self._publish_ack(command, "manual-prepare", "rejected", reason, received_at)
 
     def _handle_manual_prepare(self, command: dict[str, Any], received_at: str) -> None:
-        if (self._emergency_active or self._manual_serial is None or not self._mqtt.is_connected()
+        if (self._emergency_active or self._manual_serial is None or self._autonomy.owns_execution
+                or not self._mqtt.is_connected()
                 or self._consume_challenge(command, "rearm", 2_000_000_000) is None):
             self._publish_ack(command, "manual-prepare", "rejected", "manual-preparation-unavailable", received_at)
             return
@@ -585,6 +595,8 @@ class JetsonMowerClientNode(Node):
             autonomy_block_reason = "emergency-active"
         elif not self._config.autonomy_command:
             autonomy_block_reason = "autonomy-not-configured"
+        elif self._autonomy_ready is True:
+            autonomy_block_reason = None
         elif self._autonomy_ready is False:
             autonomy_block_reason = self._autonomy_readiness_reason or "autonomy-not-ready"
         else:
@@ -594,12 +606,14 @@ class JetsonMowerClientNode(Node):
             "manual-serial-ready" if self._manual_serial.armed else "manual-serial-locked")
         if self._pending_manual_prepare is not None:
             serial_state = "manual-preparing"
+        if self._autonomy.run_id is not None or self._autonomy.state in {"start-failed", "stop-unconfirmed"}:
+            serial_state = "autonomy-" + self._autonomy.state
         payload = {
             "robotId": self._config.robot_id,
             "connectionState": "degraded" if self._emergency_active else "online",
             "mqttState": "connected",
             "edgeState": "emergency" if self._emergency_active else (
-                serial_state or ("autonomy-" + self._autonomy.state if self._autonomy.run_id is not None else self._mode or "connected")),
+                serial_state or self._mode or "connected"),
             "lastSeenAt": utc_now(),
             "autonomyBlockReason": autonomy_block_reason,
             "autonomyReady": self._autonomy_ready,

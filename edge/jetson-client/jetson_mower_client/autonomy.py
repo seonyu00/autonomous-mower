@@ -31,6 +31,13 @@ class AutonomyExecution:
         self._stdout_buffer = b""
         self._start_permitted = False
         self._start_sent = False
+        self._supervision_enabled = False
+        self._web_supervised = False
+
+    @property
+    def owns_execution(self) -> bool:
+        with self._lock:
+            return self.process is not None or self._process_group is not None
 
     def request_start(self, ready: bool | None, *, robot_id: str | None = None,
                       work_zone_id: int | None = None, work_zone_version: int | None = None) -> str:
@@ -90,8 +97,11 @@ class AutonomyExecution:
             self._process_group = self.process.pid if os.name == "posix" else None
             self._last_at = None
             self._stdout_buffer = b""
-            self._start_permitted = ready is True
+            # 웹 요청은 이 실행에서 새로 수신한 준비 입력을 기다린다.
+            self._start_permitted = robot_id is None
             self._start_sent = False
+            self._supervision_enabled = True
+            self._web_supervised = robot_id is not None
             self.state = "awaiting-start"
             return "autonomy-process-started"
 
@@ -107,6 +117,11 @@ class AutonomyExecution:
         """현재 작업 폴더에 게시된 장비 확인 이벤트만 처리한다."""
         with self._lock:
             self.poll()
+            if (self.run_id is not None and self.process is None and self._web_supervised
+                    and not self._start_sent and not self.started):
+                self.stop()
+                self.state = "start-failed"
+            self._relay_supervision_frames()
             if self.run_id is None or self._confirmation_dir is None:
                 return
             kind = "end" if self.started else "start"
@@ -162,14 +177,13 @@ class AutonomyExecution:
 
     def poll(self) -> None:
         with self._lock:
-            self._relay_supervision_frames()
             if self.process is not None and self.process.poll() is not None:
-                self.process = None
+                self._close_process_pipes()
                 # 정상 exit도 실제 작업 완료의 증거로 사용하지 않는다.
                 self.state = "end-unconfirmed" if self.run_id is not None else "end-confirmed"
 
     def _relay_supervision_frames(self) -> None:
-        if self.process is None or self.process.stdout is None or self.process.stdin is None:
+        if not self._supervision_enabled or self.process is None or self.process.stdout is None or self.process.stdin is None:
             return
         try:
             readable, _, _ = select.select([self.process.stdout], [], [], 0)
@@ -200,8 +214,18 @@ class AutonomyExecution:
                 self._start_sent = True
                 self.state = "start-requested"
 
+    def _close_process_pipes(self) -> None:
+        process, self.process = self.process, None
+        if process is not None:
+            for pipe in (process.stdin, process.stdout):
+                if pipe is not None:
+                    pipe.close()
+
     def stop(self) -> None:
         with self._lock:
+            self._supervision_enabled = False
+            self._start_permitted = False
+            cancelled_before_start = self._web_supervised and not self._start_sent and not self.started
             if self.process is not None or self._process_group is not None:
                 try:
                     if os.name == "posix":
@@ -218,11 +242,14 @@ class AutonomyExecution:
                     else:
                         self.process.kill()
                     self.process.wait(timeout=2)
-                self.process = None
+                self._close_process_pipes()
                 self._process_group = None
-                self._start_permitted = False
                 self._start_sent = False
                 self.state = "end-unconfirmed"
+            if cancelled_before_start:
+                self.run_id = None
+                self.state = "idle"
+            self._web_supervised = False
 
     def _emit(self, kind: str, at: str) -> None:
         stamp = datetime.fromisoformat(at.replace("Z", "+00:00"))
