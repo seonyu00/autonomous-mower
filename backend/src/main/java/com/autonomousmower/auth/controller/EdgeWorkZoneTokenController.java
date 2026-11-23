@@ -5,6 +5,7 @@ import com.autonomousmower.auth.service.EdgeWorkZoneTokenService;
 import com.autonomousmower.common.api.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -26,7 +27,7 @@ public class EdgeWorkZoneTokenController {
     @PreAuthorize("hasAuthority('accounts:write')")
     public ApiResponse<IssuedResponse> issue(@PathVariable String robotId, @Valid @RequestBody IssueRequest request,
                                               @AuthenticationPrincipal SecurityUser user) {
-        var issued = tokens.issue(robotId, request.label(), user.getAdminId());
+        var issued = tokens.issue(robotId, request.label(), user.getAdminId(), "mission-upload".equals(request.purpose()));
         return ApiResponse.success(new IssuedResponse(issued.tokenId(), issued.token(), issued.expiresAt()));
     }
 
@@ -37,6 +38,6 @@ public class EdgeWorkZoneTokenController {
         return ApiResponse.success(null);
     }
 
-    public record IssueRequest(@NotBlank String label) { }
+    public record IssueRequest(@NotBlank String label, @Pattern(regexp = "work-zone|mission-upload") String purpose) { }
     public record IssuedResponse(UUID tokenId, String token, Instant expiresAt) { }
 }

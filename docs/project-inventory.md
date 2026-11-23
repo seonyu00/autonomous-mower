@@ -545,13 +545,13 @@ Backend 주요 파일:
 Mock/Skeleton:
 
 - coverage 계산 미구현
-- 작업별 이력의 V12 저장 구조와 내부 `AutonomousRunService`, 읽기 전용 `/api/history/runs`, GPS 3초 구간별 거리·부분 거리와 화면 표시를 PC에서 준비했다. 기존 `/api/history`는 작업 구분 전 기록으로 함께 표시한다. V13과 내부 작업 신호의 spool 연결·원본 보관·24시간 시작 대기·늦은 시작 자동 연결을 PC에서 준비했다. 실제 작업·GPS 입력은 미구현이며 일반 telemetry에서 작업을 추정 생성하지 않는다.
+- 작업별 이력의 V12 저장 구조와 내부 `AutonomousRunService`, 읽기 전용 `/api/history/runs`, GPS 3초 구간별 거리·부분 거리와 화면 표시를 PC에서 준비했다. 기존 `/api/history`는 작업 구분 전 기록으로 함께 표시한다. V13과 내부 작업 신호의 spool 연결·원본 보관·24시간 시작 대기·늦은 시작 자동 연결을 PC에서 준비했다. 작업별 실제 GPS 입력은 미연결이며 일반 telemetry에서 작업을 추정 생성하지 않는다.
 - `RunSignalPersistence`는 진행 중 작업의 GPS·상태 입력을 새 신호만 반영하며, 시작·종료와 지연 연결은 보존된 원본으로 재조정한다. V14는 기존 좌표를 보존하면서 위치 순번을 추가하고 `AutonomousRun`의 위치 추가 시 전체 삭제·재삽입을 피한다. 위치 컬렉션 조회·중복 검사는 여전히 작업 크기에 영향을 받으며 장시간·실장비 성능은 확인하지 않았다.
 - 작업 이력의 로봇 조회는 `RobotRepository`를 직접 사용해 상태·보관 서비스와의 순환 의존성을 제거했다. `RunHistoryApplicationTest`는 서비스 대역 없이 전체 서버 시작·로그인·HTTP 이력 조회를 검사하고, 명시적으로 선택하면 브라우저 확인용 모의 작업을 격리 DB에 보존한다. 재실행 방법은 [로컬 실행·디버깅](learning/09-local-run-debugging.md#작업-이력의-전체-서버-검증과-모의-작업-생성)을 따른다.
 - 새 작업 이력은 확인된 시작·종료 이벤트만 표시한다. 기존 오류 이벤트의 작업별 연결은 미구현이다.
-- 작업 신호의 30초 확인 불가 판정과 동일 ID 재연결은 내부 입력으로 검증하며 실제 자율주행 프로그램별 작업 신호 연결과 실제 예초 면적 커버리지는 미구현이다. 합의한 기준과 미확정 사항, 후속 순서는 Git에서 제외된 로컬 문서 `docs/learning/12-development-roadmap.md`의 2026-11-07 계획을 따른다.
+- 웹 AUTO가 관리한 r61 세션의 마감 로그는 `mission_upload.py`가 구역·첫 주행 허용 판단·마감 요약을 확인해 서버에 시작·종료와 재생 파일을 등록한다. 실제 위치의 작업별 GPS 입력과 실제 예초 면적 커버리지는 별도 범위다. 설치와 업로드 대상은 [Jetson README](../edge/jetson-client/README.md#r57-백업을-웹에서-재생)를 따른다.
 - 웹 저장 작업 구역의 준비 파일은 `edge/jetson-client/jetson_mower_client/web_work_zone.py`와 `scripts/prepare-web-work-zone.sh`로 별도 생성한다. 기존 조회 API 응답의 로봇·버전·다각형을 검증하고 오목한 경계·내부 제외 구역을 보존하며 기존 파일을 덮어쓰지 않는다. 기존 5×5 시험 스크립트는 변경하지 않는다. 실제 주행·비전 지도·AUTO 적용과 연결하지 않았으며 [Jetson README](../edge/jetson-client/README.md#웹-작업-구역의-별도-준비-파일)에 실행·인증·미검증 범위를 기록했다.
-- `edge/jetson-client/jetson_mower_client/autonomy.py`에 AUTO 프로세스 실행 관리와 명시적인 시작·상태·종료 확인 지점을 PC에서 준비했다. 예제 명령과 준비 확인은 기본 비활성이며 실제 GPS 준비·스크립트·작업 이력 전송 어댑터는 미연결이다. 기존 웹 AUTO/작업 시작 요청을 받는 제어 클라이언트의 실행 경로이며 상태 전용 모니터에는 적용하지 않았다. 검증·한계는 [Jetson README](../edge/jetson-client/README.md#auto-실행-관리의-pc-준비)를 따른다.
+- `edge/jetson-client/jetson_mower_client/autonomy.py`는 웹 AUTO 프로세스와 장비 확인 이벤트를 관리한다. 작업 이력 업로더는 마감 로그를 별도 서비스에서 확인한다. 검증·한계는 [Jetson README](../edge/jetson-client/README.md#auto-실행-관리의-pc-준비)를 따른다.
 
 ### Logs/Snapshot
 

@@ -329,13 +329,15 @@ Response `200`:
 
 #### `GET /api/history?robotId=&from=&to=`
 
-Jetson의 업로더는 `PUT /api/history/runs/{id}/lifecycle?robotId=`로 실행 관리자가 확인한 시작·종료를 보고한다. `control:write` 권한이 필요하며 JSON 본문은 신호 UUID `id`, `kind`(`start` 또는 `end`), UTC 기준 `signalAt`으로 구성한다. 같은 신호의 재전송은 204를 반환한다. 시작이 저장되기 전 종료나 충돌한 신호는 409로 응답한다. 이 API는 작업 이력 기록에 사용하며 주행 제어 명령을 발행하지 않는다.
+Jetson의 업로더는 `PUT /api/history/runs/{id}/lifecycle?robotId=`로 작업 세션 시작·종료를 보고한다. `control:write` 권한 또는 해당 로봇의 `edge:mission:upload` 권한을 사용한다. JSON 본문은 신호 UUID `id`, `kind`(`start` 또는 `end`), UTC 기준 `signalAt`으로 구성한다. 같은 신호의 재전송은 204를 반환한다. 시작이 저장되기 전 종료나 충돌한 신호는 409로 응답한다. r61 자동 등록의 완료 상태는 세션 마감을 의미한다.
 
 Permission: `history:read`
 
 기존 날짜별 API는 유지한다. 화면은 이 결과를 `작업 구분 전 기록`으로 표시하며 작업 시작·종료를 추정하지 않는다. 별도 `GET /api/history/runs?robotId=&from=&to=`도 같은 권한과 UTC Instant 조건을 사용한다. 새 조회는 기간에 걸쳐 있는 작업 전체를 반환하며 종료가 미확인인 작업은 시작 이후 기간의 조회에 포함될 수 있다. 기존 위치 조회와 새 작업 조회는 서로 다른 출처이며 작업에 GPS를 연결하기 전 과거 위치를 자동 복사·분할하지 않는다.
 
-`PUT /api/history/runs/{id}/replay?robotId=`는 `control:write` 권한으로 종료 확인된 작업의 gzip JSONL을 등록한다. 본문은 `application/gzip`이며 첫 행의 `server_run_id`가 URL의 작업 UUID와 같아야 한다. 무구동 로그, 종료 기록이 없는 로그, 형식 오류는 400으로 거부한다. 작업이나 로봇 불일치는 404, 종료 대기 또는 기존 파일과의 충돌은 409, 압축 16 MiB 초과는 413이다. 같은 파일을 다시 보내면 204를 반환하고 다른 파일로 덮어쓰지 않는다. 같은 URL의 GET은 `history:read` 권한으로 등록된 로그를 반환한다.
+`PUT /api/history/runs/{id}/replay?robotId=`는 시작·종료 보고와 같은 권한으로 종료 확인된 작업의 gzip JSONL을 등록한다. 본문은 `application/gzip`이며 첫 행의 `server_run_id`가 URL의 작업 UUID와 같아야 한다. 무구동 로그, 종료 기록이 없는 로그, 형식 오류는 400으로 거부한다. 작업이나 로봇 불일치는 404, 종료 대기 또는 기존 파일과의 충돌은 409, 압축 16 MiB 초과는 413이다. 같은 파일을 다시 보내면 204를 반환하고 다른 파일로 덮어쓰지 않는다. 같은 URL의 GET은 `history:read` 권한으로 등록된 로그를 반환한다.
+
+`accounts:write` 권한으로 `POST /api/robots/{robotId}/edge-work-zone-tokens`에 `label`과 `purpose: "mission-upload"`를 지정하면 두 작업 이력 PUT 전용 토큰을 발급한다. `purpose` 생략 또는 `"work-zone"` 지정은 기존 작업 구역 토큰을 발급한다. 업로드 토큰으로 다른 로봇을 요청하면 404를 반환한다.
 
 작업별 조회 응답에는 `id`, `robotId`, `startedAt`, `endedAt`(미확인 시 null), `lastObservedAt`, `checkedAt`, `status`(`running|completed|unconfirmed`), `routeSegments`, `distanceMeters`, `hasGpsGap`, `distancePartial`, `coveragePercent`, `events`가 있다. 시각은 UTC다. 상태 신호의 최종 서버 관측 후 30초 이상이면 `unconfirmed`이며 실제 종료를 확정하지 않는다. 동일 작업의 새로운 신호를 확인하면 같은 ID로 이어 표시한다. 중복·역순 신호는 최종 관측 시각을 연장하지 않고 확인된 종료는 이전 상태로 되돌리지 않는다.
 

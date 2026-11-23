@@ -41,7 +41,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 UsernamePasswordAuthenticationToken authentication;
                 if (edge != null) {
                     authentication = new UsernamePasswordAuthenticationToken(edge, token,
-                            AuthorityUtils.createAuthorityList("edge:work-zone:read"));
+                            AuthorityUtils.createAuthorityList(edge.missionUpload()
+                                    ? "edge:mission:upload" : "edge:work-zone:read"));
                 } else {
                     SecurityUser user = jwtTokenProvider.parse(token);
                     authentication = new UsernamePasswordAuthenticationToken(user, token, user.getAuthorities());

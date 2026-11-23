@@ -69,13 +69,36 @@ class RunHistoryApplicationTest {
             var headers=new HttpHeaders(); headers.setBearerAuth(token);
             http.getRestTemplate().setRequestFactory(new org.springframework.http.client.JdkClientHttpRequestFactory());
             var lifecycle = "/api/history/runs/" + id + "/lifecycle?robotId=" + robotId;
+            var replayUrl = "/api/history/runs/" + id + "/replay";
             var start = new RunSignal(UUID.randomUUID(),id,robotId,"start",at,null,null);
             var end = new RunSignal(UUID.randomUUID(),id,robotId,"end",at.plusSeconds(5),null,null);
-            var startRequest = new HttpEntity<>(Map.of("id", start.id(), "kind", start.kind(), "signalAt", start.signalAt().toString()), headers);
-            var endRequest = new HttpEntity<>(Map.of("id", end.id(), "kind", end.kind(), "signalAt", end.signalAt().toString()), headers);
+            var uploadHeaders = new HttpHeaders();
             if (keep) {
                 assertThat(persistence.persist(start, at)).isTrue();
             } else {
+                var tokenPath = "/api/robots/" + robotId + "/edge-work-zone-tokens";
+                var issued = http.postForEntity(tokenPath, new HttpEntity<>(
+                        Map.of("label", "replay test", "purpose", "mission-upload"), headers), String.class);
+                assertThat(issued.getStatusCode()).isEqualTo(HttpStatus.OK);
+                uploadHeaders.setBearerAuth(mapper.readTree(issued.getBody()).path("data").path("token").asText());
+                var issuedWorkZone = http.postForEntity(tokenPath,
+                        new HttpEntity<>(Map.of("label", "legacy work zone test"), headers), String.class);
+                assertThat(issuedWorkZone.getStatusCode()).isEqualTo(HttpStatus.OK);
+                var workZoneHeaders = new HttpHeaders();
+                workZoneHeaders.setBearerAuth(mapper.readTree(issuedWorkZone.getBody()).path("data").path("token").asText());
+                var startBody = Map.of("id", start.id(), "kind", start.kind(), "signalAt", start.signalAt().toString());
+                var startRequest = new HttpEntity<>(startBody, uploadHeaders);
+                var endRequest = new HttpEntity<>(Map.of("id", end.id(), "kind", end.kind(),
+                        "signalAt", end.signalAt().toString()), uploadHeaders);
+                assertThat(http.exchange(lifecycle, HttpMethod.PUT,
+                        new HttpEntity<>(startBody, workZoneHeaders), Void.class).getStatusCode())
+                        .isEqualTo(HttpStatus.FORBIDDEN);
+                assertThat(http.exchange(lifecycle.replace(robotId, "another-robot"), HttpMethod.PUT,
+                        startRequest, Void.class).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+                assertThat(http.exchange("/api/robots/" + robotId + "/work-zone", HttpMethod.GET,
+                        new HttpEntity<>(uploadHeaders), String.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+                assertThat(http.exchange(replayUrl + "?robotId=" + robotId, HttpMethod.GET,
+                        new HttpEntity<>(uploadHeaders), byte[].class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
                 assertThat(http.exchange(lifecycle, HttpMethod.PUT, endRequest, Void.class).getStatusCode())
                         .isEqualTo(HttpStatus.CONFLICT);
                 assertThat(http.exchange(lifecycle, HttpMethod.PUT, startRequest, Void.class).getStatusCode())
@@ -90,6 +113,8 @@ class RunHistoryApplicationTest {
             if (keep) {
                 assertThat(persistence.persist(end, at.plusSeconds(5))).isTrue();
             } else {
+                var endRequest = new HttpEntity<>(Map.of("id", end.id(), "kind", end.kind(),
+                        "signalAt", end.signalAt().toString()), uploadHeaders);
                 assertThat(http.exchange(lifecycle, HttpMethod.PUT, endRequest, Void.class).getStatusCode())
                         .isEqualTo(HttpStatus.NO_CONTENT);
             }
@@ -103,7 +128,6 @@ class RunHistoryApplicationTest {
             assertThat(run.path("distanceMeters").asDouble()).isBetween(178.0,180.0);
             assertThat(run.path("coveragePercent").isNull()).isTrue();
             assertThat(http.getForEntity("/api/history/runs?robotId="+robotId,String.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-            var replayUrl = "/api/history/runs/" + id + "/replay";
             assertThat(http.exchange(replayUrl + "?robotId=" + robotId, HttpMethod.GET,
                     new HttpEntity<>(headers), byte[].class).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
@@ -121,10 +145,12 @@ class RunHistoryApplicationTest {
             if (keep) {
                 Files.write(replayFile, compressed.toByteArray());
             } else {
-                headers.setContentType(MediaType.parseMediaType("application/gzip"));
-                var upload = new HttpEntity<>(compressed.toByteArray(), headers);
+                uploadHeaders.setContentType(MediaType.parseMediaType("application/gzip"));
+                var upload = new HttpEntity<>(compressed.toByteArray(), uploadHeaders);
                 String path = replayUrl + "?robotId=" + robotId;
-                assertThat(http.exchange(path, HttpMethod.PUT, new HttpEntity<>(new byte[]{1}, headers),
+                assertThat(http.exchange(replayUrl + "?robotId=another-robot", HttpMethod.PUT,
+                        upload, Void.class).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+                assertThat(http.exchange(path, HttpMethod.PUT, new HttpEntity<>(new byte[]{1}, uploadHeaders),
                         Void.class).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
                 assertThat(http.exchange(path, HttpMethod.PUT, upload, Void.class).getStatusCode())
                         .isEqualTo(HttpStatus.NO_CONTENT);
@@ -147,6 +173,7 @@ class RunHistoryApplicationTest {
             Files.deleteIfExists(replayFile);
             Files.deleteIfExists(REPLAY_DIR);
             if(!keep) {
+                jdbc.update("DELETE FROM edge_work_zone_token WHERE robot_id=?",robotId);
                 jdbc.update("DELETE FROM stored_run_signal WHERE run_id=?",id);
                 jdbc.update("DELETE FROM autonomous_run_position WHERE run_id=?",id);
                 jdbc.update("DELETE FROM autonomous_run WHERE id=?",id);

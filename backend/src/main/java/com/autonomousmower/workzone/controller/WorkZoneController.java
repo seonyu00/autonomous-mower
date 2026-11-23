@@ -29,7 +29,7 @@ public class WorkZoneController {
     public ApiResponse<WorkZoneResponse> getWorkZone(@PathVariable String robotId, Authentication authentication) {
         Object principal = authentication.getPrincipal();
         boolean edgeOwnsRobot = principal instanceof com.autonomousmower.auth.security.EdgeWorkZonePrincipal edge
-                && edge.robotId().equals(robotId);
+                && !edge.missionUpload() && edge.robotId().equals(robotId);
         boolean operatorCanRead = authentication.getAuthorities().stream()
                 .anyMatch(authority -> "robots:read".equals(authority.getAuthority()));
         if (!edgeOwnsRobot && !operatorCanRead) throw new org.springframework.security.access.AccessDeniedException("Permission denied.");

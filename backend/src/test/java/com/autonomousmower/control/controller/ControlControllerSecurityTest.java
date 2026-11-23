@@ -65,7 +65,7 @@ class ControlControllerSecurityTest {
 
     @Test
     void autonomyAuthorityRequiresTheMatchingJetsonTokenAndDisablesCaching() throws Exception {
-        when(edgeTokens.authenticate("test-only")).thenReturn(new EdgeWorkZonePrincipal(UUID.randomUUID(), "MOWER-01"));
+        when(edgeTokens.authenticate("test-only")).thenReturn(new EdgeWorkZonePrincipal(UUID.randomUUID(), "MOWER-01", false));
         when(controlCommandService.autonomyAuthorityMillis("MOWER-01", "cmd-1", 8L)).thenReturn(1200L);
         mockMvc.perform(get("/api/control/MOWER-01/autonomy-authority").param("commandId", "cmd-1")
                         .param("lockVersion", "8").header("Authorization", "Bearer test-only"))

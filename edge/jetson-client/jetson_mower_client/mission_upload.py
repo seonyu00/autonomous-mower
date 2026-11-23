@@ -1,7 +1,9 @@
-"""작업별 r60 로그를 압축해 종료가 확인된 서버 작업에 전송한다."""
+"""마감된 자율주행 세션 로그를 관제 작업 이력에 등록한다."""
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
+from datetime import datetime, timezone
 import gzip
 import io
 import json
@@ -11,9 +13,17 @@ import time
 import tempfile
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
-from uuid import UUID
+from uuid import UUID, uuid5
 
 MAX_UPLOAD_BYTES = 16 * 1024 * 1024
+ZONE_FIELDS = ("work_zone_id", "work_zone_version", "polygon")
+SESSION_END_REASONS = {"operator_quit", "terminal_closed", "terminal_disconnected", "terminal_interrupted"}
+
+
+@dataclass(frozen=True)
+class MissionArchive:
+    data: bytes
+    session_times: tuple[int, int] | None = None
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -46,11 +56,12 @@ def queue_lifecycle(spool: Path, signal: dict) -> None:
         Path(temporary).unlink()
 
 
-def pack(source: Path, run_id: UUID) -> bytes | None:
+def pack(source: Path, run_id: UUID, *, requested_zone: dict | None = None) -> MissionArchive | None:
     output = io.BytesIO()
     ended = False
     first = True
-    has_step = False
+    log_start = first_permitted = last_step = None
+    steps = 0
     with source.open("rb") as lines, gzip.GzipFile(fileobj=output, mode="wb", mtime=0) as compressed:
         for raw in lines:
             # 줄 단위로 쓰는 실행기가 아직 마지막 줄을 완성하지 않았다.
@@ -69,21 +80,51 @@ def pack(source: Path, run_id: UUID) -> bytes | None:
                     return None
                 if row.get("server_run_id", str(run_id)) != str(run_id):
                     raise ValueError("로그의 작업 UUID가 폴더와 다릅니다.")
+                if requested_zone is not None:
+                    if row.get("work_zone") != {key: requested_zone[key] for key in ZONE_FIELDS}:
+                        raise ValueError("로그의 작업 구역이 웹에서 준비한 구역과 다릅니다.")
+                    log_start = row.get("started_at_unix_ms")
+                    if type(log_start) is not int or log_start <= 0:
+                        raise ValueError("로그 시작 시각이 유효하지 않습니다.")
                 row["server_run_id"] = str(run_id)
                 raw = json.dumps(row, ensure_ascii=False, allow_nan=False).encode("utf-8") + b"\n"
                 first = False
             elif kind == "run_start":
                 raise ValueError("여러 작업의 로그가 섞였습니다.")
-            has_step |= kind == "step"
+            if kind == "step":
+                steps += 1
+            if requested_zone is not None and kind == "step":
+                at = row.get("at_unix_ms")
+                if type(at) is not int or at <= 0 or (last_step is not None and at < last_step):
+                    raise ValueError("자율주행 판단 시각이 유효하지 않습니다.")
+                last_step = at
+                inputs = row.get("input")
+                decision = inputs.get("decision_inputs") if isinstance(inputs, dict) else None
+                command = row.get("actuator_command")
+                if (first_permitted is None and at >= log_start
+                        and isinstance(decision, dict) and decision.get("permit") is True
+                        and isinstance(command, dict) and command.get("output_topic") == "/mower_cpp/drive_cmd_vel"
+                        and type(command.get("timestamp_unix_ms")) is int and command["timestamp_unix_ms"] >= at):
+                    first_permitted = at
             ended = kind == "run_end"
             compressed.write(raw)
             if output.tell() > MAX_UPLOAD_BYTES:
                 raise ValueError("압축 로그가 업로드 한도를 초과합니다.")
-    if not ended or not has_step:
+    if not ended or not steps:
         return None
     if output.tell() > MAX_UPLOAD_BYTES:
         raise ValueError("압축 로그가 업로드 한도를 초과합니다.")
-    return output.getvalue()
+    if requested_zone is None:
+        return MissionArchive(output.getvalue())
+    end_at = row.get("ended_at_unix_ms")
+    end_reason = row.get("ended_reason")
+    if first_permitted is None or end_reason not in SESSION_END_REASONS:
+        return None
+    if (row.get("dry_run") is not False or row.get("started_at_unix_ms") != log_start or row.get("steps") != steps
+            or type(end_at) is not int or not last_step <= end_at <= time.time_ns() // 1_000_000
+            or json.loads(source.with_name("summary.json").read_bytes()) != {k: v for k, v in row.items() if k != "type"}):
+        raise ValueError("로그 종료와 마감 요약이 일치하지 않습니다.")
+    return MissionArchive(output.getvalue(), (first_permitted, end_at))
 
 
 def upload_pending(spool: Path, base: str, robot: str, token: str) -> None:
@@ -97,6 +138,14 @@ def upload_pending(spool: Path, base: str, robot: str, token: str) -> None:
             if response.status != 204:
                 raise ValueError(f"예상하지 못한 응답 상태 {response.status}")
 
+    def send_lifecycle(folder, path):
+        for kind in ("start", "end"):
+            event = folder / f".lifecycle-{kind}.json"
+            sent = event.with_suffix(".sent")
+            if event.is_file() and not sent.exists():
+                send(f"{path}/lifecycle?{query}", event.read_bytes(), "application/json")
+                sent.touch(exist_ok=True)
+
     for folder in sorted(spool.glob("*")):
         try:
             run_id = UUID(folder.name)
@@ -109,20 +158,33 @@ def upload_pending(spool: Path, base: str, robot: str, token: str) -> None:
             continue
         try:
             path = f"{base}/api/history/runs/{run_id}"
-            for kind in ("start", "end"):
-                event = folder / f".lifecycle-{kind}.json"
-                sent = event.with_suffix(".sent")
-                if event.is_file() and not sent.exists():
-                    send(f"{path}/lifecycle?{query}", event.read_bytes(), "application/json")
-                    sent.touch(exist_ok=True)
+            send_lifecycle(folder, path)
             sources = list(folder.glob("session.*/mission-*/mission.jsonl"))
             if len(sources) != 1 or not sources[0].with_name("summary.json").is_file():
                 continue
             source = sources[0]
-            compressed = pack(source, run_id)
-            if compressed is None:
+            zone_path = folder / "requested-work-zone.json"
+            kinds = ("start", "end")
+            signal_ids = {kind: str(uuid5(run_id, f"cpp-session-{kind}")) for kind in kinds}
+            explicit_confirmation = False
+            for kind in kinds:
+                event = folder / f".lifecycle-{kind}.json"
+                if ((folder / f".confirmed-{kind}.json").exists()
+                        or event.is_file() and json.loads(event.read_bytes())["id"] != signal_ids[kind]):
+                    explicit_confirmation = True
+                    break
+            zone = json.loads(zone_path.read_bytes()) if zone_path.is_file() and not explicit_confirmation else None
+            if zone_path.is_file() and not explicit_confirmation and not isinstance(zone, dict):
+                raise ValueError("웹에서 준비한 작업 구역의 형식이 다릅니다.")
+            archive = pack(source, run_id, requested_zone=zone)
+            if archive is None:
                 continue
-            send(f"{path}/replay?{query}", compressed, "application/gzip")
+            if archive.session_times is not None:
+                for kind, stamp in zip(kinds, archive.session_times):
+                    at = datetime.fromtimestamp(stamp / 1000, timezone.utc).isoformat(timespec="milliseconds")
+                    queue_lifecycle(spool, {"runId": str(run_id), "id": signal_ids[kind], "kind": kind, "signalAt": at})
+                send_lifecycle(folder, path)
+            send(f"{path}/replay?{query}", archive.data, "application/gzip")
             marker.touch(exist_ok=True)
         except (OSError, ValueError, KeyError, TypeError) as error:
             print(f"작업 {run_id} 업로드 보류: {error}", flush=True)

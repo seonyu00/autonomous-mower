@@ -1,0 +1,16 @@
+[Unit]
+Description=예초기 작업 기록 자동 업로드
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=%h/autonomous-mower/edge/jetson-client
+EnvironmentFile=%h/.config/mower-mission-upload.env
+ExecStart=/usr/bin/python3 -B -m jetson_mower_client.mission_upload --api-base-url ${MOWER_MISSION_API_BASE_URL} --robot-id ${MOWER_MISSION_ROBOT_ID}
+Restart=on-failure
+RestartSec=15
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

@@ -20,9 +20,9 @@ public class EdgeWorkZoneTokenService {
     public EdgeWorkZoneTokenService(EdgeWorkZoneTokenRepository tokens) { this.tokens = tokens; }
 
     @Transactional
-    public IssuedToken issue(String robotId, String label, String actor) {
+    public IssuedToken issue(String robotId, String label, String actor, boolean missionUpload) {
         byte[] bytes = new byte[32]; RANDOM.nextBytes(bytes);
-        String secret = "mwr_" + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        String secret = (missionUpload ? "mwm_" : "mwr_") + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         Instant now = Instant.now();
         EdgeWorkZoneToken token = new EdgeWorkZoneToken(UUID.randomUUID(), robotId, hash(secret), label, actor,
                 now, now.plus(90, ChronoUnit.DAYS));
@@ -32,10 +32,11 @@ public class EdgeWorkZoneTokenService {
 
     @Transactional(readOnly = true)
     public EdgeWorkZonePrincipal authenticate(String secret) {
-        if (secret == null || !secret.matches("mwr_[A-Za-z0-9_-]{43}")) return null;
+        if (secret == null || !secret.matches("mw[rm]_[A-Za-z0-9_-]{43}")) return null;
         return tokens.findByTokenHash(hash(secret))
                 .filter(token -> token.getRevokedAt() == null && token.getExpiresAt().isAfter(Instant.now()))
-                .map(token -> new EdgeWorkZonePrincipal(token.getTokenId(), token.getRobotId())).orElse(null);
+                .map(token -> new EdgeWorkZonePrincipal(token.getTokenId(), token.getRobotId(),
+                        secret.startsWith("mwm_"))).orElse(null);
     }
 
     @Transactional

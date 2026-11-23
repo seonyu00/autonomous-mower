@@ -196,5 +196,5 @@ function runStatus(entry: HistoryEntry, now: number) {
       + Math.max(0, now - (entry.receivedAtClient ?? now)) : 0;
     return age >= 86_400_000 ? '시작 확인 불가 · 대기 기간 경과' : '시작 확인 불가 · 시작 신호 대기 중';
   }
-  return entry.status === 'completed'   ? '완료' : entry.status === 'unconfirmed' ? '종료 확인 불가' : '진행 중';
+  return entry.status === 'completed' ? '세션 종료' : entry.status === 'unconfirmed' ? '종료 확인 불가' : '진행 중';
 }

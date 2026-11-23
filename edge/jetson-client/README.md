@@ -27,7 +27,9 @@ python -m jetson_mower_client.r41_web replay-preview-routes --robot-id <ROBOT_ID
 
 기존 기록을 서버 작업 이력에 연결하려면 운영자가 세션과 서버의 실제 작업 UUID가 일치함을 확인한 뒤 PC 백엔드 호스트에서 `python tools/archive_mission.py <mission.jsonl> <작업_UUID> <보관_디렉터리>`를 실행한다. 보관 디렉터리는 백엔드 실행 위치 기준 `data/mission-replays`이며 `APP_HISTORY_REPLAY_DIRECTORY`로 절대 경로를 지정할 수 있다. 작업 목록을 검색한 뒤 해당 행을 클릭하면 웹이 로그인 세션으로 기록을 읽는다.
 
-자동 업로드 시험에서는 Jetson 실행 관리자와 별도 업로더에 같은 `MOWER_MISSION_SPOOL` 절대 경로를 설정한다. 실행 관리자는 r60 로그 루트에 작업 UUID를 붙여 자식에 전달한다. 업로더에만 `MOWER_MISSION_UPLOAD_TOKEN`에 `control:write` 권한의 토큰을 설정하고 `python -m jetson_mower_client.mission_upload --api-base-url <HTTPS_API> --robot-id <ROBOT_ID>`를 실행한다. 업로더는 30초마다 닫힌 작업 로그를 확인하고, 서버에서 같은 UUID의 종료가 확인되면 저장한다. 성공 후 표시 파일을 남겨 재전송을 건너뛰며 원본 로그는 보존한다. 무구동 로그는 전송 대상에서 제외한다. 현재 r60의 실제 시작·종료 신호를 서버에 보내는 어댑터는 별도 연결이 필요하다.
+웹 AUTO로 관리한 r61 세션의 로그는 별도 업로더가 30초마다 확인한다. 실행 관리자가 생성한 작업 UUID 폴더 안에서 `requested-work-zone.json`과 기록의 구역이 일치해야 한다. 업로더는 플래너가 처음 `permit=true`로 처리한 주행 판단 시각과 `run_end`·`summary.json`이 일치하는 마감 시각을 같은 작업 UUID로 전송한 뒤 재생 파일을 등록한다. 무구동, 주행 허용 전 종료, 마감이 누락된 로그는 자동 등록 대상에서 제외한다. 세션 종료는 작업 이력의 기록 경계다. 바퀴·칼날의 실제 정지 확인이나 AUTO 재무장에는 기존 확인 절차가 적용된다. 별도로 실행한 SSH 세션은 위의 파일 선택으로 재생할 수 있다.
+
+설치 시 인증된 관리자 계정으로 `POST /api/robots/<ROBOT_ID>/edge-work-zone-tokens`에 `{"label":"작업 이력 업로더","purpose":"mission-upload"}`를 보내 해당 로봇의 업로드 전용 토큰을 발급한다. `~/.config/mower-mission-upload.env`를 권한 600으로 만들고 `MOWER_MISSION_API_BASE_URL`, `MOWER_MISSION_ROBOT_ID`, `MOWER_MISSION_UPLOAD_TOKEN`과 게이트웨이와 같은 `MOWER_MISSION_SPOOL` 절대 경로를 지정한다. 사용자 서비스 `mower-mission-upload.service`의 `WorkingDirectory`는 배포한 Jetson 클라이언트 폴더에 맞춰 적용한다. 단독 실행 시에는 같은 환경에서 `python -m jetson_mower_client.mission_upload --api-base-url <HTTPS_API> --robot-id <ROBOT_ID>`를 사용한다. 원본은 로컬에 보존하며, 실패 시 같은 신호 UUID로 다시 시도하고 성공한 기록은 재전송하지 않는다.
 
 r60 무구동 상태를 격리 관제 서버에 전달하려면 서버에서 `APP_JETSON_ROUTE_PREVIEW_WRITE_ENABLED=true`를 설정하고, Jetson의 `MOWER_PREVIEW_TOKEN`에 해당 서버의 조회·제어 쓰기 권한 토큰을 설정한다. 같은 작업 구역이 저장된 시험 로봇을 대상으로 `edge/jetson-client`에서 실행한다.
 

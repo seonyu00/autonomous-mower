@@ -1,5 +1,6 @@
 package com.autonomousmower.history.controller;
 
+import com.autonomousmower.auth.security.EdgeWorkZonePrincipal;
 import com.autonomousmower.history.repository.AutonomousRunRepository;
 import com.autonomousmower.history.dto.RunSignal;
 import com.autonomousmower.history.service.RunSignalPersistence;
@@ -20,6 +21,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -40,9 +42,12 @@ public class RunReplayController {
     public record Lifecycle(UUID id, String kind, Instant signalAt) {}
 
     @PutMapping(value = "/{id}/lifecycle", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('control:write')")
+    @PreAuthorize("hasAnyAuthority('control:write','edge:mission:upload')")
     public ResponseEntity<Void> lifecycle(@PathVariable UUID id, @RequestParam String robotId,
-            @RequestBody Lifecycle body) throws IOException {
+            @RequestBody Lifecycle body, @AuthenticationPrincipal Object principal) throws IOException {
+        if (principal instanceof EdgeWorkZonePrincipal edge && !edge.robotId().equals(robotId)) {
+            return ResponseEntity.notFound().build();
+        }
         Instant now = Instant.now();
         if (body.id() == null || body.kind() == null || !Set.of("start", "end").contains(body.kind())
                 || body.signalAt() == null || body.signalAt().isAfter(now)
@@ -69,9 +74,12 @@ public class RunReplayController {
     }
 
     @PutMapping(value = "/{id}/replay", consumes = "application/gzip")
-    @PreAuthorize("hasAuthority('control:write')")
+    @PreAuthorize("hasAnyAuthority('control:write','edge:mission:upload')")
     public ResponseEntity<Void> upload(@PathVariable UUID id, @RequestParam String robotId,
-            HttpServletRequest request) throws IOException {
+            HttpServletRequest request, @AuthenticationPrincipal Object principal) throws IOException {
+        if (principal instanceof EdgeWorkZonePrincipal edge && !edge.robotId().equals(robotId)) {
+            return ResponseEntity.notFound().build();
+        }
         var run = runs.findById(id).filter(item -> item.getRobotId().equals(robotId));
         if (run.isEmpty()) return ResponseEntity.notFound().build();
         if (run.get().getEndedAt() == null) return ResponseEntity.status(409).build();

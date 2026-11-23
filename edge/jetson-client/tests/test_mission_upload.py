@@ -1,6 +1,8 @@
 import gzip
+from datetime import datetime
 import json
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -11,6 +13,69 @@ from jetson_mower_client.mission_upload import pack, queue_lifecycle, upload_pen
 
 
 class MissionUploadTest(unittest.TestCase):
+    def make_session(self, folder: Path, *, permit=True, dry_run=False):
+        source = folder / "session.test" / "mission-test" / "mission.jsonl"
+        source.parent.mkdir(parents=True)
+        zone = {"work_zone_id": "57", "work_zone_version": 3, "polygon": []}
+        now = time.time_ns() // 1_000_000
+        opening = {"type": "run_start", "schema": "mower.mission.log.v1", "dry_run": dry_run,
+                   "work_zone": zone, "started_at_unix_ms": now - 2000}
+        waiting = {"type": "step", "at_unix_ms": now - 1900, "input": {"decision_inputs": {"permit": False}}}
+        active = {**waiting, "at_unix_ms": now - 1500, "input": {"decision_inputs": {"permit": permit}},
+                  "actuator_command": {"output_topic": "/mower_cpp/drive_cmd_vel", "timestamp_unix_ms": now - 1499}}
+        summary = {"ended_reason": "terminal_interrupted", "ended_at_unix_ms": now - 100,
+                   "started_at_unix_ms": now - 2000, "dry_run": dry_run, "steps": 2}
+        source.write_text("".join(json.dumps(row) + "\n" for row in
+                                 (opening, waiting, active, {"type": "run_end", **summary})), encoding="utf-8")
+        source.with_name("summary.json").write_text(json.dumps(summary), encoding="utf-8")
+        (folder / "requested-work-zone.json").write_text(json.dumps(zone), encoding="utf-8")
+        return source, active["at_unix_ms"], summary["ended_at_unix_ms"]
+
+    def test_uploads_closed_managed_session_after_first_live_permit(self):
+        with tempfile.TemporaryDirectory() as root:
+            spool, run_id = Path(root), uuid4()
+            folder = spool / str(run_id)
+            source, start_at, end_at = self.make_session(folder)
+            original = source.read_bytes()
+            response = MagicMock()
+            response.__enter__.return_value.status = 204
+            with patch("jetson_mower_client.mission_upload.build_opener") as opener:
+                send = opener.return_value.open
+                send.side_effect = [response, HTTPError("https://test", 503, "retry", {}, None), response, response]
+                for _ in range(3):
+                    upload_pending(spool, "https://test", "TEST-01", "test-token")
+                start, failed_end, end, replay = [record.args[0] for record in send.call_args_list]
+                self.assertEqual(failed_end.data, end.data)
+                self.assertEqual(json.loads(start.data)["kind"], "start")
+                self.assertEqual(json.loads(end.data)["kind"], "end")
+                for request, expected in ((start, start_at), (end, end_at)):
+                    self.assertEqual(round(datetime.fromisoformat(json.loads(request.data)["signalAt"]).timestamp() * 1000),
+                                     expected)
+                self.assertEqual(json.loads(gzip.decompress(replay.data).splitlines()[0])["server_run_id"], str(run_id))
+                self.assertEqual(source.read_bytes(), original)
+                self.assertTrue((folder / ".uploaded").is_file())
+
+    def test_skips_dry_unarmed_unclosed_and_mismatched_managed_sessions(self):
+        cases = ("preview", "no permit", "no summary", "unclosed", "wrong zone", "wrong end")
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as root:
+                spool = Path(root)
+                folder = spool / str(uuid4())
+                source, _, _ = self.make_session(folder, permit=case != "no permit", dry_run=case == "preview")
+                if case == "no summary":
+                    source.with_name("summary.json").unlink()
+                if case == "unclosed":
+                    source.write_bytes(b"\n".join(source.read_bytes().splitlines()[:-1]) + b"\n")
+                if case == "wrong zone":
+                    marker = folder / "requested-work-zone.json"
+                    marker.write_text(marker.read_text().replace('"57"', '"58"'))
+                if case == "wrong end":
+                    source.with_name("summary.json").write_text("{}")
+                with patch("jetson_mower_client.mission_upload.build_opener") as opener:
+                    upload_pending(spool, "https://test", "TEST-01", "test-token")
+                    opener.return_value.open.assert_not_called()
+                self.assertEqual(list(folder.glob(".lifecycle-*.json")), [])
+
     def test_resends_end_with_same_signal_id_after_failure(self):
         with tempfile.TemporaryDirectory() as root:
             spool = Path(root)
