@@ -32,6 +32,8 @@ public class ControlStateStore {
         private long lockVersion;
         private String autonomyCommandId;
         private long autonomyCommandVersion;
+        private Instant autonomyBrowserDeadline;
+        private boolean autonomyBrowserConfirmed;
         private Instant expiresAt;
         private String reason;
         private Instant updatedAt = Instant.now();
@@ -104,19 +106,34 @@ public class ControlStateStore {
             return snapshotWithoutRefresh();
         }
 
-        public synchronized void recordAutonomyCommand(String commandId) {
+        public synchronized void recordAutonomyCommand(String commandId, Instant now) {
             autonomyCommandId = commandId;
             autonomyCommandVersion = lockVersion;
+            autonomyBrowserDeadline = now.plusSeconds(3);
+            autonomyBrowserConfirmed = false;
         }
 
         public synchronized long autonomyAuthorityMillis(String commandId, long version, Instant now) {
             refreshExpiration(now);
-            if (!"held".equals(lockState) || !"autonomous".equals(mode) || emergency
-                    || lockVersion != version || autonomyCommandVersion != version
-                    || !commandId.equals(autonomyCommandId) || expiresAt == null) {
-                return 0;
-            }
-            return Math.min(2_000, Duration.between(now, expiresAt).toMillis());
+            if (!hasAutonomyAuthority(commandId, version, now)) return 0;
+            if (!autonomyBrowserConfirmed) return -1;
+            return Math.min(2_000, Math.min(Duration.between(now, expiresAt).toMillis(),
+                    Duration.between(now, autonomyBrowserDeadline).toMillis()));
+        }
+
+        public synchronized boolean renewAutonomyBrowser(String commandId, long version, String owner, Instant now) {
+            refreshExpiration(now);
+            if (!owner.equals(controlOwner) || !hasAutonomyAuthority(commandId, version, now)) return false;
+            autonomyBrowserConfirmed = true;
+            autonomyBrowserDeadline = now.plusSeconds(3);
+            return true;
+        }
+
+        private boolean hasAutonomyAuthority(String commandId, long version, Instant now) {
+            return "held".equals(lockState) && "autonomous".equals(mode) && !emergency
+                    && lockVersion == version && autonomyCommandVersion == version
+                    && commandId.equals(autonomyCommandId) && expiresAt != null
+                    && autonomyBrowserDeadline != null && now.isBefore(autonomyBrowserDeadline);
         }
 
         public synchronized ControlLockSnapshot activateEmergency(String reason, Instant now) {

@@ -86,6 +86,17 @@ public class ControlController {
                 .body(ApiResponse.success(Map.of("validForMs", validForMs)));
     }
 
+    @PostMapping("/autonomy-keepalive")
+    @PreAuthorize("hasAuthority('control:write')")
+    public ResponseEntity<Void> keepAutonomy(@PathVariable String robotId,
+            @Valid @RequestBody AutonomyKeepalive request, @AuthenticationPrincipal SecurityUser user) {
+        controlCommandService.renewAutonomyBrowser(robotId, request.commandId(), request.lockVersion(), user);
+        return ResponseEntity.noContent().build();
+    }
+
+    public record AutonomyKeepalive(@jakarta.validation.constraints.NotBlank String commandId,
+                                    @jakarta.validation.constraints.Positive long lockVersion) {}
+
     @PostMapping("/claim")
     @PreAuthorize("hasAuthority('control:write')")
     public ApiResponse<ControlCommandResponse> claim(

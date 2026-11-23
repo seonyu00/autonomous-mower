@@ -111,6 +111,7 @@ class JetsonMowerClientNode(Node):
                     self._stop_autonomy()
                 authority = self._autonomy_authority.status() if self._autonomy_authority else "pending"
                 if self._autonomy.owns_execution and authority == "lost":
+                    self.get_logger().warning(f"AUTO 제어권 확인 종료: {self._autonomy_authority.diagnostic()}")
                     self._stop_autonomy()
                     self._autonomy.state = "authority-lost"
                     self._publish_status()

@@ -135,6 +135,33 @@ describe('control command prechecks', () => {
     }
   });
 
+  it('AUTO 요청의 제어권을 갱신하고 브라우저 이탈 후에는 멈춘다', async () => {
+    const previousMock = env.enableMockControl;
+    env.enableMockControl = false;
+    vi.useFakeTimers();
+    const post = vi.spyOn(httpClient, 'post')
+      .mockResolvedValueOnce({ accepted: true, commandId: 'cmd-auto', lockVersion: 3, mode: 'autonomous' })
+      .mockResolvedValue(undefined);
+    try {
+      useZoneStore.getState().setZone(TEST_ROBOT_ID, { type: 'Polygon', coordinates: [
+        [[127, 36], [127.01, 36], [127, 36.01], [127, 36]],
+      ] }, 11, 2);
+      await changeMode(TEST_ROBOT_ID, 'autonomous');
+      expect(post).toHaveBeenLastCalledWith(`/api/control/${TEST_ROBOT_ID}/autonomy-keepalive`,
+        { commandId: 'cmd-auto', lockVersion: 3 }, expect.anything());
+      await vi.advanceTimersByTimeAsync(750);
+      expect(post).toHaveBeenCalledTimes(3);
+      window.dispatchEvent(new Event('pagehide'));
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(post).toHaveBeenCalledTimes(3);
+    } finally {
+      window.dispatchEvent(new Event('pagehide'));
+      post.mockRestore();
+      vi.useRealTimers();
+      env.enableMockControl = previousMock;
+    }
+  });
+
   it('blocks read-only users from manual control commands', async () => {
     resetStores('read-only');
     holdControl();

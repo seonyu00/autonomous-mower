@@ -1074,7 +1074,9 @@ CPP 생성 요청의 선택적 `start:{lat,lon}`은 검토용 시작 좌표이�
 
 웹 AUTO 요청은 저장된 `workZoneId`와 `workZoneVersion`을 보낸다. 최초 경로 계산과 구역 안에서의 재계획은 Jetson이 담당하는 방향이며 운영자가 각 경로를 승인하는 절차는 요구하지 않는다. 서버는 제어권 소유자, 긴급정지 상태, 잠금 버전을 먼저 확인하고 요청 구역이 현재 저장본과 다르면 WORK_ZONE_CONFLICT로 응답한다. 구형 웹이 `planId`만 보낸 경우에는 기존 계획 조회로 현재 구역과 대조한다. MQTT 발행 성공은 감독 실행 요청 접수이며, 실제 주행 시작은 Jetson에서 별도로 판정한다.
 
-Jetson은 같은 로봇의 전용 토큰으로 `GET /api/control/{robotId}/autonomy-authority?commandId=…&lockVersion=…`를 조회한다. 명령 ID와 제어권 버전이 현재 AUTO에 일치할 때만 `data.validForMs`에 최대 2000ms를 응답하며, 제어권이 곧 만료되면 남은 시간만 반환한다. 반납·만료·인수·정지·모드 변경·긴급 정지 후에는 기존 요청의 값이 0이다. 응답은 캐시하지 않는다. Jetson은 확인 전 시작 프레임을 보내지 않으며, 조회 거부 또는 마지막 유효시간 종료 후 감독 신호를 끊고 실행기를 종료한다. 제어권을 다시 얻어도 새 AUTO 요청이 필요하다.
+Jetson은 같은 로봇의 전용 토큰으로 `GET /api/control/{robotId}/autonomy-authority?commandId=…&lockVersion=…`를 조회한다. 최초 브라우저 확인 전에는 `data.validForMs`가 -1이고, 확인 후에는 최대 2000ms 안에서 제어권과 브라우저 갱신의 남은 시간을 반환한다. 반납·만료·인수·정지·모드 변경·긴급 정지 후에는 값이 0이다. 응답은 캐시하지 않는다. Jetson은 확인 전 시작 프레임을 보내지 않으며, 권한 종료 시 감독 신호를 끊고 실행기를 종료한다. 제어권을 다시 얻어도 새 AUTO 요청이 필요하다.
+
+웹은 AUTO 접수 후 `POST /api/control/{robotId}/autonomy-keepalive`에 `{commandId, lockVersion}`을 보내고 약 750ms 간격으로 갱신한다. 서버는 현재 제어권 보유자와 명령을 검사하며 마지막 확인 후 3초가 지나면 늦은 갱신을 거부한다. 페이지 종료나 연결 단절 시 웹은 갱신을 끝낸다.
 # 수동 시리얼 조작 재개와 입력 식별자 (개발 중)
 
 ### 웹에서 수동 제어부 준비 요청 — 2026-11-11

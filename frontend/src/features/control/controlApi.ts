@@ -59,6 +59,7 @@ export async function takeoverControl(robotId: string) {
 
 export async function changeMode(robotId: string, mode: ControlMode) {
   requireCanControl(robotId);
+  const sessionVersion = useAuthStore.getState().sessionVersion;
   const zones = useZoneStore.getState();
   const workZoneId = zones.zoneIdsByRobotId[robotId];
   const workZoneVersion = zones.versionsByRobotId[robotId];
@@ -79,7 +80,50 @@ export async function changeMode(robotId: string, mode: ControlMode) {
     lastCommandPayload: command,
   });
 
-  return requestControlCommand(robotId, 'change-mode', `/api/control/${robotId}/mode`, command);
+  const result = await requestControlCommand(robotId, 'change-mode', `/api/control/${robotId}/mode`, command);
+  if (mode === 'autonomous' && result.accepted && !result.mock && result.commandId && result.lockVersion !== undefined
+      && useAuthStore.getState().sessionVersion === sessionVersion) {
+    keepAutonomy(robotId, result.commandId, result.lockVersion, sessionVersion);
+  }
+  return result;
+}
+
+function keepAutonomy(robotId: string, commandId: string, lockVersion: number, sessionVersion: number) {
+  const path = `/api/control/${encodeURIComponent(robotId)}/autonomy-keepalive`;
+  let stopped = false;
+  let timer: number | undefined;
+  let pending: AbortController | undefined;
+  const stop = () => {
+    stopped = true;
+    window.clearTimeout(timer);
+    pending?.abort();
+    window.removeEventListener('pagehide', stop);
+    window.removeEventListener('offline', stop);
+  };
+  const renew = async () => {
+    const auth = useAuthStore.getState();
+    const control = useControlStore.getState().getControlState(robotId);
+    if (stopped || auth.sessionVersion !== sessionVersion || control.lockVersion !== lockVersion
+        || control.controlOwner !== auth.user?.id || control.lockState !== 'held'
+        || control.mode !== 'autonomous' || control.emergency) {
+      stop();
+      return;
+    }
+    pending = new AbortController();
+    const timeout = window.setTimeout(() => pending?.abort(), 1500);
+    try {
+      await httpClient.post(path, { commandId, lockVersion }, { signal: pending.signal });
+      if (!stopped) timer = window.setTimeout(() => void renew(), 750);
+    } catch {
+      stop();
+    } finally {
+      window.clearTimeout(timeout);
+      pending = undefined;
+    }
+  };
+  window.addEventListener('pagehide', stop);
+  window.addEventListener('offline', stop);
+  void renew();
 }
 
 export async function sendManualCommand(robotId: string, command: ManualCommand) {

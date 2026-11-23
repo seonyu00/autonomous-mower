@@ -45,6 +45,8 @@ class AutonomyPlanGateTest {
         verify(publisher).publishModeCommand(argThat(payload -> payload.lockVersion() == result.lockVersion()
                 && payload.parameters().get("mode").equals("autonomous")));
         assertThat(state.snapshot().mode()).isEqualTo("autonomous");
+        assertThat(service.autonomyAuthorityMillis("R1", result.commandId(), result.lockVersion())).isEqualTo(-1);
+        service.renewAutonomyBrowser("R1", result.commandId(), result.lockVersion(), user);
         assertThat(service.autonomyAuthorityMillis("R1", result.commandId(), result.lockVersion())).isPositive();
         assertThat(service.autonomyAuthorityMillis("R1", "unrelated", result.lockVersion())).isZero();
         state.release("operator", Instant.now());
@@ -56,12 +58,27 @@ class AutonomyPlanGateTest {
         var now = Instant.now();
         var lock = state.claim("operator", "운영자", "manual", now);
         var auto = state.changeMode("operator", "autonomous", now);
-        state.recordAutonomyCommand("cmd-1");
+        state.recordAutonomyCommand("cmd-1", lock.expiresAt().minusSeconds(2));
+        assertThat(state.renewAutonomyBrowser("cmd-1", auto.lockVersion(), "operator",
+                lock.expiresAt().minusSeconds(1))).isTrue();
         assertThat(state.autonomyAuthorityMillis("cmd-1", auto.lockVersion(), lock.expiresAt().minusMillis(700)))
                 .isEqualTo(700);
         assertThat(state.autonomyAuthorityMillis("cmd-1", auto.lockVersion(), lock.expiresAt())).isZero();
         var next = state.claim("operator", "운영자", "autonomous", lock.expiresAt());
         assertThat(state.autonomyAuthorityMillis("cmd-1", next.lockVersion(), lock.expiresAt())).isZero();
+    }
+
+    @Test void aClosedBrowserCannotRestoreAnExpiredAutonomyLease() {
+        var state = states.stateFor("R1");
+        var now = Instant.now();
+        state.claim("operator", "운영자", "manual", now);
+        var auto = state.changeMode("operator", "autonomous", now);
+        state.recordAutonomyCommand("cmd-1", now);
+        assertThat(state.renewAutonomyBrowser("cmd-1", auto.lockVersion(), "other", now)).isFalse();
+        assertThat(state.renewAutonomyBrowser("cmd-1", auto.lockVersion(), "operator", now)).isTrue();
+        assertThat(state.autonomyAuthorityMillis("cmd-1", auto.lockVersion(), now.plusSeconds(3))).isZero();
+        assertThat(state.renewAutonomyBrowser("cmd-1", auto.lockVersion(), "operator", now.plusSeconds(4))).isFalse();
+        assertThat(state.snapshot().lockState()).isEqualTo("held");
     }
 
     @Test void rejectsLostControlAndEmergencyBeforeReadingPlan() {

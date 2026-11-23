@@ -314,6 +314,7 @@ class AutonomyTest(unittest.TestCase):
                 node._emergency_active = False
                 node._mqtt = MagicMock()
                 node._publish_status = MagicMock()
+                node.get_logger = MagicMock()
                 node._autonomy = AutonomyExecution([sys.executable, str(MOCK)])
                 with patch.object(autonomy_authority, "time") as clock:
                     clock.monotonic.return_value = 10
@@ -321,6 +322,9 @@ class AutonomyTest(unittest.TestCase):
                     node._autonomy_authority = authority
                     authority._opener = MagicMock()
                     response = authority._opener.open.return_value.__enter__.return_value
+                    response.read.return_value = b'{"success":true,"data":{"validForMs":-1}}'
+                    authority._poll()
+                    self.assertEqual(authority.status(), "pending")
                     response.read.return_value = b'{"success":true,"data":{"validForMs":750}}'
                     authority._poll()
                     self.assertEqual(authority.status(), "valid")
