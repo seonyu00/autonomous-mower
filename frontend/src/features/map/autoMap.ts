@@ -47,3 +47,12 @@ export function useAutoMap(status: RobotStatus | undefined, zoneId: number | nul
   const age = frame ? Date.now() - frame.observedAt : Infinity;
   return active && frame && frame !== expiredFrame && age >= 0 && age < displayLifetimeMs ? frame : undefined;
 }
+
+export function useAutoPwm(status: RobotStatus | undefined, connected: boolean) {
+  const raw = status?.autoMap as { zoneId?: number; zoneVersion?: number; pwm?: { left?: unknown; right?: unknown } } | undefined;
+  const frame = useAutoMap(status, raw?.zoneId, raw?.zoneVersion, connected);
+  const pwm = raw?.pwm;
+  if (!frame || typeof pwm?.left !== 'number' || typeof pwm?.right !== 'number'
+      || ![pwm.left, pwm.right].every(value => Number.isInteger(value) && value >= 1000 && value <= 2000)) return undefined;
+  return { left: pwm.left, right: pwm.right };
+}

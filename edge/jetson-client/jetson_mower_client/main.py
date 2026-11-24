@@ -678,7 +678,10 @@ class JetsonMowerClientNode(Node):
                 and self._autonomy.owns_execution and self._autonomy_zone and observation
                 and isinstance(observation.value, dict) and 0 <= time.monotonic() - observation.received_at < 2):
             from .cpp_live_map import live_map_frame
-            frame = live_map_frame(observation.value, self._autonomy.run_id, self._autonomy_zone, time.time_ns() // 1_000_000)
+            feedback = self._autonomy_feedback
+            frame = live_map_frame(observation.value, self._autonomy.run_id, self._autonomy_zone,
+                                   time.time_ns() // 1_000_000,
+                                   feedback.value if feedback and 0 <= time.monotonic() - feedback.received_at < .4 else None)
             if frame is not None:
                 payload["autoMap"] = frame
         self._mqtt.publish_json(self._topics.status, payload, qos=1)

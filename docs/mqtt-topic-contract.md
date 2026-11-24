@@ -303,7 +303,7 @@ Field policy:
 - `mqttState`: `connected`, `reconnecting`, or `disconnected`.
 - `edgeState`: `connected`, `monitoring`, `manual`, `autonomous`, `emergency`, or `fault`. `monitoring`은 명령 구독·ROS 제어 출력 없이 상태만 전송하는 프로그램이며 센서·STM32·예초 작업의 정상 동작을 의미하지 않는다.
 - `stale`: true when Jetson considers upstream telemetry/control state stale.
-- `autoMap`은 웹 AUTO의 선택적 지도 표본이다. `runId`, `zoneId`, `zoneVersion`, `observedAt`, `path`, `obstacles`를 전달한다. 좌표 순서는 WGS84 경도, 위도다. 경로는 최대 400개의 다음 점, 장애물은 현재 관측된 최대 16개를 담는다. 사람은 `position`, 나무와 덤불은 `ring`으로 표시한다. 관제는 같은 구역의 최신 표본만 표시하고 AUTO 종료, 연결 단절 또는 표본이 3초 이상 지나면 레이어를 내린다.
+- `autoMap`은 웹 AUTO의 선택적 지도 표본이다. `runId`, `zoneId`, `zoneVersion`, `observedAt`, `path`, `obstacles`를 전달한다. 좌표 순서는 WGS84 경도, 위도다. 경로는 최대 400개의 다음 점, 장애물은 현재 관측된 최대 16개를 담는다. 사람은 `position`, 나무와 덤불은 `ring`으로 표시한다. 관제는 같은 구역의 최신 표본만 표시하고 AUTO 종료, 연결 단절 또는 표본이 3초 이상 지나면 레이어를 내린다. 브리지가 최근 시리얼에 쓴 AUTO 패킷을 보고하면 선택적 `pwm`의 `left`, `right`를 마이크로초 단위로 표시한다.
 - `autonomyBlockReason`은 Jetson 게이트웨이가 알려주는 선택적 AUTO 차단 사유다. `emergency-active`, `autonomy-not-configured`, `autonomy-not-ready`, `autonomy-readiness-unknown` 또는 r61 입력 판정 사유다. `autonomyReady`는 같은 표본에서 r61 감독 실행기의 실제 시작 입력이 모두 최신·일치할 때만 `true`이며, 미관측은 `null`이다. 서버는 최근 6초 이내의 상태만 관제 상태 응답에 표시한다. 첫 AUTO 요청은 출력 없는 감독 프로세스를 시작할 수 있으므로 서버가 이 필드를 보고 직접 바퀴 출발을 판정하지 않는다.
 
 ## Event Payload

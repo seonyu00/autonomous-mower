@@ -3,6 +3,7 @@ import { receptionLabels, useTelemetryReception } from '../useTelemetryReception
 import { hasUsableTelemetryPosition } from '../position';
 import { useTelemetryStore } from '../telemetryStore';
 import type { RobotMode, WorkState } from '../types';
+import { useAutoPwm } from '../../map/autoMap';
 
 const modeLabels: Record<RobotMode, string> = { manual: '수동 주행', autonomous: '자율 주행', emergency: '긴급 정지', idle: '대기' };
 const workLabels: Record<WorkState, string> = { idle: '대기', mowing: '예초 중', paused: '일시 정지', error: '오류' };
@@ -24,6 +25,8 @@ export function TelemetryPanel({ compact = false }: TelemetryPanelProps) {
   const reception = useTelemetryReception(selectedRobotId);
   const recording = useTelemetryStore((state) => selectedRobotId ? state.receptionByRobotId[selectedRobotId]?.recording : undefined);
   const connected = useTelemetryStore((state) => state.connectionState === 'connected');
+  const robotStatus = useTelemetryStore(state => selectedRobotId ? state.statusByRobotId[selectedRobotId] : undefined);
+  const pwm = useAutoPwm(robotStatus, connected);
   const recordingLabel = !connected ? '연결 대기 · 현재 DB 기록 상태 확인 불가' : recording?.state === 'available' ? 'DB 기록 가능'
     : recording?.state === 'buffered' ? 'DB 저장 대기 · 로컬 보관분 재저장 대기' : 'DB 기록 확인 전';
   const recordingNotice = dataSource === 'real' && (
@@ -56,7 +59,10 @@ export function TelemetryPanel({ compact = false }: TelemetryPanelProps) {
         : '오프라인';
   const positionAvailable = hasUsableTelemetryPosition(telemetry);
   const batteryText = telemetry.batteryLevel === null ? '미수신' : `${telemetry.batteryLevel}%`;
-  const speedText = telemetry.speedMps === null ? '미수신' : `${telemetry.speedMps.toFixed(1)} m/s`;
+  const speedLabel = dataSource === 'real' ? 'PWM 명령' : '속도';
+  const speedText = dataSource === 'real'
+    ? pwm ? `좌 ${pwm.left} · 우 ${pwm.right} µs` : '미수신'
+    : telemetry.speedMps === null ? '미수신' : `${telemetry.speedMps.toFixed(1)} m/s`;
   const modeText = telemetry.mode === null ? '모드 미수신' : modeLabels[telemetry.mode];
   const workText = telemetry.workState === null ? '작업 상태 미수신' : workLabels[telemetry.workState];
   const code = telemetry.errorState;
@@ -86,7 +92,7 @@ export function TelemetryPanel({ compact = false }: TelemetryPanelProps) {
           <span className="overview-note">장비 전원 상태</span>
         </div>
         <div className="overview-metric">
-          <Metric label="속도" value={speedText} priority />
+          <Metric label={speedLabel} value={speedText} priority />
           <span className="overview-note">GPS / RTK · <span>{positionAvailable ? dataSource === 'mock' ? '샘플 위치' : 'GPS 수신' : 'GPS 미수신'}</span></span>
         </div>
         <div className="overview-metric">
@@ -113,7 +119,7 @@ export function TelemetryPanel({ compact = false }: TelemetryPanelProps) {
         <Metric label="배터리" value={batteryText} />
         <Metric label="모드" value={modeText} />
         <Metric label="작업" value={workText} />
-        <Metric label="속도" value={speedText} />
+        <Metric label={speedLabel} value={speedText} />
         <Metric label="신호" value={telemetry.signalStrength === null ? '미수신' : `${telemetry.signalStrength}%`} />
         <Metric label="마지막 수신" value={lastReceivedText} />
       </div>

@@ -28,8 +28,11 @@ class CppLiveMapTest(unittest.TestCase):
                 ],
             }}},
         }
-        frame = live_map_frame(packet, "run", (3, 2), now)
+        packet["planning"]["status"] = "replanning_in_background"
+        frame = live_map_frame(packet, "run", (3, 2), now, {"pwm_command": {"mode": 1, "left": 1668, "right": 1668}})
         self.assertEqual(frame["path"], [(127, 37), (127.001, 37)])
+        self.assertEqual(frame["pwm"], {"left": 1668, "right": 1668})
+        self.assertNotIn("pwm", live_map_frame(packet, "run", (3, 2), now, {"pwm_command": {"mode": 0, "left": 1500, "right": 1500}}))
         self.assertEqual(frame["obstacles"][0], {"kind": "person", "position": (127, 37)})
         self.assertEqual(frame["obstacles"][1]["ring"][0], frame["obstacles"][1]["ring"][-1])
         self.assertIsNone(live_map_frame(packet, "run", (3, 1), now))

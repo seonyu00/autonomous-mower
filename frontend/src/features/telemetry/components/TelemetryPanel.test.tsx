@@ -77,7 +77,7 @@ describe('TelemetryPanel compact summary', () => {
     expect(screen.getByLabelText('텔레메트리 수신 상태')).toBeInTheDocument();
   });
 
-  it('센서 미수신과 실제 0 값을 구분하고 나중에 도착한 값을 표시한다', () => {
+  it('배터리 0과 센서 미수신을 구분하고 현재 AUTO PWM 명령을 표시한다', () => {
     const telemetry = useTelemetryStore.getState().telemetryByRobotId[TEST_ROBOT_ID];
     const partial = { ...telemetry, latitude: null, longitude: null, batteryLevel: null,
       speedMps: null, signalStrength: null, mode: null, workState: null };
@@ -92,7 +92,19 @@ describe('TelemetryPanel compact summary', () => {
 
     act(() => useTelemetryStore.getState().upsertTelemetry({ ...partial, batteryLevel: 0, speedMps: 0 }));
     expect(screen.getByText('0%')).toBeInTheDocument();
-    expect(screen.getByText('0.0 m/s')).toBeInTheDocument();
+    expect(screen.getByText('PWM 명령')).toBeInTheDocument();
+    const now = new Date().toISOString();
+    act(() => {
+      const store = useTelemetryStore.getState();
+      store.setConnectionState('connected');
+      store.upsertStatus({ robotId: TEST_ROBOT_ID, connectionState: 'online', mqttState: 'connected', wssState: 'connected',
+        edgeState: 'autonomy-start-requested', lastSeenAt: now, stale: false,
+        autoMap: { runId: 'run', zoneId: 1, zoneVersion: 1, observedAt: now, path: [], obstacles: [], pwm: { left: 1668, right: 1668 } },
+      });
+    });
+    expect(screen.getByText('좌 1668 · 우 1668 µs')).toBeInTheDocument();
+    act(() => useTelemetryStore.getState().setConnectionState('disconnected'));
+    expect(screen.queryByText('좌 1668 · 우 1668 µs')).not.toBeInTheDocument();
   });
 
   it('GPS만 수신한 compact 요약은 나머지 센서를 미수신으로 표시한다', () => {

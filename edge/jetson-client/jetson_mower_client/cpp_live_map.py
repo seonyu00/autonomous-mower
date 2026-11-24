@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from .r41_web import enu_to_wgs84, fresh_timestamp, valid_snapshot, wgs84_point, zone_matches
 
 
-def live_map_frame(packet, run_id, zone_identity, now_ms):
+def live_map_frame(packet, run_id, zone_identity, now_ms, feedback=None):
     zone = {"work_zone_id": str(zone_identity[0]), "work_zone_version": zone_identity[1]}
     if (not zone_matches(packet, zone) or packet.get("planner") != "edge"
             or packet.get("output_topic") != "/mower_cpp/drive_cmd_vel"):
@@ -18,7 +18,7 @@ def live_map_frame(packet, run_id, zone_identity, now_ms):
         planning = {}
     path = []
     points = planning.get("remaining_path")
-    if planning.get("status") in ("replanned", "unchanged") and isinstance(points, list):
+    if planning.get("status") in ("replanned", "unchanged", "replanning_in_background") and isinstance(points, list):
         try:
             path = [wgs84_point(point) for point in points[:400]]
         except ValueError:
@@ -54,8 +54,14 @@ def live_map_frame(packet, run_id, zone_identity, now_ms):
                             continue
     except ValueError:
         pass
-    return {
+    frame = {
         "runId": run_id, "zoneId": zone_identity[0], "zoneVersion": zone_identity[1],
         "observedAt": datetime.fromtimestamp(replay["at_unix_ms"] / 1000, timezone.utc).isoformat(),
         "path": path, "obstacles": obstacles,
     }
+    if isinstance(feedback, dict):
+        pwm = feedback.get("pwm_command")
+        if (isinstance(pwm, dict) and pwm.get("mode") == 1
+                and all(type(pwm.get(side)) is int and 1000 <= pwm[side] <= 2000 for side in ("left", "right"))):
+            frame["pwm"] = {"left": pwm["left"], "right": pwm["right"]}
+    return frame
