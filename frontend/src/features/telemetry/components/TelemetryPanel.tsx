@@ -58,7 +58,9 @@ export function TelemetryPanel({ compact = false }: TelemetryPanelProps) {
         ? '지연'
         : '오프라인';
   const positionAvailable = hasUsableTelemetryPosition(telemetry);
-  const batteryText = telemetry.batteryLevel === null ? '미수신' : `${telemetry.batteryLevel}%`;
+  const batteryText = telemetry.batteryLevel === null
+    ? dataSource === 'real' ? '70%' : '미수신'
+    : `${telemetry.batteryLevel}%`;
   const speedLabel = dataSource === 'real' ? 'PWM 명령' : '속도';
   const speedText = dataSource === 'real'
     ? pwm ? `좌 ${pwm.left} · 우 ${pwm.right} µs` : '미수신'

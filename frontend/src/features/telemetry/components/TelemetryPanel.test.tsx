@@ -83,7 +83,8 @@ describe('TelemetryPanel compact summary', () => {
       speedMps: null, signalStrength: null, mode: null, workState: null };
     act(() => useTelemetryStore.getState().upsertTelemetry(partial));
     render(<TelemetryPanel />);
-    expect(screen.getAllByText('미수신')).toHaveLength(3);
+    expect(screen.getByText('70%')).toBeInTheDocument();
+    expect(screen.getAllByText('미수신')).toHaveLength(2);
     expect(screen.getByText('모드 미수신')).toBeInTheDocument();
     expect(screen.getByText('작업 상태 미수신')).toBeInTheDocument();
     expect(screen.getByText('위치 수신 대기')).toBeInTheDocument();
@@ -92,6 +93,7 @@ describe('TelemetryPanel compact summary', () => {
 
     act(() => useTelemetryStore.getState().upsertTelemetry({ ...partial, batteryLevel: 0, speedMps: 0 }));
     expect(screen.getByText('0%')).toBeInTheDocument();
+    expect(screen.queryByText('70%')).not.toBeInTheDocument();
     expect(screen.getByText('PWM 명령')).toBeInTheDocument();
     const now = new Date().toISOString();
     act(() => {
@@ -113,7 +115,8 @@ describe('TelemetryPanel compact summary', () => {
       speedMps: null, signalStrength: null, mode: null, workState: null }));
     render(<TelemetryPanel compact />);
     expect(screen.getByRole('heading', { name: '작업 상태 미수신' })).toBeInTheDocument();
-    expect(screen.getAllByText('미수신')).toHaveLength(2);
+    expect(screen.getByText('70%')).toBeInTheDocument();
+    expect(screen.getAllByText('미수신')).toHaveLength(1);
     expect(screen.getByText('모드 미수신')).toBeInTheDocument();
     expect(screen.getByText('GPS 수신')).toBeInTheDocument();
   });
